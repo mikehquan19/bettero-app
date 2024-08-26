@@ -41,24 +41,29 @@ const LoginPage = ({type = "LOGIN"}) => {
                 username: data.username,
                 password: data.password,
             };
+            try {
+                // call the API to get the access and refresh token
+                const response = await expenseappClient.post("/login/", submittedData); 
+                console.log("login request status: " + response.status); 
+                localStorage.setItem(ACCESS_TOKEN, response.data.access); 
+                localStorage.setItem(REFRESH_TOKEN, response.data.refresh); 
+                navigate("/");
+            }
+            catch (error) {
+                handleError(error); 
+            }
         } else {
             submittedData = {...data};
-        }
-        console.log(submittedData);
-        try {
-            // call the API to get the access and refresh token
-            const endpoint = type === "LOGIN" ? "/login/" : "/register/";
-            const response = await expenseappClient.post(endpoint, submittedData); 
-            localStorage.setItem(ACCESS_TOKEN, response.data.access); 
-            localStorage.setItem(REFRESH_TOKEN, response.data.refresh); 
-            if (type === "LOGIN") {
-                navigate("/");
-            } else {
+            console.log(submittedData);
+            try {
+                // call the API to create new user 
+                const response = await expenseappClient.post("/register/", submittedData); 
+                console.log("creat new user request status: " + response.status); 
                 navigate("/login");
             }
-        }
-        catch (error) {
-            handleError(error); 
+            catch (error) {
+                handleError(error); 
+            }
         }
     }
 

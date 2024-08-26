@@ -11,7 +11,7 @@ export const expenseappClient = axios.create({baseURL: "http://127.0.0.1:8000/ex
 expenseappClient.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem(ACCESS_TOKEN); 
-        if (token !== "access") {
+        if (token) {
             config.headers.Authorization = `Bearer ${token}`
         }
         return config; 
