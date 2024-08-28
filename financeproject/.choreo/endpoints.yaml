@@ -1,8 +1,9 @@
 version: 0.1 
 
 endpoints: 
-  - name: "REST API"
+  - name: "Expense App Service"
     port: 8000
     type: REST
     networkVisibility: Public
-    context: /
+    context: /expenseapp
+    schemaFilePath: greeting_openapi.yaml
