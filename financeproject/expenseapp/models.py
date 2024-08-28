@@ -8,10 +8,10 @@ from django.utils import timezone
 # the user account of the app 
 class User(AbstractUser): 
     # login info
-    full_name = models.CharField(max_length=50)
+    full_name = models.CharField(max_length=100)
     user_email = models.EmailField()
-    username = models.CharField(max_length=20, default="username", unique=True)
-    password = models.CharField(max_length=20, default="password")
+    username = models.CharField(max_length=100, default="username", unique=True)
+    password = models.CharField(max_length=100, default="password")
 
     # date joined will be automatically be today
     date_joined = models.DateTimeField(default=timezone.now)
@@ -37,7 +37,7 @@ class Account(models.Model):
         max_digits=10, 
         decimal_places=2, 
         default=0, 
-        validators=[MinValueValidator(limit_value=0.0)])
+        validators=[MinValueValidator(limit_value=Decimal(0.0))])
     # this is strictly for credit accounts 
     credit_limit = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
@@ -59,7 +59,7 @@ class Transaction(models.Model):
         max_digits=10, 
         decimal_places=2, 
         default = 0, 
-        validators=[MinValueValidator(limit_value=0.01)])
+        validators=[MinValueValidator(limit_value=Decimal(0.01))])
     from_account = models.BooleanField(default=True)
     # hours were used to sort 
     occur_date = models.DateTimeField("The date transaction was made")
@@ -98,12 +98,12 @@ class BudgetPlan(models.Model):
         max_digits=10, 
         decimal_places=2, 
         default=0.01,
-        validators=[MinValueValidator(limit_value=0.01)])
+        validators=[MinValueValidator(limit_value=Decimal(0.01))])
     
     # validator for the percentage 
     value_validators = [
-        MinValueValidator(limit_value=0),
-        MaxValueValidator(limit_value=100), 
+        MinValueValidator(limit_value=Decimal(0)),
+        MaxValueValidator(limit_value=Decimal(100)), 
     ]
     # the portion of the recurring income used for expense (in percentage)
     portion_for_expense = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=value_validators)

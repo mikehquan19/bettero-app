@@ -106,7 +106,7 @@ def delete_transactions() -> None:
     try:
         # compute the first date of 5 months ago 
         first_date_this_month = date(year=date.today().year, month=date.today().month, day=1)
-        filter_date = first_date_this_month - timedelta(months=5)
+        filter_date = first_date_this_month - timedelta(days=155)
 
         # query the list of transactions that are 5months old and delete
         old_transaction_list = Transaction.objects.filter(occur_date__lt=filter_date)
