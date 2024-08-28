@@ -1,9 +1,7 @@
 .financial-info-title {
     font-size: 23px;
-    margin-top: 0;
+    margin: 0 auto 20px auto;
     width: 85%; 
-    margin-left: auto; 
-    margin-right: auto;
 }
 
 .financial-cards-wrapper {
