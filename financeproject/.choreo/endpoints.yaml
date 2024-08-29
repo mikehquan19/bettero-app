@@ -5,5 +5,5 @@ endpoints:
     port: 8000
     type: REST
     networkVisibility: Public
-    context: /expenseapp
+    context: /
     schemaFilePath: greeting_openapi.yaml
