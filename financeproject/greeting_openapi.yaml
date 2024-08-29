@@ -1,7 +1,7 @@
 openapi: 3.0.2
 info:
-  title: ''
-  version: ''
+  title: 'expenseapp backend'
+  version: '0.0.1'
 paths:
   /expenseapp/summary/:
     get:
@@ -854,8 +854,7 @@ components:
           format: decimal
           multipleOf: 0.01
           maximum: 100000000
-          minimum: !!python/object/apply:decimal.Decimal
-          - '0'
+          minimum: 0
         credit_limit:
           type: string
           format: decimal
@@ -888,8 +887,7 @@ components:
           format: decimal
           multipleOf: 0.01
           maximum: 100000000
-          minimum: !!python/object/apply:decimal.Decimal
-          - '1'
+          minimum: 1
         due_date:
           type: string
           format: date
