@@ -4,7 +4,9 @@ export const ACCESS_TOKEN = "access";
 export const REFRESH_TOKEN = "refresh";
 
 // the instance of the axios used for this app
-export const expenseappClient = axios.create({baseURL: "http://127.0.0.1:8000/expenseapp/",})
+export const expenseappClient = axios.create({
+    baseURL: "/choreo-apis/bettero-app/expense-app-service/v1",
+})
 
 // interceptor to automatically add bearer token if there is any 
 // before the request is sent 
