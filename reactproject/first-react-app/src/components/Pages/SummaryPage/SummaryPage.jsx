@@ -7,7 +7,6 @@ import ExpenseChart from '../../Charts/ExpenseChart.jsx';
 import TransactionTable from '../../TransactionTable/TransactionTable.jsx';
 import { getElementAtEvent } from 'react-chartjs-2';
 import { useMediaQuery } from '@uidotdev/usehooks';
-import axios from 'axios';
 import './SummaryPage.css';
 
 
