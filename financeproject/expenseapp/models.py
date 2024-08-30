@@ -97,7 +97,7 @@ class BudgetPlan(models.Model):
     recurring_income = models.DecimalField(
         max_digits=10, 
         decimal_places=2, 
-        default=0.01,
+        default=Decimal(0.01),
         validators=[MinValueValidator(limit_value=Decimal(0.01))])
     
     # validator for the percentage 
@@ -106,8 +106,8 @@ class BudgetPlan(models.Model):
         MaxValueValidator(limit_value=Decimal(100)), 
     ]
     # the portion of the recurring income used for expense (in percentage)
-    portion_for_expense = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=value_validators)
-
+    portion_for_expense = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal(0.0), validators=value_validators)
+    
     # the portion (based on the amount of money for expense) on each category
     grocery = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=value_validators)
     dining = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=value_validators)
@@ -128,6 +128,7 @@ class BudgetPlan(models.Model):
         # if the user doesn't have any budget plan, skip it 
         if user.budgetplan_set.exists(): 
             # the queryset of user's budget plan, excluding this instance
+            # if no instance, id = None
             budget_plan_list = user.budgetplan_set.exclude(id=self.id)
             # the maximum number of budget plans, excluding this instance 
             max_plan_count = 2 
@@ -215,6 +216,7 @@ class Stock(models.Model):
         user = self.user
         if user.stock_set.exists(): 
             # the list of stock with this stock symbol, but excluding this stock
+            # if no instance, id = None
             stock_list = user.stock_set.exclude(id=self.id)
             stock_list = stock_list.filter(symbol=self.symbol)
             if stock_list.exists(): 
@@ -262,7 +264,7 @@ class OverdueBillMessage(models.Model):
         decimal_places=2, 
         default = 0, 
         validators=[MinValueValidator(limit_value=Decimal(1.00))])
-    bill_due_date = models.DateField("The date the overdue bill was due",null=True)
+    bill_due_date = models.DateField("The date the overdue bill was due", null=True)
     appear_date = models.DateField("The date the message was created", null=True)
 
     def __str__(self): 

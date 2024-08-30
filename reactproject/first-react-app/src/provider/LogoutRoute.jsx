@@ -15,11 +15,6 @@ const LogoutRoute = () => {
                 // call the API to blacklist the refresh token
                 const response = await expenseappClient.post("/logout/", data);
                 console.log("log out request status: " + response.status); 
-                // clear the local storage 
-                localStorage.clear(); 
-                // test the ACCESS and REFRESH TOKEN
-                console.log(localStorage.getItem(ACCESS_TOKEN)); 
-                console.log(localStorage.getItem(REFRESH_TOKEN));
                 
             } catch (error) {
                 if (error.response) {
@@ -37,6 +32,11 @@ const LogoutRoute = () => {
                 }
                 console.log(error.config); 
             }
+            // clear the local storage 
+            localStorage.clear(); 
+            // test the ACCESS and REFRESH TOKEN
+            console.log(localStorage.getItem(ACCESS_TOKEN)); 
+            console.log(localStorage.getItem(REFRESH_TOKEN));
         }
         blacklistRefreshToken(); 
     }, []);

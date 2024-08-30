@@ -1,5 +1,5 @@
 import { useForm } from "react-hook-form";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { expenseappClient, ACCESS_TOKEN, REFRESH_TOKEN } from "../../../provider/api";
 import './LoginPage.css';
@@ -26,6 +26,7 @@ const LoginPage = ({type = "LOGIN"}) => {
 
     // necessary components of useForm() hook 
     const { register, reset, handleSubmit, formState: { errors } } = useForm();
+    const [isInvalidCredentials, setIsInvalidCredentials] = useState(false);
     const navigate = useNavigate(); 
     console.log(type);
 
@@ -50,7 +51,10 @@ const LoginPage = ({type = "LOGIN"}) => {
                 navigate("/");
             }
             catch (error) {
-                handleError(error); 
+                handleError(error);
+                if (error.response.data.detail === "No active account found with the given credentials") {
+                    setIsInvalidCredentials(true);
+                }
             }
         } else {
             submittedData = {...data};
@@ -61,9 +65,7 @@ const LoginPage = ({type = "LOGIN"}) => {
                 console.log("creat new user request status: " + response.status); 
                 navigate("/login");
             }
-            catch (error) {
-                handleError(error); 
-            }
+            catch (error) {handleError(error)}
         }
     }
 
@@ -73,6 +75,9 @@ const LoginPage = ({type = "LOGIN"}) => {
             <div className="login-header-bar">Bettero App</div>
             <div className="login-form-wrapper" >
                 <h3>{type === "LOGIN" ? <span>LOG IN</span> : <span>SIGN UP</span>}</h3>
+                {(isInvalidCredentials && type=="LOGIN") && 
+                    <div style={{textAlign: "center"}}><small className="error-message">Invalid username or password!</small></div>
+                }
                 <form id="login" onSubmit={handleSubmit(handleSubmitButton)}>
                     {
                         type == "SIGNUP" && (
@@ -107,7 +112,7 @@ const LoginPage = ({type = "LOGIN"}) => {
                         </small>
                         <input type="text" id="username" name="username"
                             placeholder="Username" {...register("username", {
-                                required: "Username is required", 
+                                required: "*Username is required", 
                             })} />
                     </div>
                     <div className="form-field">
@@ -117,7 +122,7 @@ const LoginPage = ({type = "LOGIN"}) => {
                         </small>
                         <input type="password" id="password" name="password" 
                             placeholder="Password" {...register("password", {
-                                required: "Password is required", 
+                                required: "*Password is required", 
                             })}/>
                     </div>
                     {
@@ -129,7 +134,7 @@ const LoginPage = ({type = "LOGIN"}) => {
                                 </small>
                                 <input type="password" id="password_again" name="password_again"
                                     placeholder="Password again" {...register("password_again", {
-                                        required: "Password again is required",
+                                        required: "*Password again is required",
                                     })}/>
                             </div>
                         )
