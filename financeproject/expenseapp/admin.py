@@ -1,10 +1,14 @@
 from django.contrib import admin
 from .models import (
-    BudgetPlan, User, Account, Transaction, Bills, Stock, DateStockPrice, PortfolioValue, OverdueBillMessage)
-
-# Register your models here.
-# username: mikequan19
-# password: 0918273645Mike@
+    BudgetPlan, 
+    User, Account, 
+    Transaction, 
+    Bills, 
+    Stock, 
+    DateStockPrice, 
+    PortfolioValue, 
+    OverdueBillMessage
+)
 
 admin.site.register(User)
 admin.site.register(Account)

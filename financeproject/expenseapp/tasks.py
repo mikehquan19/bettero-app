@@ -6,7 +6,7 @@ from .models import (
     DateStockPrice, 
     Transaction, 
     OverdueBillMessage)
-from . import finance 
+from .finance import update_stock_data
 
 
 # update the due date of the credit account 
@@ -15,8 +15,9 @@ def update_credit_due_date() -> None:
         # query the list of credit accounts 
         credit_account_list = Account.objects.filter(account_type="Credit")
         for account in credit_account_list: 
-            if account.due_date >= date.today(): 
-                account.due_date += timedelta(days=1)
+            if account.due_date <= date.today(): 
+                # increment the month of the due date by 1 (same day next month)
+                account.due_date.month += 1
                 account.save()
     except Exception as e: 
         print("Error occur", e)
@@ -32,7 +33,7 @@ def update_info_and_create_price() -> None:
             stock_list = Stock.objects.all()
             for stock in stock_list: 
                 # fetch the updated info about the stock 
-                updated_stock_data = finance.update_stock_data(stock.symbol)
+                updated_stock_data = update_stock_data(stock.symbol)
 
                 # update the data of each stock instance in the database
                 # current close, previous_close, open, low, high, volume
