@@ -9,9 +9,7 @@ from expenseapp.serializers import (
     PortfolioValueSerializer, 
     StockSerializer,
     StockPriceSerializer)
-from expenseapp.finance import (
-    load_stock_data,
-)
+from expenseapp.finance import load_stock_data
 
 # handling the list of stocks 
 class StockList(APIView): 

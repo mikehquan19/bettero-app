@@ -32,7 +32,7 @@ const LogoutRoute = () => {
                 }
                 console.log(error.config); 
             }
-            // clear the local storage 
+            // clear the local storage no matter what
             localStorage.clear(); 
             // test the ACCESS and REFRESH TOKEN
             console.log(localStorage.getItem(ACCESS_TOKEN)); 

@@ -32,6 +32,7 @@ def total_income(arg_user, arg_first_date=None, arg_last_date=None) -> float:
     total_income = get_number(income_list.aggregate(total=Sum("amount"))["total"])
     return total_income 
 
+
 # return the dictionary mapping the date to the total expense of that date 
 # up until the current date 
 def daily_expense(arg_user, arg_first_date=None, arg_last_date=None) -> Dict: 

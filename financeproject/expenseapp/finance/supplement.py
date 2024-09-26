@@ -4,7 +4,6 @@ from datetime import date, timedelta
 from calendar import monthrange
 
 # THESE ARE THE SUPPLEMENTAL FUNCTIONS THAT WILL SUPPORT OTHER FINANCE FUNCTIONS
-
 # turn None into 0
 def get_number(arg): 
     return 0 if arg == None else arg

@@ -33,7 +33,7 @@ const DeleteBillForm = ({
         console.log("the id of the bill: " + billId); 
         if (e.target.value === "true") {
             // call the DELETE method API to delete the chosen bill
-            expenseappClient.delete(`bills/${billId}`)
+            expenseappClient.delete(`bills/${billId}/`)
                 .then((response) => {
                     console.log("delete bills request status: " + response.status);
                     // call the GET method API to get the new list of bills 
