@@ -238,7 +238,7 @@ class Stock(models.Model):
 class DateStockPrice(models.Model): 
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE, default=1)
     date = models.DateField()
-
+    
     # the close price of the given stock on the given date 
     given_date_close =  models.DecimalField(
         max_digits=10, 

@@ -38,9 +38,7 @@ class StockList(APIView):
         try: 
             stock_data = load_stock_data(symbol)
         except IndexError: # if the stock with the given symbol isn't found 
-            return Response(
-                {"error": "No stock with the given symbol"}, 
-                status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "No stock with the given symbol"}, status=status.HTTP_404_NOT_FOUND)
         
         stock_price_data = stock_data.pop("price_data")
         for key in list(stock_data.keys()): 
@@ -124,7 +122,3 @@ def portfolio_value_list(request):
         for data_item in original_data: 
             response_data[data_item["date"]] = data_item["given_date_value"]
         return Response(response_data)
-    else: 
-        return Response(
-            {"Error": "This API is only for GET method"}, 
-            status=status.HTTP_400_BAD_REQUEST)

@@ -8,13 +8,10 @@ from .supplement import *
 def budget_composition_percentage(arg_user, interval_type) -> Dict: 
     # query the budget plan 
     plan = arg_user.budgetplan_set.get(interval_type=interval_type)
-
     # the first and last date of the current interval of given type 
     first_date, last_date = get_current_dates(interval_type)
-
     # the total expense of each category 
     category_expenses = category_expense_dict(arg_user, first_date, last_date)
-
     # dictionary mapping the type's name to the set of composition percentage of that type
     budget_percentage = {
         "goal": {
@@ -43,7 +40,6 @@ def budget_progress_percentage(arg_user, interval_type) -> Dict:
 
     # the first and last date of the current interval of given type 
     first_date, last_date = get_current_dates(interval_type)
-
     # the total expense of each category 
     category_expenses = category_expense_dict(arg_user, first_date, last_date)
 
@@ -63,7 +59,6 @@ def budget_progress_percentage(arg_user, interval_type) -> Dict:
     for key in list(progress_percentage.keys()):
         # the current expense of this category 
         progress_percentage[key]["current"] = category_expenses[key]
-
         # if the budget is not $0, calculate the percentage 
         if progress_percentage[key]["current"] < progress_percentage[key]["budget"]: 
             # the progress percentage 
@@ -90,7 +85,7 @@ def get_budget_response_data(arg_user, type) -> Dict:
 
     # the budget percentage and total budget 
     budget_response["expense_portion"] = this_plan.portion_for_expense
-
+    
     # composition percentage and progress percentage 
     budget_composition_dict = budget_composition_percentage(arg_user, type)
     budget_progress_dict = budget_progress_percentage(arg_user, type)

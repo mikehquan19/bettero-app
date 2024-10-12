@@ -58,10 +58,6 @@ def user_interval_transactions(request, arg_first_date, arg_last_date):
             occur_date__lte=last_date).order_by("-occur_date")
         response_data = TransactionSerializer(transaction_list, many=True).data
         return Response(response_data)
-    else: 
-        return Response(
-            {"Error": "This API is only for GET method"}, 
-            status=status.HTTP_400_BAD_REQUEST)
 
 
 # handling the list of latest transactions in each category for the user 
@@ -91,9 +87,7 @@ def user_category_transactions(request, arg_category):
         response_data = TransactionSerializer(transaction_list, many=True).data
         return Response(response_data)
     else: 
-        return Response(
-            {"Error": "This API is only for GET method"}, 
-            status=status.HTTP_400_BAD_REQUEST)
+        return Response({"Error": "This API is only for GET method"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # handling the list of transactions of the given category between 2 predefined dates 
@@ -121,10 +115,6 @@ def interval_category_transactions(request, arg_category, arg_first_date, arg_la
         
         response_data = TransactionSerializer(transaction_list, many=True).data
         return Response(response_data)
-    else: 
-        return Response(
-            {"Error": "This API is only for GET method"}, 
-            status=status.HTTP_400_BAD_REQUEST)
 
 
 # GET method, return the 15 latest transactions of the account
@@ -142,10 +132,6 @@ def account_transaction_list(request, pk):
         transaction_list = account.transaction_set.order_by("-occur_date")[:15]
         response_data = TransactionSerializer(transaction_list, many=True).data
         return Response(response_data)
-    else: 
-        return Response(
-            {"Error": "This API is only for GET method"}, 
-            status=status.HTTP_400_BAD_REQUEST)
 
 
 # handling the list of latest transactions in each category for the account 
@@ -174,7 +160,3 @@ def account_category_transactions(request, pk, arg_category):
             
         response_data = TransactionSerializer(transaction_list, many=True).data
         return Response(response_data)
-    else: 
-        return Response(
-            {"Error": "This API is only for GET method"}, 
-            status=status.HTTP_400_BAD_REQUEST)

@@ -21,7 +21,7 @@ def user_summary_detail(request):
         user = request.user
 
         # first and last dates of month
-        first_date, last_date = get_current_dates("mont")
+        first_date, last_date = get_current_dates("month")
 
         response_data = {
             # calculate the financial info of the user 
@@ -37,9 +37,7 @@ def user_summary_detail(request):
         }
         return Response(response_data)
     else: 
-        return Response(
-            {"Error": "This API is only for GET method"}, 
-            status=status.HTTP_400_BAD_REQUEST)
+        return Response({"Error": "This API is only for GET method"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # handling the fully detailed financial summary of the user 
@@ -67,6 +65,4 @@ def user_full_summary_detail(request):
         }
         return Response(response_data)
     else: 
-        return Response(
-            {"Error": "This API is only for GET method"}, 
-            status=status.HTTP_400_BAD_REQUEST)
+        return Response({"Error": "This API is only for GET method"}, status=status.HTTP_400_BAD_REQUEST)

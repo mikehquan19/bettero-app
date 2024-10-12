@@ -110,6 +110,7 @@ class BillsList(APIView):
         new_bill_serializer = BillSerializer(data=request_data)
         if new_bill_serializer.is_valid(raise_exception=True): 
             new_bill_serializer.save() # call the create() method 
+
             # return the new list of bills 
             response_data = self.get_response_data(request)
             return Response(response_data, status=status.HTTP_201_CREATED)
@@ -157,12 +158,6 @@ def overdue_message_list(request):
     if request.method == "GET": 
         user = request.user
         overdue_message_list = user.overduebillmessage_set.all()
-        response_data = OverdueBillMessageSerializer(
-            overdue_message_list, 
-            many=True).data
+        response_data = OverdueBillMessageSerializer(overdue_message_list, many=True).data
         return Response(response_data)
-    else: 
-        return Response(
-            {"Error": "This API is only for GET method"}, 
-            status=status.HTTP_400_BAD_REQUEST)
     

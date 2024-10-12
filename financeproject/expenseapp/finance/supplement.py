@@ -75,12 +75,10 @@ def category_expense_dict(arg_obj, arg_first_date, arg_last_date) -> Dict:
     category_expense = {"Total": 0, "Expense": 0 ,"Grocery": 0, "Dining": 0, "Shopping": 0, 
                         "Bills": 0, "Gas": 0, "Others": 0, "Income": 0}
     
-    # compute the sum of all transactions 
+    # compute the sum of all transactions, expense transactions, and income transactions
     category_expense["Total"] = get_number(transaction_list.aggregate(total=Sum("amount"))["total"])
     category_expense["Expense"] = get_number(expense_list.aggregate(total=Sum("amount"))["total"])
     category_expense["Income"] = get_number(income_list.aggregate(total=Sum("amount"))["total"])
-
-    
     # compute the total expense of each category 
     for expense in expense_list: 
         category_expense[expense.category] += expense.amount 

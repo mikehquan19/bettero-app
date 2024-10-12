@@ -78,9 +78,7 @@ def create_portfolio_value() -> None:
                 total_value = sum([(stock.current_close * stock.shares) for stock in user_portfolio])
 
                 # create the portfolio value instance
-                user.portfoliovalue_set.create(
-                    date=previous_date, 
-                    given_date_value=total_value)
+                user.portfoliovalue_set.create(date=previous_date, given_date_value=total_value)
     except Exception as e: 
         print("Error occured", e)
 

@@ -66,10 +66,8 @@ def daily_expense(arg_user, arg_first_date=None, arg_last_date=None) -> Dict:
 def expense_composition_percentage(arg_obj, arg_first_date=None, arg_last_date=None) -> Dict: 
     # the first date and last date of the given month 
     first_date, last_date = get_current_dates("month", arg_first_date, arg_last_date)
-
     # dictionary mapping the expense's category to the total amount of expense of this month 
     category_expense = category_expense_dict(arg_obj, first_date, last_date)
-
     # dictionary mapping the expense's category to the percentage of expense
     category_percentage = {"Grocery": 0, "Dining": 0, "Shopping": 0,  
                            "Bills": 0, "Gas": 0, "Others": 0, "Income": 0}
@@ -88,7 +86,6 @@ def expense_composition_percentage(arg_obj, arg_first_date=None, arg_last_date=N
 def expense_change_percentage(arg_obj, interval_type="month", arg_first_date=None, arg_last_date=None) -> Dict: 
     # the first and last date of the current month
     curr_first_date, curr_last_date = get_current_dates(interval_type, arg_first_date, arg_last_date)
-
     # the first and last date of the previous month 
     prev_first_date, prev_last_date = get_previous_dates(interval_type, curr_first_date, curr_last_date)
 
@@ -104,10 +101,9 @@ def expense_change_percentage(arg_obj, interval_type="month", arg_first_date=Non
     for key in list(change_dict.keys()): 
         if prev_category_expense[key] != 0: 
             # calculate the percentage change and then add to the dict
+            # and round to 2 decimal points 
             change_percentage = curr_category_expense[key] - prev_category_expense[key]
-            change_percentage = (change_percentage / prev_category_expense[key]) * 100
-            # round the change to 2
-            change_dict[key]= round(change_percentage, 2) 
+            change_percentage = round((change_percentage / prev_category_expense[key]) * 100, 2)
         else: 
             # if no expenses made during previous month, obviously expenses increase 100% 
             if curr_category_expense[key] != 0: 
@@ -174,7 +170,7 @@ def interval_total_expense(arg_user) -> Dict:
             
             # daily expense of the user during this interval 
             interval_daily_expense = daily_expense(arg_user, first_date, last_date)
-        
+            
             interval_expense_dict[interval_type].append({
                 "first_date": first_date, 
                 "last_date": last_date, 
