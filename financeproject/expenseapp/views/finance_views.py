@@ -36,8 +36,6 @@ def user_summary_detail(request):
             "daily_expense": daily_expense(user), 
         }
         return Response(response_data)
-    else: 
-        return Response({"Error": "This API is only for GET method"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # handling the fully detailed financial summary of the user 
@@ -64,5 +62,3 @@ def user_full_summary_detail(request):
             "initial_transaction_data": initial_transaction_data,
         }
         return Response(response_data)
-    else: 
-        return Response({"Error": "This API is only for GET method"}, status=status.HTTP_400_BAD_REQUEST)

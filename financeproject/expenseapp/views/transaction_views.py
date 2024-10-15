@@ -86,8 +86,6 @@ def user_category_transactions(request, arg_category):
 
         response_data = TransactionSerializer(transaction_list, many=True).data
         return Response(response_data)
-    else: 
-        return Response({"Error": "This API is only for GET method"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # handling the list of transactions of the given category between 2 predefined dates 
