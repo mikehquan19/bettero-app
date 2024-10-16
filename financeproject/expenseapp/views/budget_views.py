@@ -38,7 +38,7 @@ class UserBudget(APIView):
         request_data["user"] = request.user.id
         new_plan_serializer = BudgetPlanSerializer(data=request_data)
 
-        if new_plan_serializer.is_valid(raise_exception=True): 
+        if new_plan_serializer.is_valid(): 
             new_plan_serializer.save() # call the create method 
 
             # return new budget plan
@@ -72,7 +72,7 @@ class UserBudgetDetail(APIView):
         budget_plan = self.get_budget_plan(request, interval_type)
         updated_plan_serializer = BudgetPlanSerializer(budget_plan, data=request_data)
     
-        if updated_plan_serializer.is_valid(raise_exception=True): 
+        if updated_plan_serializer.is_valid(): 
             updated_plan_serializer.save() # call update() method 
             # custom data to be returned 
             custom_data = {"month": {}, "bi_week": {}, "week": {}}
@@ -108,7 +108,7 @@ class BillsList(APIView):
         request_data["user"] = request.user.id
 
         new_bill_serializer = BillSerializer(data=request_data)
-        if new_bill_serializer.is_valid(raise_exception=True): 
+        if new_bill_serializer.is_valid(): 
             new_bill_serializer.save() # call the create() method 
 
             # return the new list of bills 

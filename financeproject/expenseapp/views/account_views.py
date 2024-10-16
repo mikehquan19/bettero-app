@@ -33,7 +33,7 @@ class AccountList(APIView):
         request_data = request.data 
         request_data["user"] = request.user.id
         new_account_serializer = AccountSerializer(data=request_data)
-        if new_account_serializer.is_valid(raise_exception=True): 
+        if new_account_serializer.is_valid(): 
             # call the create method 
             new_account_serializer.save() 
 

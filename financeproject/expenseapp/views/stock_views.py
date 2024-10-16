@@ -46,7 +46,7 @@ class StockList(APIView):
 
         # add to the list 
         new_stock_serializer = StockSerializer(data=request_data)
-        if new_stock_serializer.is_valid(raise_exception=True): 
+        if new_stock_serializer.is_valid(): 
             created_stock = new_stock_serializer.save() 
 
             # add all of the price of the stock
@@ -94,7 +94,7 @@ class StockPriceDetail(APIView):
         stock = get_object_or_404(Stock, user=user, symbol=symbol)
 
         updated_stock_serializer = StockSerializer(stock, data=request_data)
-        if updated_stock_serializer.is_valid(raise_exception=True): 
+        if updated_stock_serializer.is_valid(): 
             updated_stock_serializer.save() 
             # return the response data
             response_data = self.get_response_data(request, symbol)
