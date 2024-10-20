@@ -17,8 +17,8 @@ class AccountList(APIView):
     # get the customized response data with the user id
     def get_response_data(self, request):
         # query and serialize the account list 
-        user = request.user
-        account_list = user.account_set.all()
+        queried_user = request.user
+        account_list = Account.objects.filter(user=queried_user)
         response_data = AccountSerializer(account_list, many=True).data
         # return the json
         return response_data
@@ -49,11 +49,10 @@ class AccountDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AccountSerializer
     # the account instance 
     def get_object(self): 
-        user = self.request.user
         try: 
-            selected_account =  user.account_set.get(pk=self.kwargs["pk"])
+            selected_account =  Account.objects.get(pk=self.kwargs["pk"])
         except Account.DoesNotExist: 
-            raise Http404
+            raise Http404("Account with the given pk not found.")
         return selected_account
     
 
@@ -62,15 +61,14 @@ class AccountDetail(generics.RetrieveUpdateDestroyAPIView):
 @permission_classes([IsAuthenticated])
 def account_summary_detail(request, pk):
     if request.method == "GET": 
-        user = request.user
         try: 
-            account = user.account_set.get(pk=pk)
+            queried_account = Account.objects.get(pk=pk)
         except Account.DoesNotExist: 
-            return Response({"Error": "Account not found"}, status=status.HTTP_404_NOT_FOUND)
+            raise Http404("Account with the given pk not found.")
         
         # calculate the change & composition percentage of the account 
-        change_percentage = expense_change_percentage(account)
-        composition_percentage = expense_composition_percentage(account)
+        change_percentage = expense_change_percentage(queried_account)
+        composition_percentage = expense_composition_percentage(queried_account)
 
         # the response data 
         response_data = {

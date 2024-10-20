@@ -7,7 +7,7 @@ from .supplement import *
 # calculate the actual compostion percentage of each category vs the goal
 def budget_composition_percentage(arg_user, interval_type) -> Dict: 
     # query the budget plan 
-    plan = arg_user.budgetplan_set.get(interval_type=interval_type)
+    queried_plan = BudgetPlan.objects.get(user=arg_user, interval_type=interval_type)
     # the first and last date of the current interval of given type 
     first_date, last_date = get_current_dates(interval_type)
     # the total expense of each category 
@@ -15,27 +15,30 @@ def budget_composition_percentage(arg_user, interval_type) -> Dict:
     # dictionary mapping the type's name to the set of composition percentage of that type
     budget_percentage = {
         "goal": {
-            "Grocery": plan.grocery, 
-            "Dining": plan.dining, 
-            "Shopping": plan.shopping,
-            "Bills": plan.bills, 
-            "Gas": plan.gas, 
-            "Others": plan.others,
+            "Grocery": queried_plan.grocery, 
+            "Dining": queried_plan.dining, 
+            "Shopping": queried_plan.shopping,
+            "Bills": queried_plan.bills, 
+            "Gas": queried_plan.gas, 
+            "Others": queried_plan.others,
         },
         "actual": {}
     }
-    if category_expenses["Expense"] != 0: 
-        for key in list(budget_percentage["goal"].keys()): 
+    # if the total expense is 0, then there is no composition
+    total_expense = category_expenses["Expense"]
+    if total_expense != 0: 
+        for category in list(budget_percentage["goal"].keys()): 
+            this_category_expense = category_expenses[category]
             # calculate the percentage and round up to 2 decimal places 
-            budget_percentage["actual"][key] = (category_expenses[key] / category_expenses["Expense"]) * 100
-            budget_percentage["actual"][key] = round(budget_percentage["actual"][key], 2)
+            budget_percentage["actual"][category] = (this_category_expense / total_expense) * 100
+            budget_percentage["actual"][category] = round(budget_percentage["actual"][category], 2)
     return budget_percentage
 
 
 # calculate the the progress percentage of each towards that category's budget
 def budget_progress_percentage(arg_user, interval_type) -> Dict: 
     # query the budget plan and total budget
-    plan = arg_user.budgetplan_set.get(interval_type=interval_type)
+    plan = BudgetPlan.objects.get(user=arg_user, interval_type=interval_type)
     total_budget = plan.recurring_income * plan.portion_for_expense / 100
 
     # the first and last date of the current interval of given type 
@@ -56,17 +59,17 @@ def budget_progress_percentage(arg_user, interval_type) -> Dict:
     }
 
     # iterate through each key in the progress percentage dict
-    for key in list(progress_percentage.keys()):
+    for category in list(progress_percentage.keys()):
         # the current expense of this category 
-        progress_percentage[key]["current"] = category_expenses[key]
+        progress_percentage[category]["current"] = category_expenses[category]
         # if the budget is not $0, calculate the percentage 
-        if progress_percentage[key]["current"] < progress_percentage[key]["budget"]: 
+        if progress_percentage[category]["current"] < progress_percentage[category]["budget"]: 
             # the progress percentage 
-            percentage = (progress_percentage[key]["current"] / progress_percentage[key]["budget"]) * 100
-            progress_percentage[key]["percentage"] = round(percentage, 2)
+            percentage = (progress_percentage[category]["current"] / progress_percentage[category]["budget"]) * 100
+            progress_percentage[category]["percentage"] = round(percentage, 2)
         # otherwise, percentage is automatically 100%
         else: 
-            progress_percentage[key]["percentage"] = 100
+            progress_percentage[category]["percentage"] = 100
     return progress_percentage
 
 
@@ -75,9 +78,9 @@ def get_budget_response_data(arg_user, type) -> Dict:
     # data about the budget 
     budget_response = {}
     try: 
-        this_plan = arg_user.budgetplan_set.get(interval_type=type)
+        this_plan = BudgetPlan.objects.get(user=arg_user, interval_type=type)
     except BudgetPlan.DoesNotExist: 
-        return budget_response
+        return budget_response # return the empty dictionary 
     
     # id and the income  
     budget_response["id"] = this_plan.id

@@ -9,17 +9,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = models.User
         fields = ["full_name", "user_email", "username", "password", "password_again"]
 
-    """
-    {
-        "full_name": "sample user", 
-        "user_email": "sample.user@gmail.com", 
-        "username": "sample username", 
-        "password": "sample password", 
-        "password_again": "sample password"
-    }
-
-    """
-
     # field of second password 
     # TODO: what is the write_only parameters ?
     password_again = serializers.CharField(max_length=20, required=True, write_only=True)
@@ -47,19 +36,7 @@ class AccountSerializer(serializers.ModelSerializer):
     class Meta: 
         model = models.Account 
         fields = "__all__"
-    """
-        sample POST, PUT request data 
-        {
-            "user": 5,  
-            "account_number": 6000,
-            "name": "BOA's Debit Account",
-            "institution": "BOA",
-            "account_type": "Debit",
-            "balance": "22.00"
-            "credit_limit": null, 
-            "due_date": null
-        }
-    """
+
     def update(self, instance, validated_data): 
         # compute the change of balance
         previous_balance = instance.balance
@@ -102,17 +79,7 @@ class TransactionSerializer(serializers.ModelSerializer):
     class Meta: 
         model = models.Transaction
         exclude = ["user"] 
-    """ 
-        sample POST request data
-        {
-            "account": 34,
-            "description": "Starbucks' Orders",
-            "amount": "22.50",
-            "from_account": true,
-            "occur_date": "2024-07-27",
-            "category": "Dining"
-        }
-    """
+
     # create the account objects given the validated data
     def create(self, validated_data): 
         # create the transaction with the associated user, and account 
@@ -139,21 +106,7 @@ class BudgetPlanSerializer(serializers.ModelSerializer):
     class Meta: 
         model = models.BudgetPlan
         fields = "__all__"
-    """
-        Sample POST, PUT data: 
-        {
-            "user": 5,
-            "interval_type": "week", 
-            "recurring_income": 4200, 
-            "portion_for_expense": 75, 
-            "grocery": 15.0,
-            "dining": 15.0,
-            "shopping": 10.0,
-            "bills": 30.0,
-            "gas": 10.0,
-            "others": 10.0
-        }
-    """
+
     # update the account instance given the validated data from json 
     def update(self, instance, validated_data): 
         # only update if the instance and validated data has the same interval type
@@ -169,16 +122,7 @@ class BillSerializer(serializers.ModelSerializer):
     class Meta: 
         model = models.Bills
         fields = "__all__"
-    """
-        Sample POST, PUT data
-        {
-            "user": 5, 
-            "pay_account": 14, 
-            "description": "Monthly Utility Bills City of Garland", 
-            "amount": 230.00, 
-            "due_date": "2024-08-16"
-        }
-    """
+
     # overidding the representation of the datetime field 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -217,16 +161,6 @@ class StockSerializer(serializers.ModelSerializer):
         model = models.Stock
         fields = "__all__"
 
-    """
-        Sample POST, PUT DATA
-        {
-            "user": 5, 
-            "corporation": "Apple.Inc",
-            "name": "Apple stock",
-            "symbol": "AAPL", 
-            "shares": 20
-        }
-    """
     # restrict the field the user can update 
     def update(self, instance, validated_data): 
         # the user can't update 

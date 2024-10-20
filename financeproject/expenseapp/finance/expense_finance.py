@@ -1,15 +1,15 @@
 from typing import Dict, List, Tuple
 from django.db.models import Sum
 from datetime import date, timedelta
+from financeproject.expenseapp.models import Account, Transaction
 from .supplement import *
-
 # THESE ARE FUNCTIONS COMPUTING THE FINANCE OF THE USER'S EXPENSE
 
 # return the total balance of all debit accounts of the user as a tuple 
 def total_balance_and_amount_due(arg_user) -> Tuple: 
     # list of debit and credit accounts 
-    debit_account_list = arg_user.account_set.filter(account_type="Debit")
-    credit_account_list = arg_user.account_set.filter(account_type="Credit")
+    debit_account_list = Account.objects.filter(user=arg_user, account_type="Debit")
+    credit_account_list = Account.objects.filter(user=arg_user, account_type="Credit")
 
     # compute the total balance (balance of debit accounts) and amount due (credit accounts)
     total_balance = get_number(debit_account_list.aggregate(total=Sum("balance"))["total"])
@@ -23,11 +23,10 @@ def total_income(arg_user, arg_first_date=None, arg_last_date=None) -> float:
     first_date, last_date = get_current_dates("month", arg_first_date, arg_last_date)
 
     # query the list of incomes of the user between the first and last date 
-    income_list = arg_user.transaction_set.filter(
-        from_account=False, 
-        occur_date__gte=first_date, 
-        occur_date__lte=last_date)
-    
+    income_list = Transaction.objects.filter(
+        user=arg_user, from_account=False, 
+        occur_date__gte=first_date, occur_date__lte=last_date
+    )
     # compute the total income 
     total_income = get_number(income_list.aggregate(total=Sum("amount"))["total"])
     return total_income 
@@ -48,8 +47,8 @@ def daily_expense(arg_user, arg_first_date=None, arg_last_date=None) -> Dict:
     current_date = first_date
     while current_date <= last_date: 
         # query list of expenses between current date and next date 
-        current_expense_list = arg_user.transaction_set.filter(
-            from_account=True, 
+        current_expense_list = Transaction.objects.filter(
+            user=arg_user, from_account=True, 
             occur_date__gte=current_date, 
             occur_date__lt=(current_date + timedelta(days=1)))
         # compute the total_expense 

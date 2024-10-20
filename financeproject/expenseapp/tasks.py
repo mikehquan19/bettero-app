@@ -1,27 +1,27 @@
 from django.db import transaction
 from datetime import timedelta, date
 from .models import (
-    Account,
-    User, 
-    Stock, 
-    DateStockPrice, 
-    Transaction, 
-    OverdueBillMessage)
+    Account, User, Stock, DateStockPrice, 
+    Transaction, OverdueBillMessage)
 from .finance import update_stock_data
-
+import traceback
 
 # update the due date of the credit account 
 def update_credit_due_date() -> None:
     try:
         # query the list of credit accounts 
         credit_account_list = Account.objects.filter(account_type="Credit", due_date__lte=date.today())
+        updated_account_list = []
         with transaction.atomic(): 
-            for account in credit_account_list: 
+            for credit_account, i in credit_account_list: 
+                updated_account_list.append(credit_account)
                 # increment the month of the due date by 1 (same day next month)
-                account.due_date.month += 1
-                account.save()
-    except Exception as e: 
-        print("Error occur", e)
+                updated_account_list[i].due_date.month += 1 
+            # bulk-update() will make stuff more efficient with 1 query 
+            Account.objects.bulk_update(updated_account_list, ["due_date"])
+    except Exception: 
+        # print the traceback of the errors 
+        print(traceback.format_exc())
 
 
 # update the info of the stock and create the record for the previous day
@@ -33,14 +33,16 @@ def update_info_and_create_price() -> None:
         if weekday != 0 and weekday != 6: 
             with transaction.atomic(): 
                 stock_list = Stock.objects.all()
-                for stock in stock_list: 
+                updated_stock_list = []
+                for stock, i in enumerate(stock_list): 
                     # fetch the updated info about the stock 
                     updated_stock_data = update_stock_data(stock.symbol)
+                    updated_stock_list.append(stock)
 
                     # update the data of each stock instance in the database
                     # current close, previous_close, open, low, high, volume
-                    stock.previous_close = stock.current_close
-                    stock.current_close = updated_stock_data["new_close"]
+                    updated_stock_list[i].previous_close = stock.current_close
+                    updated_stock_list[i].current_close = updated_stock_data["new_close"]
                     stock.open = updated_stock_data["new_open"]
                     stock.low = updated_stock_data["new_low"]
                     stock.high = updated_stock_data["new_high"]
@@ -56,8 +58,8 @@ def update_info_and_create_price() -> None:
                     # create the new date price instance for this stock 
                     stock.datestockprice_set.create(
                         date=stock.last_updated_date, 
-                        given_date_close=stock.current_close)
-                    
+                        given_date_close=stock.current_close
+                    )
                 # create the value of the portfolio 
                 create_portfolio_value()
     except Exception as e: 

@@ -21,11 +21,11 @@ class UserBudget(APIView):
 
     def get_response_data(self, request): 
         # query and serialize the user 
-        user = request.user
-        custom_data = {"month": {}, "bi_week": {}, "week": {}}
-        for key in list(custom_data.keys()): 
-            custom_data[key] = get_budget_response_data(user, key)
-        return custom_data 
+        queried_user = request.user
+        response_data = {"month": {}, "bi_week": {}, "week": {}}
+        for time_type in list(response_data.keys()): 
+            response_data[time_type] = get_budget_response_data(queried_user, time_type)
+        return response_data
     
     # GET method 
     def get(self, request, format=None): 
@@ -53,16 +53,18 @@ class UserBudgetDetail(APIView):
 
     def get_budget_plan(self, request, interval_type): 
         # query the user and check if the user has plan of this type
-        user = request.user
+        queried_user = request.user
         try: 
-            return user.budgetplan_set.get(interval_type=interval_type)
+            selected_budget_plan = queried_user.budgetplan_set.get(interval_type=interval_type)
         except BudgetPlan.DoesNotExist: 
-            raise Http404("Budget plan doesn't exist!")
+            raise Http404("Budget plan with given type doesn't exist.")
+        # return the plane 
+        return selected_budget_plan
     
     # GET method, just return the plan of the given interval type
     def get(self, request, interval_type, format=None): 
-        user = request.user
-        response_data = get_budget_response_data(user, interval_type)
+        queried_user = request.user
+        response_data = get_budget_response_data(queried_user, interval_type)
         return Response(response_data)
     
     # PUT method, update the plan of the given interval type 
@@ -74,10 +76,12 @@ class UserBudgetDetail(APIView):
     
         if updated_plan_serializer.is_valid(): 
             updated_plan_serializer.save() # call update() method 
+
             # custom data to be returned 
+            queried_user = request.user
             custom_data = {"month": {}, "bi_week": {}, "week": {}}
-            for key in list(custom_data.keys()): 
-                custom_data[key] = get_budget_response_data(request.user, key)
+            for time_type in list(custom_data.keys()): 
+                custom_data[time_type] = get_budget_response_data(queried_user, time_type)
             return Response(custom_data, status=status.HTTP_202_ACCEPTED)
         return Response(updated_plan_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -92,8 +96,8 @@ class UserBudgetDetail(APIView):
 class BillsList(APIView): 
     # get the response data 
     def get_response_data(self, request):
-        user = request.user
-        bills_list = user.bills_set.all()
+        queried_user = request.user
+        bills_list = Bills.objects.filter(user=queried_user)
         response_data = BillSerializer(bills_list, many=True).data
         return response_data 
     
@@ -106,7 +110,6 @@ class BillsList(APIView):
     def post(self, request, format=None): 
         request_data =request.data
         request_data["user"] = request.user.id
-
         new_bill_serializer = BillSerializer(data=request_data)
         if new_bill_serializer.is_valid(): 
             new_bill_serializer.save() # call the create() method 
@@ -124,11 +127,10 @@ class BillsDetail(generics.RetrieveUpdateDestroyAPIView):
 
     # get object and the serializer class 
     def get_object(self):
-        user = self.request.user
         try: 
-            return user.bills_set.get(pk=self.kwargs["pk"])
+            return Bills.objects.get(pk=self.kwargs["pk"])
         except Bills.DoesNotExist: 
-            raise Http404
+            raise Http404("Bill with the given pk not found.")
 
     # overriding the destroying behavior 
     def perform_destroy(self, instance):
@@ -137,17 +139,16 @@ class BillsDetail(generics.RetrieveUpdateDestroyAPIView):
             # create transactions contending that we've paid the bills 
             # before destroying the bills 
             new_transaction = Transaction.objects.create(
-                user=instance.user, 
-                account=instance.pay_account, 
+                user=instance.user, account=instance.pay_account, 
                 description=f"Payment: {instance.description}",
-                amount=instance.amount,
-                from_account=True,
-                occur_date=datetime.now(),
-                category="Bills")
+                amount=instance.amount, from_account=True,
+                occur_date=datetime.now(), category="Bills"
+            )
             # adjust the account 
             adjust_account_balance(
                 user_account=new_transaction.account, 
-                user_transaction=new_transaction)
+                user_transaction=new_transaction
+            )
         # destroy the bills 
         instance.delete()
 

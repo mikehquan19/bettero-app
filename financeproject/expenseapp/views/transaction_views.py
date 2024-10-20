@@ -19,7 +19,7 @@ class UserTransactionList(APIView):
     def get_response_data(self, request):
         # query and serialize the transaction list 
         user = request.user
-        transaction_list = user.transaction_set.order_by("-occur_date")[:15]
+        transaction_list = Transaction.objects.filter(user=user).order_by("-occur_date")[:15]
         response_data = TransactionSerializer(transaction_list, many=True).data
         return response_data
     
@@ -44,16 +44,16 @@ class UserTransactionList(APIView):
 @permission_classes([IsAuthenticated])
 def user_interval_transactions(request, arg_first_date, arg_last_date): 
     if request.method == "GET": 
-        user = request.user
-
-        # first and last date of the interval 
+        queried_user = request.user
+        # process first and last date of the interval 
         first_list = arg_first_date.split("-")
         last_list= arg_last_date.split("-")
         first_date = date(int(first_list[0]), int(first_list[1]), int(first_list[2]))
         last_date = date(int(last_list[0]), int(last_list[1]), int(last_list[2]))
 
         # the list of transactions between 2 predefined dates 
-        transaction_list = user.transaction_set.filter(
+        transaction_list = Transaction.objects.filter(
+            user=queried_user,
             occur_date__gte=first_date, 
             occur_date__lte=last_date).order_by("-occur_date")
         response_data = TransactionSerializer(transaction_list, many=True).data
@@ -72,17 +72,15 @@ def user_category_transactions(request, arg_category):
         last_date = date(
             year=date.today().year, 
             month=date.today().month, 
-            day=monthrange(date.today().year, date.today().month)[1])
-        
+            day=monthrange(date.today().year, date.today().month)[1]
+        )
         # data about the list of transactions with the picked category 
         from_account = True if arg_category != "Income" else False
         category = arg_category if arg_category != "Income" else "Others"
-        transaction_list = user.transaction_set.filter(
-            from_account=from_account, 
-            category=category, 
-            occur_date__gte=first_date, 
-            occur_date__lte=last_date,
-        ).order_by("-occur_date")
+        transaction_list = Transaction.objects.filter(
+            user=user, 
+            from_account=from_account, category=category, 
+            occur_date__gte=first_date, occur_date__lte=last_date,).order_by("-occur_date")
 
         response_data = TransactionSerializer(transaction_list, many=True).data
         return Response(response_data)
@@ -104,12 +102,10 @@ def interval_category_transactions(request, arg_category, arg_first_date, arg_la
         # the list of transactions with the picked category 
         from_account = True if arg_category != "Income" else False
         category = arg_category if arg_category != "Income" else "Others"
-        transaction_list = user.transaction_set.filter(
-            from_account=from_account,
-            category=category, 
-            occur_date__gte=first_date, 
-            occur_date__lte=last_date
-        ).order_by("-occur_date")
+        transaction_list = Transaction.objects.filter(
+            user=user,
+            from_account=from_account, category=category, 
+            occur_date__gte=first_date, occur_date__lte=last_date).order_by("-occur_date")
         
         response_data = TransactionSerializer(transaction_list, many=True).data
         return Response(response_data)
@@ -120,14 +116,13 @@ def interval_category_transactions(request, arg_category, arg_first_date, arg_la
 @permission_classes([IsAuthenticated])
 def account_transaction_list(request, pk):  
     if request.method == "GET": 
-        user = request.user
         try: 
-            account = user.account_set.get(pk=pk)
+            queried_account = Account.objects.get(pk=pk)
         except Account.DoesNotExist: 
-            raise Http404
+            raise Http404("This account with given pk not found.")
         
         # the trasaction list of the given account 
-        transaction_list = account.transaction_set.order_by("-occur_date")[:15]
+        transaction_list = Transaction.objects.filter(account=queried_account).order_by("-occur_date")[:15]
         response_data = TransactionSerializer(transaction_list, many=True).data
         return Response(response_data)
 
@@ -137,24 +132,21 @@ def account_transaction_list(request, pk):
 @permission_classes([IsAuthenticated])
 def account_category_transactions(request, pk, arg_category): 
     if request.method == "GET": 
-        user = request.user
         try: 
-            account = user.account_set.get(pk=pk)
+            queried_account = Account.objects.get(pk=pk)
         except Account.DoesNotExist: 
-            raise Http404
+            raise Http404("The account with given pk not found.")
 
-        # the list of transactions with picked category
+        # the list of transactions with picked category 
         first_date, last_date = get_current_dates(arg_interval_type="month")
 
         # the list of transactions with the picked category 
         from_account = True if arg_category != "Income" else False
         category = arg_category if arg_category != "Income" else "Others"
-        transaction_list = account.transaction_set.filter(
-            from_account=from_account,
-            category=category, 
-            occur_date__gte=first_date, 
-            occur_date__lte=last_date
-        ).order_by("-occur_date")
+        transaction_list = Transaction.objects.filter(
+            account=queried_account,
+            from_account=from_account, category=category, 
+            occur_date__gte=first_date, occur_date__lte=last_date).order_by("-occur_date")
             
         response_data = TransactionSerializer(transaction_list, many=True).data
         return Response(response_data)
