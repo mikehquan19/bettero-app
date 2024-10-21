@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from expenseapp.models import BudgetPlan, Transaction, Bills
+from expenseapp.models import BudgetPlan, OverdueBillMessage, Transaction, Bills
 from expenseapp.serializers import (
     BudgetPlanSerializer,
     BillSerializer, 
@@ -157,8 +157,8 @@ class BillsDetail(generics.RetrieveUpdateDestroyAPIView):
 @permission_classes([IsAuthenticated])
 def overdue_message_list(request): 
     if request.method == "GET": 
-        user = request.user
-        overdue_message_list = user.overduebillmessage_set.all()
+        queried_user = request.user
+        overdue_message_list = OverdueBillMessage.objects.filter(user=queried_user)
         response_data = OverdueBillMessageSerializer(overdue_message_list, many=True).data
         return Response(response_data)
     
