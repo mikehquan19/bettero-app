@@ -1,7 +1,7 @@
 from typing import Dict, List, Tuple
 from django.db.models import Sum
 from datetime import date, timedelta
-from financeproject.expenseapp.models import Account, Transaction
+from expenseapp.models import Account, Transaction
 from .supplement import *
 # THESE ARE FUNCTIONS COMPUTING THE FINANCE OF THE USER'S EXPENSE
 
@@ -94,22 +94,22 @@ def expense_change_percentage(arg_obj, interval_type="month", arg_first_date=Non
 
     # calculate the change percentage 
     # dict mapping each category to the list [current, previous, change percentage]
-    change_dict = {"Grocery": 0, "Dining": 0, "Shopping": 0, 
-        "Bills": 0, "Gas": 0, "Others": 0, "Income": 0}
+    change_percentage = {"Grocery": 0, "Dining": 0, "Shopping": 0, 
+                    "Bills": 0, "Gas": 0, "Others": 0, "Income": 0}
 
-    for key in list(change_dict.keys()): 
+    for key in list(change_percentage.keys()): 
         if prev_category_expense[key] != 0: 
             # calculate the percentage change and then add to the dict
             # and round to 2 decimal points 
-            change_percentage = curr_category_expense[key] - prev_category_expense[key]
-            change_percentage = round((change_percentage / prev_category_expense[key]) * 100, 2)
+            change_percentage[key] = curr_category_expense[key] - prev_category_expense[key]
+            change_percentage[key] = round((change_percentage[key] / prev_category_expense[key]) * 100, 2)
         else: 
             # if no expenses made during previous month, obviously expenses increase 100% 
             if curr_category_expense[key] != 0: 
-                change_dict[key]= 100.00
+                change_percentage[key]= 100.00
             else: 
-                change_dict[key]= 0.00
-    return change_dict
+                change_percentage[key]= 0.00
+    return change_percentage
 
 
 # adjust the balance of the debit account based on the amount and flow
