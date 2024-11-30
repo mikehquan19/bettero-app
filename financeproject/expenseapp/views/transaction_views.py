@@ -19,7 +19,7 @@ class UserTransactionList(APIView):
     def get_response_data(self, request):
         # query and serialize the transaction list 
         user = request.user
-        transaction_list = Transaction.objects.filter(user=user).order_by("-occur_date")[:15]
+        transaction_list = Transaction.objects.filter(user=user).order_by("-occur_date")[:20]
         response_data = TransactionSerializer(transaction_list, many=True).data
         return response_data
     

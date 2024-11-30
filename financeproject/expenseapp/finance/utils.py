@@ -1,20 +1,24 @@
+"""
+THESE ARE THE SUPPLEMENTAL FUNCTIONS THAT WILL SUPPORT OTHER FINANCE FUNCTIONS
+"""
+
 from typing import Dict
 from django.db.models import Sum
 from datetime import date, timedelta
 from calendar import monthrange
 
-# THESE ARE THE SUPPLEMENTAL FUNCTIONS THAT WILL SUPPORT OTHER FINANCE FUNCTIONS
+
 # turn None into 0
 def get_number(arg): 
     return 0 if arg == None else arg
 
-# get the current first and last dates 
-def get_current_dates(arg_interval_type=None, arg_first_date=None, arg_last_date=None): 
-    if arg_first_date == None: 
-        if arg_interval_type != "month": 
+# get the current first and last dates based on the interval type
+def get_current_dates(period_type=None, arg_first_date=None, arg_last_date=None): 
+    if not arg_first_date: 
+        if period_type != "month": 
             # the number of days of the intervals of given type
             in_between_days = 7 # for week
-            if arg_interval_type == "bi_week": 
+            if period_type == "bi_week": 
                 in_between_days = 14 
             # first and last date of the current interval 
             last_date = date.today() + timedelta(days=(6 - date.today().weekday()))
@@ -29,33 +33,33 @@ def get_current_dates(arg_interval_type=None, arg_first_date=None, arg_last_date
                 day=monthrange(date.today().year, date.today().month)[1])
     else: 
         first_date = arg_first_date
-        last_date = arg_last_date 
+        last_date = arg_last_date
     return first_date, last_date 
 
 
 # get the previous first and last dates 
-def get_previous_dates(arg_interval_type, arg_first_date, arg_last_date): 
-    if arg_interval_type != "month": 
+def get_previous_dates(period_type, arg_first_date, arg_last_date): 
+    if period_type != "month": 
         # the number of days of the intervals of given type
         in_between_days = 7 # for week
-        if arg_interval_type == "bi_week": 
+        if period_type == "bi_week": 
             in_between_days = 14 
             
         prev_first_date = arg_first_date - timedelta(days=in_between_days)
         prev_last_date = arg_last_date - timedelta(days=in_between_days)
     else: 
-        curr_year = arg_first_date.year
-        curr_month = arg_first_date.month
+        current_year = arg_first_date.year
+        current_month = arg_first_date.month
         
         # compute the previous month, and year (if necessary)
-        prev_month = curr_month - 1
-        prev_year = curr_year
-        if prev_month == 0:
-            prev_month = 12
-            prev_year = curr_year - 1
+        previous_month = current_month - 1
+        previous_year = current_year
+        if previous_month == 0:
+            previous_month = 12
+            previous_year = current_year - 1
 
-        prev_first_date = arg_first_date - timedelta(days=monthrange(prev_year, prev_month)[1])
-        prev_last_date = arg_last_date - timedelta(days=monthrange(curr_year, curr_month)[1])
+        prev_first_date = arg_first_date - timedelta(days=monthrange(previous_year, previous_month)[1])
+        prev_last_date = arg_last_date - timedelta(days=monthrange(current_year, current_month)[1])
 
     # return the first date, last date
     return prev_first_date, prev_last_date 
@@ -72,8 +76,7 @@ def category_expense_dict(arg_obj, arg_first_date, arg_last_date) -> Dict:
     
     # calculate the total expense and the expense of each category
     # dictionary mapping the expense's category to amount for the interval between 2 dates to be returned 
-    category_expense = {"Total": 0, "Expense": 0 ,"Grocery": 0, "Dining": 0, "Shopping": 0, 
-                        "Bills": 0, "Gas": 0, "Others": 0, "Income": 0}
+    category_expense = {"Total": 0, "Expense": 0, "Income": 0, "Grocery": 0, "Dining": 0, "Shopping": 0, "Bills": 0, "Gas": 0, "Others": 0}
     
     # compute the sum of all transactions, expense transactions, and income transactions
     category_expense["Total"] = get_number(transaction_list.aggregate(total=Sum("amount"))["total"])

@@ -1,9 +1,13 @@
+""" THESE ARE FUNCTIONS COMPUTING THE FINANCE OF THE USER'S EXPENSE """
+
 from typing import Dict, List, Tuple
 from django.db.models import Sum
 from datetime import date, timedelta
+
+from pandas import Period
 from expenseapp.models import Account, Transaction
-from .supplement import *
-# THESE ARE FUNCTIONS COMPUTING THE FINANCE OF THE USER'S EXPENSE
+from .utils import *
+
 
 # return the total balance of all debit accounts of the user as a tuple 
 def total_balance_and_amount_due(arg_user) -> Tuple: 
@@ -65,51 +69,49 @@ def daily_expense(arg_user, arg_first_date=None, arg_last_date=None) -> Dict:
 def expense_composition_percentage(arg_obj, arg_first_date=None, arg_last_date=None) -> Dict: 
     # the first date and last date of the given month 
     first_date, last_date = get_current_dates("month", arg_first_date, arg_last_date)
-    # dictionary mapping the expense's category to the total amount of expense of this month 
+    # dictionary mapping the category to the total expense this month 
     category_expense = category_expense_dict(arg_obj, first_date, last_date)
+    
     # dictionary mapping the expense's category to the percentage of expense
-    category_percentage = {"Grocery": 0, "Dining": 0, "Shopping": 0,  
-                           "Bills": 0, "Gas": 0, "Others": 0, "Income": 0}
+    composition_percent = {"Grocery": 0, "Dining": 0, "Shopping": 0, "Bills": 0, "Gas": 0, "Others": 0, "Income": 0}
 
     # total expense indicates that no transactions have been made 
-    if category_expense["Total"] != 0:   
+    if category_expense["Total"] != 0:  
         # list of the keys of this dictionary
-        for key in list(category_percentage.keys()):  
-            category_percentage[key] = (category_expense[key] / category_expense["Total"]) * 100
-            # round up to 2 decimal places 
-            category_percentage[key] = round(category_percentage[key], 2) 
-    return category_percentage
+        for category in list(composition_percent.keys()):  
+            composition_percent[category] = (category_expense[category] / category_expense["Total"]) * 100
+            composition_percent[category] = round(composition_percent[category], 2) # round up to 2 decimal places 
+    return composition_percent
 
 
 # calculate how the total expenses and expense of each category have changed 
-def expense_change_percentage(arg_obj, interval_type="month", arg_first_date=None, arg_last_date=None) -> Dict: 
-    # the first and last date of the current month
-    curr_first_date, curr_last_date = get_current_dates(interval_type, arg_first_date, arg_last_date)
-    # the first and last date of the previous month 
-    prev_first_date, prev_last_date = get_previous_dates(interval_type, curr_first_date, curr_last_date)
+def expense_change_percentage(arg_obj, period_type="month", arg_first_date=None, arg_last_date=None) -> Dict: 
+    # the first and last date of the current period
+    curr_date1, curr_date2 = get_current_dates(period_type, arg_first_date, arg_last_date)
+    # the first and last date of the previous period
+    prev_date1, prev_date2 = get_previous_dates(period_type, curr_date1, curr_date2)
 
     # dictionary mapping the expense's category to amount for the current and previous month 
-    curr_category_expense = category_expense_dict(arg_obj, curr_first_date, curr_last_date)
-    prev_category_expense = category_expense_dict(arg_obj, prev_first_date, prev_last_date)
+    curr_expense_dict = category_expense_dict(arg_obj, curr_date1, curr_date2)
+    prev_expense_dict = category_expense_dict(arg_obj, prev_date1, prev_date2)
 
     # calculate the change percentage 
     # dict mapping each category to the list [current, previous, change percentage]
-    change_percentage = {"Grocery": 0, "Dining": 0, "Shopping": 0, 
-                    "Bills": 0, "Gas": 0, "Others": 0, "Income": 0}
+    change_percent = {"Grocery": 0, "Dining": 0, "Shopping": 0, "Bills": 0, "Gas": 0, "Others": 0, "Income": 0}
 
-    for key in list(change_percentage.keys()): 
-        if prev_category_expense[key] != 0: 
+    for category in list(change_percent.keys()): 
+        if prev_expense_dict[category] != 0: 
             # calculate the percentage change and then add to the dict
             # and round to 2 decimal points 
-            change_percentage[key] = curr_category_expense[key] - prev_category_expense[key]
-            change_percentage[key] = round((change_percentage[key] / prev_category_expense[key]) * 100, 2)
+            change_percent[category] = curr_expense_dict[category] - prev_expense_dict[category]
+            change_percent[category] = round((change_percent[category] / prev_expense_dict[category]) * 100, 2)
         else: 
             # if no expenses made during previous month, obviously expenses increase 100% 
-            if curr_category_expense[key] != 0: 
-                change_percentage[key]= 100.00
+            if curr_expense_dict[category] != 0: 
+                change_percent[category]= 100.00
             else: 
-                change_percentage[key]= 0.00
-    return change_percentage
+                change_percent[category]= 0.00
+    return change_percent
 
 
 # adjust the balance of the debit account based on the amount and flow
@@ -130,13 +132,13 @@ def adjust_account_balance(user_account, user_transaction) -> None:
 
 
 # return the list of latest intervals (month, bi_week, or week), intervals = tuple (first_date, last_date)
-def latest_intervals(interval_type, num_intervals) -> List: 
+def latest_periods(period_type, num_periods) -> List: 
     # the list of latest time intervals 
     latest_intervals = [] 
-    first_date, last_date = get_current_dates(interval_type)
-    for _ in range(num_intervals): 
+    first_date, last_date = get_current_dates(period_type)
+    for _ in range(num_periods): 
         latest_intervals.append((first_date, last_date))
-        first_date, last_date = get_previous_dates(interval_type, first_date, last_date)
+        first_date, last_date = get_previous_dates(period_type, first_date, last_date)
     # return the list of intervals 
     return latest_intervals
 
@@ -144,16 +146,17 @@ def latest_intervals(interval_type, num_intervals) -> List:
 # return the total expense of each interval depending on the type of the interval
 def interval_total_expense(arg_user) -> Dict: 
     # the 5 latest months, bi-weeks, and weeks in the dictionary 
-    latest_intervals_dict = {}
-    latest_intervals_dict["month"] = latest_intervals("month", 5)
-    latest_intervals_dict["bi_week"] = latest_intervals("bi_week", 5)
-    latest_intervals_dict["week"] = latest_intervals("week", 5)
+    latest_periods_dict = {
+        "month": latest_periods("month", 5), 
+        "bi_week": latest_periods("bi_week", 5),
+        "week": latest_periods("week", 5)
+    }
 
     # the dictionary mapping the interval type to the list of expense of each interval
-    interval_expense_dict = {}
-    for interval_type in list(latest_intervals_dict.keys()): 
-        interval_expense_dict[interval_type] = []
-        interval_list = latest_intervals_dict[interval_type]
+    period_expense_dict = {}
+    for period_type in list(latest_periods_dict.keys()): 
+        period_expense_dict[period_type] = []
+        interval_list = latest_periods_dict[period_type]
 
         # compute total expense for each interval of the list 
         for interval in interval_list: 
@@ -163,20 +166,20 @@ def interval_total_expense(arg_user) -> Dict:
             # first key-value pair of total_expense_dict is total expense of all categories
             total_expense = category_expense_dict(arg_user, first_date, last_date)["Total"]
 
-            # the expense change and composition of the user during this interval
-            expense_change = expense_change_percentage(arg_user, interval_type, first_date, last_date)
+            # the expense change and composition of the user during this period
+            expense_change = expense_change_percentage(arg_user, period_type, first_date, last_date)
             expense_composition = expense_composition_percentage(arg_user, first_date, last_date)
             
-            # daily expense of the user during this interval 
-            interval_daily_expense = daily_expense(arg_user, first_date, last_date)
+            # daily expense of the user during this period
+            period_daily_expense = daily_expense(arg_user, first_date, last_date)
             
-            interval_expense_dict[interval_type].append({
+            period_expense_dict[period_type].append({
                 "first_date": first_date, 
                 "last_date": last_date, 
                 "total_expense": total_expense,
                 "expense_change": expense_change, 
                 "expense_composition": expense_composition,
-                "daily_expense": interval_daily_expense,
+                "daily_expense": period_daily_expense,
             })
     # return the dictionary 
-    return interval_expense_dict
+    return period_expense_dict

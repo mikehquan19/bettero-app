@@ -41,16 +41,16 @@ def load_stock_data(symbol) -> Dict:
     first_date, last_date = get_first_and_last_dates()
     # load data of the stock's info 
     recent_data = yf.download([symbol], start=to_string(first_date), end=to_string(last_date))
-    # structure of the data 
-    custom_data = {}
 
     # current info of the stock 
-    custom_data["current_close"] = round(Decimal(recent_data["Adj Close"].iloc[-1]), 2)
-    custom_data["previous_close"] = round(Decimal(recent_data["Adj Close"].iloc[-2]), 2)
-    custom_data["open"] = round(Decimal(recent_data["Open"].iloc[-1]), 2)
-    custom_data["high"] = round(Decimal(recent_data["High"].iloc[-1]), 2)
-    custom_data["low"] = round(Decimal(recent_data["Low"].iloc[-1]), 2)
-    custom_data["volume"] = int(recent_data["Volume"].iloc[-1])
+    custom_data = {
+        "current_close": round(Decimal(recent_data["Adj Close"].iloc[-1]), 2),
+        "previous_close": round(Decimal(recent_data["Adj Close"].iloc[-2]), 2), 
+        "open": round(Decimal(recent_data["Open"].iloc[-1]), 2), 
+        "high": round(Decimal(recent_data["High"].iloc[-1]), 2), 
+        "low": round(Decimal(recent_data["Low"].iloc[-1]), 2), 
+        "volume": int(recent_data["Volume"].iloc[-1]),
+    }
 
     # the price of the stock over the past
     custom_data["price_data"] = []
@@ -83,10 +83,11 @@ def update_stock_data(symbol) -> Dict:
     # return the Panda data frame 
     updated_data = yf.download(symbol, start=previous_date, end=today)
     
-    custom_data = {}
-    custom_data["new_close"] = round(Decimal(updated_data["Adj Close"].iloc[0]), 2)
-    custom_data["new_open"] = round(Decimal(updated_data["Open"].iloc[0]), 2)
-    custom_data["new_high"] = round(Decimal(updated_data["High"].iloc[0]), 2)
-    custom_data["new_low"] = round(Decimal(updated_data["Low"].iloc[0]), 2)
-    custom_data["new_volume"] = int(updated_data["Volume"].iloc[0])
+    custom_data = {
+        "new_close": round(Decimal(updated_data["Adj Close"].iloc[0]), 2), 
+        "new_open": round(Decimal(updated_data["Open"].iloc[0]), 2), 
+        "new_high": round(Decimal(updated_data["High"].iloc[0]), 2), 
+        "new_low": round(Decimal(updated_data["Low"].iloc[0]), 2), 
+        "new_volume": int(updated_data["Volume"].iloc[0])
+    }
     return custom_data
