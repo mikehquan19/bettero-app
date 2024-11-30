@@ -36,7 +36,7 @@ def to_date(arg_str):
 
 # load the initial price of the stock since first date of last month
 # till the today along with current data of the stock 
-def load_stock_data(symbol) -> Dict: 
+def load_stock_data(symbol: str) -> Dict: 
     # get the first and last date 
     first_date, last_date = get_first_and_last_dates()
     # load data of the stock's info 
@@ -76,7 +76,7 @@ def load_stock_data(symbol) -> Dict:
 
 
 # update the info the stock, and add new record of the stock price 
-def update_stock_data(symbol) -> Dict: 
+def update_stock_data(symbol: str) -> Dict: 
     previous_date = to_string(date.today() - timedelta(days=1))
     today = to_string(date.today())
     

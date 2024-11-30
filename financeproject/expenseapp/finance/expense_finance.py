@@ -3,14 +3,12 @@
 from typing import Dict, List, Tuple
 from django.db.models import Sum
 from datetime import date, timedelta
-
-from pandas import Period
-from expenseapp.models import Account, Transaction
+from expenseapp.models import Account, Transaction, User
 from .utils import *
 
 
 # return the total balance of all debit accounts of the user as a tuple 
-def total_balance_and_amount_due(arg_user) -> Tuple: 
+def total_balance_and_amount_due(arg_user: User) -> Tuple: 
     # list of debit and credit accounts 
     debit_account_list = Account.objects.filter(user=arg_user, account_type="Debit")
     credit_account_list = Account.objects.filter(user=arg_user, account_type="Credit")
@@ -22,7 +20,7 @@ def total_balance_and_amount_due(arg_user) -> Tuple:
 
 
 # return the total income of the user of this interval
-def total_income(arg_user, arg_first_date=None, arg_last_date=None) -> float: 
+def total_income(arg_user: User, arg_first_date: date=None, arg_last_date: date=None) -> float: 
     # determine the first and last date of the month
     first_date, last_date = get_current_dates("month", arg_first_date, arg_last_date)
 
@@ -38,7 +36,7 @@ def total_income(arg_user, arg_first_date=None, arg_last_date=None) -> float:
 
 # return the dictionary mapping the date to the total expense of that date 
 # up until the current date 
-def daily_expense(arg_user, arg_first_date=None, arg_last_date=None) -> Dict: 
+def daily_expense(arg_user: User, arg_first_date: date=None, arg_last_date: date=None) -> Dict: 
     daily_exepense = {} # result dict 
     if not arg_first_date: 
         first_date = date(year=date.today().year, month=date.today().month, day=1)
@@ -66,7 +64,7 @@ def daily_expense(arg_user, arg_first_date=None, arg_last_date=None) -> Dict:
 
 # calculate the percentage composition of each category of expense
 # return the dictionary mapping each category to its composition percentage of this month
-def expense_composition_percentage(arg_obj, arg_first_date=None, arg_last_date=None) -> Dict: 
+def expense_composition_percentage(arg_obj, arg_first_date: date=None, arg_last_date: date=None) -> Dict: 
     # the first date and last date of the given month 
     first_date, last_date = get_current_dates("month", arg_first_date, arg_last_date)
     # dictionary mapping the category to the total expense this month 
@@ -85,7 +83,7 @@ def expense_composition_percentage(arg_obj, arg_first_date=None, arg_last_date=N
 
 
 # calculate how the total expenses and expense of each category have changed 
-def expense_change_percentage(arg_obj, period_type="month", arg_first_date=None, arg_last_date=None) -> Dict: 
+def expense_change_percentage(arg_obj, period_type: str="month", arg_first_date: date=None, arg_last_date: date=None) -> Dict: 
     # the first and last date of the current period
     curr_date1, curr_date2 = get_current_dates(period_type, arg_first_date, arg_last_date)
     # the first and last date of the previous period
@@ -116,7 +114,7 @@ def expense_change_percentage(arg_obj, period_type="month", arg_first_date=None,
 
 # adjust the balance of the debit account based on the amount and flow
 # return nothing
-def adjust_account_balance(user_account, user_transaction) -> None: 
+def adjust_account_balance(user_account: Account, user_transaction: Transaction) -> None: 
     # multiplier will determine the result based on if amount is extracted for added
     multiplier = 1 
     if not user_transaction.from_account:
@@ -132,7 +130,7 @@ def adjust_account_balance(user_account, user_transaction) -> None:
 
 
 # return the list of latest intervals (month, bi_week, or week), intervals = tuple (first_date, last_date)
-def latest_periods(period_type, num_periods) -> List: 
+def latest_periods(period_type: str, num_periods: int) -> List: 
     # the list of latest time intervals 
     latest_intervals = [] 
     first_date, last_date = get_current_dates(period_type)
@@ -144,7 +142,7 @@ def latest_periods(period_type, num_periods) -> List:
 
 
 # return the total expense of each interval depending on the type of the interval
-def interval_total_expense(arg_user) -> Dict: 
+def interval_total_expense(arg_user: User) -> Dict: 
     # the 5 latest months, bi-weeks, and weeks in the dictionary 
     latest_periods_dict = {
         "month": latest_periods("month", 5), 

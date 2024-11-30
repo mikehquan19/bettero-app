@@ -1,12 +1,12 @@
 """ THESE ARE FUNCTIONS COMPUTING THE FINANCE OF THE USER'S BUDGET AND BILLS """
 
 from typing import Dict
-from expenseapp.models import BudgetPlan
+from expenseapp.models import BudgetPlan, User
 from .utils import *
 
 
 # calculate the actual compostion percentage of each category vs the goal
-def budget_composition_percentage(arg_user, period_type) -> Dict: 
+def budget_composition_percentage(arg_user: User, period_type: str) -> Dict: 
     # query the budget plan 
     queried_plan = BudgetPlan.objects.get(user=arg_user, interval_type=period_type)
     # the first and last date of the current interval of given type 
@@ -38,7 +38,7 @@ def budget_composition_percentage(arg_user, period_type) -> Dict:
 
 
 # calculate the the progress percentage of each towards that category's budget
-def budget_progress_percentage(arg_user, interval_type) -> Dict: 
+def budget_progress_percentage(arg_user: User, interval_type: str) -> Dict: 
     # query the budget plan and total budget
     queried_plan = BudgetPlan.objects.get(user=arg_user, interval_type=interval_type)
     total_budget = queried_plan.recurring_income * queried_plan.portion_for_expense / 100
@@ -76,17 +76,17 @@ def budget_progress_percentage(arg_user, interval_type) -> Dict:
 
 
 # get response data for 
-def get_budget_response_data(arg_user, type) -> Dict: 
+def get_budget_response_data(arg_user: User, period_type: str) -> Dict: 
     # data about the budget 
     budget_response = {}
     try: 
-        this_plan = BudgetPlan.objects.get(user=arg_user, interval_type=type)
+        this_plan = BudgetPlan.objects.get(user=arg_user, interval_type=period_type)
     except BudgetPlan.DoesNotExist: 
         return budget_response # return the empty dictionary 
     
     # composition percentage and progress percentage
-    budget_composition_dict = budget_composition_percentage(arg_user, type)
-    budget_progress_dict = budget_progress_percentage(arg_user, type)
+    budget_composition_dict = budget_composition_percentage(arg_user, period_type)
+    budget_progress_dict = budget_progress_percentage(arg_user, period_type)
 
     budget_response = {
         "id": this_plan.id,   

@@ -2,6 +2,7 @@
 THESE ARE THE SUPPLEMENTAL FUNCTIONS THAT WILL SUPPORT OTHER FINANCE FUNCTIONS
 """
 
+from ast import Tuple
 from typing import Dict
 from django.db.models import Sum
 from datetime import date, timedelta
@@ -13,7 +14,7 @@ def get_number(arg):
     return 0 if arg == None else arg
 
 # get the current first and last dates based on the interval type
-def get_current_dates(period_type=None, arg_first_date=None, arg_last_date=None): 
+def get_current_dates(period_type: str=None, arg_first_date: date=None, arg_last_date: date=None) -> Tuple: 
     if not arg_first_date: 
         if period_type != "month": 
             # the number of days of the intervals of given type
@@ -38,7 +39,7 @@ def get_current_dates(period_type=None, arg_first_date=None, arg_last_date=None)
 
 
 # get the previous first and last dates 
-def get_previous_dates(period_type, arg_first_date, arg_last_date): 
+def get_previous_dates(period_type: str, arg_first_date: date, arg_last_date: date) -> Tuple: 
     if period_type != "month": 
         # the number of days of the intervals of given type
         in_between_days = 7 # for week
@@ -66,7 +67,7 @@ def get_previous_dates(period_type, arg_first_date, arg_last_date):
 
 
 # return the dictionary mapping the expense's category to amount for the interval between 2 dates
-def category_expense_dict(arg_obj, arg_first_date, arg_last_date) -> Dict:
+def category_expense_dict(arg_obj, arg_first_date: date, arg_last_date: date) -> Dict:
     # query the list of transactions (in general) incomes and expenses between 2 dates 
     transaction_list = arg_obj.transaction_set.filter(
         occur_date__gte=arg_first_date, 
