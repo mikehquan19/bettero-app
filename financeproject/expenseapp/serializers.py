@@ -1,4 +1,5 @@
 import datetime
+from decimal import Decimal
 from . import models
 from rest_framework import serializers
 from django.core.exceptions import ValidationError
@@ -27,6 +28,8 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         # built-in method to hash the password of the user 
         user.set_password(password)
+        # add initial value of the user's stock portfolio 
+        models.PortfolioValue.objects.create(user=user, date=datetime.date.today(), given_date_value=Decimal(0))
         user.save()
         return user
 
