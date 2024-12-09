@@ -66,24 +66,29 @@ def get_previous_dates(period_type: str, arg_first_date: date, arg_last_date: da
     return prev_first_date, prev_last_date 
 
 
+# TODO: use more advanced aggregation 
 # return the dictionary mapping the expense's category to amount for the interval between 2 dates
 def category_expense_dict(arg_obj, arg_first_date: date, arg_last_date: date) -> Dict:
     # query the list of transactions (in general) incomes and expenses between 2 dates 
     transaction_list = arg_obj.transaction_set.filter(
         occur_date__gte=arg_first_date, 
-        occur_date__lte=arg_last_date)
+        occur_date__lte=arg_last_date
+    )
     expense_list = transaction_list.filter(from_account=True)
     income_list = transaction_list.filter(from_account=False)
     
     # calculate the total expense and the expense of each category
-    # dictionary mapping the expense's category to amount for the interval between 2 dates to be returned 
-    category_expense = {"Total": 0, "Expense": 0, "Income": 0, "Grocery": 0, "Dining": 0, "Shopping": 0, "Bills": 0, "Gas": 0, "Others": 0}
+    # dict mapping the expense category to amount for the period to be returned 
+    category_expense = {"Grocery": 0, "Dining": 0, "Shopping": 0, "Bills": 0, "Gas": 0, "Others": 0}
+
+     # compute the total expense of each category 
+    for category in list(category_expense.keys()): 
+        category_expense_list = expense_list.filter(category=category)
+        category_expense[category] = get_number(category_expense_list.aggregate(total=Sum("amount"))["total"])
     
     # compute the sum of all transactions, expense transactions, and income transactions
     category_expense["Total"] = get_number(transaction_list.aggregate(total=Sum("amount"))["total"])
     category_expense["Expense"] = get_number(expense_list.aggregate(total=Sum("amount"))["total"])
     category_expense["Income"] = get_number(income_list.aggregate(total=Sum("amount"))["total"])
-    # compute the total expense of each category 
-    for expense in expense_list: 
-        category_expense[expense.category] += expense.amount 
+
     return category_expense
