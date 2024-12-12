@@ -8,18 +8,14 @@ from django.db.models import Sum
 from datetime import date, timedelta
 from calendar import monthrange
 
-
-# turn None into 0
-def get_number(arg): 
-    return 0 if arg == None else arg
-
 # get the current first and last dates based on the interval type
 def get_current_dates(period_type: str=None, arg_first_date: date=None, arg_last_date: date=None) -> Tuple: 
     if not arg_first_date: 
         if period_type != "month": 
             # the number of days of the intervals of given type
-            in_between_days = 7 # for week
-            if period_type == "bi_week": 
+            if period_type == "week": 
+                in_between_days = 7 # for week
+            elif period_type == "bi_week": 
                 in_between_days = 14 
             # first and last date of the current interval 
             last_date = date.today() + timedelta(days=(6 - date.today().weekday()))
@@ -29,8 +25,7 @@ def get_current_dates(period_type: str=None, arg_first_date: date=None, arg_last
             # first date and last date of the current month
             first_date = date(year=date.today().year, month=date.today().month, day=1)
             last_date = date(
-                year=date.today().year, 
-                month=date.today().month, 
+                year=date.today().year, month=date.today().month, 
                 day=monthrange(date.today().year, date.today().month)[1])
     else: 
         first_date = arg_first_date
@@ -78,17 +73,15 @@ def category_expense_dict(arg_obj, arg_first_date: date, arg_last_date: date) ->
     income_list = transaction_list.filter(from_account=False)
     
     # calculate the total expense and the expense of each category
-    # dict mapping the expense category to amount for the period to be returned 
     category_expense = {"Grocery": 0, "Dining": 0, "Shopping": 0, "Bills": 0, "Gas": 0, "Others": 0}
 
      # compute the total expense of each category 
     for category in list(category_expense.keys()): 
-        category_expense_list = expense_list.filter(category=category)
-        category_expense[category] = get_number(category_expense_list.aggregate(total=Sum("amount"))["total"])
+        category_expense[category] = expense_list.filter(category=category).aggregate(
+            total=Sum("amount", default=0))["total"]
     
     # compute the sum of all transactions, expense transactions, and income transactions
-    category_expense["Total"] = get_number(transaction_list.aggregate(total=Sum("amount"))["total"])
-    category_expense["Expense"] = get_number(expense_list.aggregate(total=Sum("amount"))["total"])
-    category_expense["Income"] = get_number(income_list.aggregate(total=Sum("amount"))["total"])
-
+    category_expense["Total"] = transaction_list.aggregate(total=Sum("amount", default=0))["total"]
+    category_expense["Expense"] = expense_list.aggregate(total=Sum("amount"), default=0)["total"]
+    category_expense["Income"] = income_list.aggregate(total=Sum("amount", default=0))["total"]
     return category_expense

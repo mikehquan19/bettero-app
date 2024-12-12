@@ -5,8 +5,7 @@ import yfinance as yf
 
 # get the first date of last month and current date 
 def get_first_and_last_dates(): 
-    # the last date (which is today)
-    current_date = date.today()
+    current_date = date.today() # the last date (which is today)
 
     # the first date (which is first date of last month)
     # month and year of the last date 
@@ -66,8 +65,7 @@ def load_stock_data(symbol: str) -> Dict:
         # the key error means that the price of stock on that date doesn't exist
         except KeyError: 
             pass
-        # increment the date
-        current_date += timedelta(days=1)
+        current_date += timedelta(days=1) # increment the date
 
     # the date the price of the stock was updated 
     last_updated_date = custom_data["price_data"][-1]["date"]

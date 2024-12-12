@@ -4,11 +4,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from expenseapp.models import Stock, PortfolioValue
-from expenseapp.serializers import (
-    PortfolioValueSerializer, 
-    StockSerializer,
-    StockPriceSerializer)
+from django.db import transaction
+from expenseapp.models import DateStockPrice, Stock, PortfolioValue
+from expenseapp.serializers import PortfolioValueSerializer, StockSerializer, StockPriceSerializer
 from expenseapp.finance import load_stock_data
 
 # handling the list of stocks 
@@ -50,11 +48,13 @@ class StockList(APIView):
             created_stock = new_stock_serializer.save() 
 
             # add all of the price of the stock
+            stock_price_list = [] 
             for i in range(len(stock_price_data)): 
-                created_stock.datestockprice_set.create(
-                    date=stock_price_data[i]["date"],
-                    given_date_close=stock_price_data[i]["given_date_close"]
-                )
+                stock_price_list.append(DateStockPrice(
+                    Stock=created_stock, date=stock_price_data[i], given_date_close=stock_price_data[i]["given_date_close"]))
+            with transaction.atomic():
+                DateStockPrice.objects.bulk_create(stock_price_list)
+
             # return the response data
             response_data = self.get_response_data(request)
             return Response(response_data, status=status.HTTP_201_CREATED)
@@ -106,7 +106,7 @@ class StockPriceDetail(APIView):
         queried_user = request.user
         stock = get_object_or_404(Stock, user=queried_user, symbol=symbol)
         stock.delete()
-        return Response({"message": "Stock deleted successfully"})
+        return Response({"message": "Stock deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["GET"])

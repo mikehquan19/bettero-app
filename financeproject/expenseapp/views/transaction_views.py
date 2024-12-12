@@ -9,6 +9,7 @@ from expenseapp.serializers import TransactionSerializer
 from expenseapp.finance import get_current_dates
 from datetime import date
 from calendar import monthrange
+from expenseapp.finance import adjust_account_balance
 
 
 # handling the list of transactions of the user 
@@ -32,7 +33,9 @@ class UserTransactionList(APIView):
     def post(self, request, format=None): 
         new_trans_serializer = TransactionSerializer(data=request.data)
         if new_trans_serializer.is_valid(): 
-            new_trans_serializer.save() # call the create method 
+            transaction = new_trans_serializer.save() # call the create method 
+            # adjust balance of the associated account 
+            adjust_account_balance(transaction.account, transaction)
 
             response_data = self.get_response_data(request)
             return Response(response_data, status=status.HTTP_201_CREATED)

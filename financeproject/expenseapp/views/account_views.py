@@ -1,15 +1,17 @@
 from django.http import Http404
+from django.db import transaction
 from rest_framework import status, generics
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from expenseapp.models import Account
+from expenseapp.models import Account, Transaction
 from expenseapp.serializers import AccountSerializer
 from expenseapp.finance import (
     expense_change_percentage, 
     expense_composition_percentage
 )
+import datetime
 
 # handling the list of accounts of the user 
 class AccountList(APIView):   
@@ -47,6 +49,7 @@ class AccountList(APIView):
 class AccountDetail(generics.RetrieveUpdateDestroyAPIView): 
     permission_classes = [IsAuthenticated]
     serializer_class = AccountSerializer
+
     # the account instance 
     def get_object(self): 
         try: 
@@ -54,6 +57,31 @@ class AccountDetail(generics.RetrieveUpdateDestroyAPIView):
         except Account.DoesNotExist: 
             raise Http404("Account with the given pk not found.")
         return selected_account
+    
+    @transaction.atomic
+    def perform_update(self, serializer):
+        previous_balance = self.get_object().balance
+        updated_account = serializer.save()
+
+        current_balance = updated_account.balance
+        balance_change = current_balance - previous_balance
+
+        # create the transaction corresponding to the change, if any
+        if balance_change != 0: 
+            # The content of the transaction differs depending on change
+            if balance_change > 0: 
+                description = f"Account's balance increases ${abs(balance_change)}"
+                from_account = True if updated_account.account_type == "Credit" else False
+            else: 
+                description = f"Account's balance decreases ${abs(balance_change)}"
+                from_account = False if updated_account.account_type == "Credit" else True
+            # create transaction
+            Transaction.objects.create(
+                user=updated_account.user, account=updated_account, description=description, 
+                amount=abs(balance_change), from_account=from_account, 
+                occur_date=datetime.datetime.now(), category="Others",
+            )
+
     
 
 # handling the info of the financial summary of the specific account

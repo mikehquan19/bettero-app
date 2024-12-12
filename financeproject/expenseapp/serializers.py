@@ -1,8 +1,7 @@
-import datetime
-from decimal import Decimal
+from .models import User
 from . import models
+from rest_framework.serializers import ValidationError as DRFValidationError
 from rest_framework import serializers
-from django.core.exceptions import ValidationError
 from . import finance
 
 class RegisterSerializer(serializers.ModelSerializer): 
@@ -17,21 +16,19 @@ class RegisterSerializer(serializers.ModelSerializer):
     # validate if 2 passwords the user entered match each other 
     def validate(self, attrs):
         if attrs.get('password') != attrs.get('password_again'): 
-            raise serializers.ValidationError({"password": "2 passwords don't match."})
+            raise DRFValidationError({"password": "2 passwords don't match."})
         return attrs
 
     # create the new user with the given validated info 
     def create(self, validated_data): 
         validated_data.pop("password_again")
         password = validated_data.pop("password")
-        user = models.User.objects.create(**validated_data)
+        created_user = User.objects.create(**validated_data)
 
         # built-in method to hash the password of the user 
-        user.set_password(password)
-        # add initial value of the user's stock portfolio 
-        models.PortfolioValue.objects.create(user=user, date=datetime.date.today(), given_date_value=Decimal(0))
-        user.save()
-        return user
+        created_user.set_password(password)
+        created_user.save()
+        return created_user
 
 
 # the serializer of the account 
@@ -39,35 +36,6 @@ class AccountSerializer(serializers.ModelSerializer):
     class Meta: 
         model = models.Account 
         fields = "__all__"
-
-    def update(self, instance, validated_data): 
-        # compute the change of balance
-        previous_balance = instance.balance
-        current_balance = validated_data["balance"]
-        balance_change = current_balance - previous_balance
-
-        # create the transaction corresponding to the change, if any
-        if balance_change != 0: 
-            # The content of the transaction differs depending on change
-            if balance_change > 0: 
-                description = f"Account's balance increases ${abs(balance_change)}"
-                from_account = True if instance.account_type == "Credit" else False
-            else: 
-                description = f"Account's balance decreases ${abs(balance_change)}"
-                from_account = False if instance.account_type == "Credit" else True
-            # create transaction
-            models.Transaction.objects.create(
-                user=instance.user,
-                account=instance, 
-                description=description, 
-                amount=abs(balance_change),
-                from_account=from_account,
-                occur_date=datetime.datetime.now(),
-                category="Others",
-            )
-
-        # call the original update() method 
-        return super().update(instance, validated_data)
 
     # overidding the representation of the date field 
     def to_representation(self, instance):
@@ -89,9 +57,6 @@ class TransactionSerializer(serializers.ModelSerializer):
         account = validated_data.pop("account")
         user = account.user
         transaction = models.Transaction.objects.create(user=user, account=account, **validated_data)
-
-        # adjust balance of the queried account 
-        finance.adjust_account_balance(account, transaction)
         return transaction 
 
 
@@ -114,7 +79,7 @@ class BudgetPlanSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data): 
         # only update if the instance and validated data has the same interval type
         if instance.interval_type != validated_data["interval_type"]: 
-            raise ValidationError("The data has different interval type. Can't update.")
+            raise DRFValidationError("The data has different interval type. Can't update.")
         
         # call the original update() method 
         return super().update(instance, validated_data)
@@ -168,7 +133,7 @@ class StockSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data): 
         # the user can't update 
         if validated_data["symbol"] != instance.symbol: 
-            raise ValidationError("The data has different symbol. Can't update.")
+            raise DRFValidationError("The data has different symbol. Can't update.")
         return super().update(instance, validated_data)
 
     # add change between 2 closes 

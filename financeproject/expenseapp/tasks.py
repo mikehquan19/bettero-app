@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import transaction, models
 from datetime import timedelta, date
 from .models import (
     Account, PortfolioValue, User, Stock, DateStockPrice, 
@@ -8,21 +8,17 @@ import traceback
 
 # update the due date of the credit account 
 def update_credit_due_date() -> None:
+    # increment the due date 
+    def add_month(date):
+        if date.month == 12:
+            return date.replace(year=date.year + 1, month=1)
+        else:
+            return date.replace(month=date.month + 1)
+        
     try:
         # query the list of credit accounts 
         credit_account_list = Account.objects.filter(account_type="Credit", due_date__lte=date.today())
-        updated_account_list = []
-        with transaction.atomic(): 
-            for i, credit_account in enumerate(credit_account_list): 
-                updated_account_list.append(credit_account)
-                # increment the month of the due date by 1 (same day next month)
-                updated_account_list[i].due_date.month += 1 
-            # bulk-update() will make stuff more efficient with 1 query 
-            if len(updated_account_list) > 0: 
-                num_updated_account = Account.objects.bulk_update(updated_account_list, ["due_date"])
-                print(f"{num_updated_account} accounts updated successfully")
-            else: 
-                print("No accounts updated!")
+        credit_account_list.update(due_date=add_month(models.F('due_date')))
     except Exception: 
         # print the traceback of the errors 
         traceback.print_exc()
@@ -31,8 +27,7 @@ def update_credit_due_date() -> None:
 # update the info of the stock and create the record for the previous day
 def update_info_and_create_price() -> None: 
     try: 
-        # if it's sunday or monday, we won't need to check for the changed close
-        # since the market is closed 
+        # if it's sunday or monday, we won't need to check for the change since the market is closed 
         weekday = date.today().weekday()
         if weekday != 0 and weekday != 6: 
             with transaction.atomic(): 
@@ -63,7 +58,7 @@ def update_info_and_create_price() -> None:
                 # using bulk_update() to update with only 1 query
                 if len(updated_stock_list) > 0: 
                     num_updated_stock = Stock.objects.bulk_update(updated_stock_list, updated_field_list)
-                    updated_stock_queryset = Stock.objects.filter(id__in=[stock.id for stock in updated_stock_list])
+                    updated_stock_queryset = Stock.objects.all()
                     print(f"{num_updated_stock} stocks updated successfully!")
                 else: 
                     updated_stock_queryset = Stock.objects.none()
@@ -73,8 +68,7 @@ def update_info_and_create_price() -> None:
                 created_stock_price_list = []
                 for updated_stock in updated_stock_queryset: 
                     created_stock_price_list.append(DateStockPrice(
-                        stock=updated_stock, 
-                        date=updated_stock.last_updated_date, 
+                        stock=updated_stock, date=updated_stock.last_updated_date, 
                         given_date_close=updated_stock.current_close,
                     ))
                 # bulk_create() to make it more efficient 
@@ -159,11 +153,9 @@ def delete_overdue_bills_and_messages() -> None:
                 # add the overdue message corresponding to the bills
                 for overdue_bill in overdue_bill_list: 
                     created_overdue_message_list.append(OverdueBillMessage(
-                        user=user, 
-                        bill_description=overdue_bill.description, 
-                        bill_amount=overdue_bill.amount, 
-                        bill_due_date=overdue_bill.due_date,
-                        appear_date=date.today()
+                        user=user,
+                        bill_description=overdue_bill.description, bill_amount=overdue_bill.amount, 
+                        bill_due_date=overdue_bill.due_date, appear_date=date.today()
                     ))
                 if len(created_overdue_message_list) > 0: 
                     OverdueBillMessage.objects.bulk_create(created_overdue_message_list)

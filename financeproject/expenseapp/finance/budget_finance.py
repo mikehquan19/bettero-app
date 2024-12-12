@@ -7,7 +7,6 @@ from .utils import *
 
 # calculate the actual compostion percentage of each category vs the goal
 def budget_composition_percentage(arg_user: User, period_type: str) -> Dict: 
-    # query the budget plan 
     queried_plan = BudgetPlan.objects.get(user=arg_user, interval_type=period_type)
     # the first and last date of the current interval of given type 
     first_date, last_date = get_current_dates(period_type)

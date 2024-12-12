@@ -2,7 +2,8 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from expenseapp.models import User, Transaction
+from expenseapp.models import User, Transaction, PortfolioValue
+from django.db import transaction
 from expenseapp.serializers import RegisterSerializer, TransactionSerializer
 from expenseapp.finance import *
 
@@ -11,6 +12,23 @@ class Register(generics.CreateAPIView):
     permission_classes = [AllowAny] # anyone visiting the page could login 
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
+
+    def perform_create(self, serializer):
+        created_user = serializer.save()
+
+        # create the list of initial portfolio value of the user 
+        first_date, last_date = get_first_and_last_dates()
+        current_date = first_date 
+
+        portfolio_value_list = [] 
+        while current_date < last_date: 
+            portfolio_value_list.append(PortfolioValue(
+                user=created_user, date=current_date, given_date_value=Decimal(0)
+            ))
+            current_date += timedelta(days=1)
+        # ensure the integrity of the query 
+        with transaction.atomic():
+            PortfolioValue.objects.bulk_create(portfolio_value_list) 
 
 
 # handling the info of the financial summary of the user 

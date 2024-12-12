@@ -34,10 +34,9 @@ class Account(models.Model):
             "Credit": "CREDIT"
         })
     balance = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=0, 
-        validators=[MinValueValidator(limit_value=Decimal(0.0))])
+        max_digits=10, decimal_places=2, 
+        default=0, validators=[MinValueValidator(limit_value=Decimal(0.0))]
+    )
     # this is strictly for credit accounts 
     credit_limit = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
@@ -56,10 +55,9 @@ class Transaction(models.Model):
     # info the accounts 
     description = models.CharField(max_length=200)
     amount = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default = 0, 
-        validators=[MinValueValidator(limit_value=Decimal(0.01))])
+        max_digits=10, decimal_places=2, 
+        default = 0, validators=[MinValueValidator(limit_value=Decimal(0.01))]
+    )
     from_account = models.BooleanField(default=True)
     # hours were used to sort 
     occur_date = models.DateTimeField("The date transaction was made")
@@ -95,10 +93,9 @@ class BudgetPlan(models.Model):
 
     # the recurring income over that period (in dollars)
     recurring_income = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=Decimal(0.01),
-        validators=[MinValueValidator(limit_value=Decimal(0.01))])
+        max_digits=10, decimal_places=2, 
+        default=Decimal(0.01), validators=[MinValueValidator(limit_value=Decimal(0.01))]
+    )
     
     # validator for the percentage 
     value_validators = [
@@ -122,16 +119,13 @@ class BudgetPlan(models.Model):
 
     # validate the budget plan 
     def clean(self): 
-        # the user this budget plans belongs to 
-        user = self.user
+        user = self.user # the user this budget plans belongs to 
 
         # if the user doesn't have any budget plan, skip it 
         if user.budgetplan_set.exists(): 
-            # the queryset of user's budget plan, excluding this instance
-            # if no instance, id = None
+            # the queryset of user's budget plan, excluding this instance. if no instance, id = None
             budget_plan_list = user.budgetplan_set.exclude(id=self.id)
-            # the maximum number of budget plans, excluding this instance 
-            max_plan_count = 2 
+            max_plan_count = 2 # the maximum number of budget plans, excluding this instance 
 
             # validate if the number of budget plans exceed 3 
             if budget_plan_list.count() > max_plan_count: 
@@ -162,9 +156,7 @@ class Bills(models.Model):
     pay_account = models.ForeignKey(Account, null=True, blank=True, on_delete=models.SET_NULL, default=1)
     description = models.CharField(max_length=200)
     amount = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default = 0, 
+        max_digits=10, decimal_places=2, default = 0, 
         validators=[MinValueValidator(limit_value=Decimal(1.00))])
     due_date = models.DateField() 
 
@@ -211,14 +203,11 @@ class Stock(models.Model):
     last_updated_date = models.DateField("The last date the stock was updated")
 
     # validate if the user has 2 different stocks of the same symbol 
-    def clean(self): 
-        # the user this stock belongs to 
-        user = self.user
+    def clean(self):
+        user = self.user # the user this stock belongs to 
         if user.stock_set.exists(): 
-            # the list of stock with this stock symbol, but excluding this stock
-            # if no instance, id = None
-            stock_list = user.stock_set.exclude(id=self.id)
-            stock_list = stock_list.filter(symbol=self.symbol)
+            # the list of stock with this stock symbol, but excluding this stock, if no instance, id = None
+            stock_list = user.stock_set.exclude(id=self.id).filter(symbol=self.symbol)
             if stock_list.exists(): 
                 raise ValidationError(f"This stock overlaps the previous ones ({self.id})")
     
@@ -241,10 +230,9 @@ class DateStockPrice(models.Model):
     
     # the close price of the given stock on the given date 
     given_date_close =  models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=0,
-        validators=[MinValueValidator(limit_value=Decimal(0.00))])
+        max_digits=10, decimal_places=2, 
+        default=0, validators=[MinValueValidator(limit_value=Decimal(0.00))]
+    )
     
     class Meta: 
         # order the stock price based on the stock and the date 
@@ -260,10 +248,9 @@ class OverdueBillMessage(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     bill_description = models.CharField(max_length=200)
     bill_amount = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default = 0, 
-        validators=[MinValueValidator(limit_value=Decimal(1.00))])
+        max_digits=10, decimal_places=2, 
+        default = 0, validators=[MinValueValidator(limit_value=Decimal(1.00))]
+    )
     bill_due_date = models.DateField("The date the overdue bill was due", null=True)
     appear_date = models.DateField("The date the message was created", null=True)
 
