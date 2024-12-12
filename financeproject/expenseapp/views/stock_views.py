@@ -88,8 +88,7 @@ class StockPriceDetail(APIView):
     
     # PUT method, update the stock 
     def put(self, request, symbol, format=None): 
-        queried_user = request.user
-        request_data = request.data
+        queried_user, request_data = request.user, request.data
         request_data["user"] = queried_user.id
         stock = get_object_or_404(Stock, user=queried_user, symbol=symbol)
 

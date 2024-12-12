@@ -83,9 +83,8 @@ def expense_composition_percentage(arg_obj, arg_first_date: date=None, arg_last_
 
 # calculate how the total expenses and expense of each category have changed 
 def expense_change_percentage(arg_obj, period_type: str="month", arg_first_date: date=None, arg_last_date: date=None) -> Dict: 
-    # the first and last date of the current period
+    # the first and last date of the current period and the previous period
     curr_date1, curr_date2 = get_current_dates(period_type, arg_first_date, arg_last_date)
-    # the previous period
     prev_date1, prev_date2 = get_previous_dates(period_type, curr_date1, curr_date2)
 
     # dictionary mapping the expense's category to amount for the current and previous month 
@@ -128,11 +127,12 @@ def adjust_account_balance(user_account: Account, user_transaction: Transaction)
 
 
 # return the list of latest intervals (month, bi_week, or week), intervals = tuple (first_date, last_date)
-def latest_periods(period_type: str, num_periods: int) -> List: 
+def latest_periods(period_type: str) -> List: 
     # the list of latest time intervals 
     latest_intervals = [] 
     first_date, last_date = get_current_dates(period_type)
-    for _ in range(num_periods): 
+    current_first_date = first_date 
+    while first_date >= current_first_date - timedelta(days=150): 
         latest_intervals.append((first_date, last_date))
         first_date, last_date = get_previous_dates(period_type, first_date, last_date)
     return latest_intervals
@@ -140,11 +140,11 @@ def latest_periods(period_type: str, num_periods: int) -> List:
 
 # return the total expense of each interval depending on the type of the interval
 def interval_total_expense(arg_user: User) -> Dict: 
-    # the 5 latest months, bi-weeks, and weeks in the dictionary 
+    # the latest months, bi-weeks, and weeks in the dictionary 
     latest_periods_dict = {
-        "month": latest_periods("month", 5), 
-        "bi_week": latest_periods("bi_week", 5),
-        "week": latest_periods("week", 5)
+        "month": latest_periods("month"), 
+        "bi_week": latest_periods("bi_week"),
+        "week": latest_periods("week")
     }
 
     # the dictionary mapping the interval type to the list of expense of each interval
@@ -156,8 +156,8 @@ def interval_total_expense(arg_user: User) -> Dict:
         # compute total expense for each interval of the list 
         for interval in interval_list: 
             # first and last date of the interval 
-            first_date = interval[0]
-            last_date = interval[1]
+            first_date, last_date = interval[0], interval[1]
+
             # first key-value pair of total_expense_dict is total expense of all categories
             total_expense = category_expense_dict(arg_user, first_date, last_date)["Total"]
 

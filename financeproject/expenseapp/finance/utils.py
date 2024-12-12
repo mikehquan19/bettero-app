@@ -28,8 +28,7 @@ def get_current_dates(period_type: str=None, arg_first_date: date=None, arg_last
                 year=date.today().year, month=date.today().month, 
                 day=monthrange(date.today().year, date.today().month)[1])
     else: 
-        first_date = arg_first_date
-        last_date = arg_last_date
+        first_date, last_date = arg_first_date, arg_last_date
     return first_date, last_date 
 
 
@@ -37,17 +36,17 @@ def get_current_dates(period_type: str=None, arg_first_date: date=None, arg_last
 def get_previous_dates(period_type: str, arg_first_date: date, arg_last_date: date) -> Tuple: 
     if period_type != "month": 
         # the number of days of the intervals of given type
-        in_between_days = 7 # for week
-        if period_type == "bi_week": 
+        if period_type == "week": 
+            in_between_days = 7
+        elif period_type == "bi_week": 
             in_between_days = 14 
             
         prev_first_date = arg_first_date - timedelta(days=in_between_days)
         prev_last_date = arg_last_date - timedelta(days=in_between_days)
     else: 
-        current_year = arg_first_date.year
-        current_month = arg_first_date.month
+        current_year, current_month = arg_first_date.year, arg_first_date.month
         
-        # compute the previous month, and year (if necessary)
+        # compute the previous month, or year (if necessary)
         previous_month = current_month - 1
         previous_year = current_year
         if previous_month == 0:
