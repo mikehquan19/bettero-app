@@ -1,4 +1,5 @@
-from django.db import transaction, models
+from django.db import transaction
+from django.db.models import F, Sum
 from datetime import timedelta, date
 from .models import (
     Account, PortfolioValue, User, Stock, DateStockPrice, 
@@ -18,7 +19,7 @@ def update_credit_due_date() -> None:
     try:
         # query the list of credit accounts 
         credit_account_list = Account.objects.filter(account_type="Credit", due_date__lte=date.today())
-        credit_account_list.update(due_date=add_month(models.F('due_date')))
+        credit_account_list.update(due_date=add_month(F('due_date')))
     except Exception: 
         # print the traceback of the errors 
         traceback.print_exc()
@@ -95,8 +96,8 @@ def create_portfolio_value() -> None:
         with transaction.atomic(): 
             for user in user_list: 
                 # compute the total value of the user's portfolio 
-                user_portfolio = Stock.objects.filter(user=user)
-                total_value = sum([(stock.current_close * stock.shares) for stock in user_portfolio])
+                user_portfolio = Stock.objects.filter(user=user).annotate(total_value=F("current_close") * F("shares"))
+                total_value = user_portfolio.aggregate(total=Sum("total_value", default=0))["total_value"]
                 created_portfolio_value_list.append(PortfolioValue(
                     user=user, date=previous_date, given_date_value=total_value
                 ))

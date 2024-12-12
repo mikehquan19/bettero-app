@@ -16,6 +16,7 @@ import datetime
 # handling the list of accounts of the user 
 class AccountList(APIView):   
     permission_classes = [IsAuthenticated]
+    
     # get the customized response data with the user id
     def get_response_data(self, request):
         # query and serialize the account list 
