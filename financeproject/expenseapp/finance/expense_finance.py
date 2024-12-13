@@ -127,12 +127,11 @@ def adjust_account_balance(user_account: Account, user_transaction: Transaction)
 
 
 # return the list of latest intervals (month, bi_week, or week), intervals = tuple (first_date, last_date)
-def latest_periods(period_type: str) -> List: 
+def latest_periods(period_type: str, num_periods: int) -> List: 
     # the list of latest time intervals 
     latest_intervals = [] 
     first_date, last_date = get_current_dates(period_type)
-    current_first_date = first_date 
-    while first_date >= current_first_date - timedelta(days=150): 
+    for i in range(num_periods): 
         latest_intervals.append((first_date, last_date))
         first_date, last_date = get_previous_dates(period_type, first_date, last_date)
     return latest_intervals
@@ -142,9 +141,9 @@ def latest_periods(period_type: str) -> List:
 def interval_total_expense(arg_user: User) -> Dict: 
     # the latest months, bi-weeks, and weeks in the dictionary 
     latest_periods_dict = {
-        "month": latest_periods("month"), 
-        "bi_week": latest_periods("bi_week"),
-        "week": latest_periods("week")
+        "month": latest_periods("month", 5), 
+        "bi_week": latest_periods("bi_week", 5),
+        "week": latest_periods("week", 5)
     }
 
     # the dictionary mapping the interval type to the list of expense of each interval

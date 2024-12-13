@@ -76,11 +76,11 @@ def category_expense_dict(arg_obj, arg_first_date: date, arg_last_date: date) ->
 
      # compute the total expense of each category 
     for category in list(category_expense.keys()): 
-        category_expense[category] = expense_list.filter(category=category).aggregate(
-            total=Sum("amount", default=0))["total"]
+        category_expense[category] = float(expense_list.filter(category=category).aggregate(
+            total=Sum("amount", default=0))["total"])
     
     # compute the sum of all transactions, expense transactions, and income transactions
-    category_expense["Total"] = transaction_list.aggregate(total=Sum("amount", default=0))["total"]
-    category_expense["Expense"] = expense_list.aggregate(total=Sum("amount"), default=0)["total"]
-    category_expense["Income"] = income_list.aggregate(total=Sum("amount", default=0))["total"]
+    category_expense["Total"] = float(transaction_list.aggregate(total=Sum("amount", default=0))["total"])
+    category_expense["Expense"] = float(expense_list.aggregate(total=Sum("amount", default=0))["total"])
+    category_expense["Income"] = float(income_list.aggregate(total=Sum("amount", default=0))["total"])
     return category_expense
