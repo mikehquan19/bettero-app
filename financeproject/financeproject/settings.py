@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders', 
-    'django_crontab', 
+    'django_celery_beat'
 ]
 
 MIDDLEWARE = [
@@ -72,8 +72,8 @@ REST_FRAMEWORK = {
 AUTH_USER_MODEL = 'expenseapp.User'
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': False,
@@ -99,16 +99,18 @@ SIMPLE_JWT = {
     'JTI_CLAIM': 'jti',
 
     'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
-    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=15),
-    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(hours=24),
+    'SLIDING_TOKEN_LIFETIME': timedelta(days=30),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
+"""
 CRONJOBS = [
     ('0 0 * * *', 'expenseapp.tasks.update_info_and_create_price'), 
     ('0 0 * * *', 'expenseapp.tasks.delete_price'),
     ('0 0 * * *', 'expenseapp.tasks.delete_transactions'),
     ('0 0 * * *', 'expenseapp.tasks.delete_overdue_bills_and_messages'),
 ]
+"""
 
 # DON'T DO IT IN PRODUCTION ENVIRONMENT
 CORS_ORIGIN_ALLOW_ALL = True
@@ -164,7 +166,7 @@ DATABASES = {
         "USER": "postgres",
         "PASSWORD": "",
         "HOST": "localhost",
-        "PORT": "5432",
+        "PORT": "5003",
     }
 }
 
@@ -199,6 +201,11 @@ TIME_ZONE = 'US/Central'
 USE_I18N = True
 
 USE_TZ = True
+
+# Celery Configuration Options
+CELERY_TIMEZONE =  "US/Central"
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
 
 
 # Static files (CSS, JavaScript, Images)

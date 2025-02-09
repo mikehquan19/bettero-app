@@ -1,13 +1,13 @@
 from .models import User
 from . import models
 from rest_framework.serializers import ValidationError as DRFValidationError
-from rest_framework import serializers
-from . import finance
+from rest_framework import serializers, fields
+import json
 
 class RegisterSerializer(serializers.ModelSerializer): 
     class Meta: 
         model = models.User
-        fields = ["full_name", "user_email", "username", "password", "password_again"]
+        fields = ["first_name", "last_name", "email address", "username", "password", "password_again"]
 
     # field of second password 
     # TODO: what is the write_only parameters ?
@@ -59,7 +59,6 @@ class TransactionSerializer(serializers.ModelSerializer):
         transaction = models.Transaction.objects.create(user=user, account=account, **validated_data)
         return transaction 
 
-
     # overidding the representation of the datetime field 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -79,16 +78,26 @@ class BudgetPlanSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data): 
         # only update if the instance and validated data has the same interval type
         if instance.interval_type != validated_data["interval_type"]: 
-            raise DRFValidationError("The data has different interval type. Can't update.")
+            raise DRFValidationError({
+                "message": "The data has different interval type. Can't update."
+            })
+
+        instance.recurring_income = validated_data.get("recurring_income", instance.recurring_income)
+        instance.portion_for_expense = validated_data.get("portion_for_expense", instance.portion_for_expense)
         
+        # update the JSON
+        for category in list(validated_data["category_portion"].keys()): 
+            instance.category_portion[category] = validated_data["category_portion"][category]
+
+        instance.save()
         # call the original update() method 
-        return super().update(instance, validated_data)
+        return instance
     
 
 # the serializer of the bills 
 class BillSerializer(serializers.ModelSerializer): 
     class Meta: 
-        model = models.Bills
+        model = models.Bill
         fields = "__all__"
 
     # overidding the representation of the datetime field 

@@ -3,14 +3,10 @@ from django.db import transaction
 from rest_framework import status, generics
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from expenseapp.models import Account, Transaction
 from expenseapp.serializers import AccountSerializer
-from expenseapp.finance import (
-    expense_change_percentage, 
-    expense_composition_percentage
-)
+from expenseapp.finance import expense_change_percentage, expense_composition_percentage
 import datetime
 
 # handling the list of accounts of the user 
@@ -20,10 +16,8 @@ class AccountList(APIView):
     # get the customized response data with the user id
     def get_response_data(self, request):
         # query and serialize the account list 
-        queried_user = request.user
-        account_list = Account.objects.filter(user=queried_user)
+        account_list = Account.objects.filter(user=request.user)
         response_data = AccountSerializer(account_list, many=True).data
-        # return the json
         return response_data
 
     # GET method, return the list of accounts of the user
@@ -50,14 +44,7 @@ class AccountList(APIView):
 class AccountDetail(generics.RetrieveUpdateDestroyAPIView): 
     permission_classes = [IsAuthenticated]
     serializer_class = AccountSerializer
-
-    # the account instance 
-    def get_object(self): 
-        try: 
-            selected_account =  Account.objects.get(pk=self.kwargs["pk"])
-        except Account.DoesNotExist: 
-            raise Http404("Account with the given pk not found.")
-        return selected_account
+    queryset = Account.objects.all()
     
     @transaction.atomic
     def perform_update(self, serializer):
@@ -72,24 +59,22 @@ class AccountDetail(generics.RetrieveUpdateDestroyAPIView):
             # The content of the transaction differs depending on change
             if balance_change > 0: 
                 description = f"Account's balance increases ${abs(balance_change)}"
-                from_account = True if updated_account.account_type == "Credit" else False
+                category = "Others" if updated_account.account_type == "Credit" else "Income"
             else: 
                 description = f"Account's balance decreases ${abs(balance_change)}"
-                from_account = False if updated_account.account_type == "Credit" else True
+                category = "Income" if updated_account.account_type == "Credit" else "Others"
             # create transaction
             Transaction.objects.create(
                 user=updated_account.user, account=updated_account, description=description, 
-                amount=abs(balance_change), from_account=from_account, 
-                occur_date=datetime.datetime.now(), category="Others",
+                amount=abs(balance_change), occur_date=datetime.datetime.now(), category=category
             )
 
-    
-
+        
 # handling the info of the financial summary of the specific account
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def account_summary_detail(request, pk):
-    if request.method == "GET": 
+class AccountSummary(APIView): 
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk, format=None): 
         try: 
             queried_account = Account.objects.get(pk=pk)
         except Account.DoesNotExist: 

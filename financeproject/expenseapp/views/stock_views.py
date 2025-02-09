@@ -1,7 +1,6 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db import transaction
@@ -15,8 +14,7 @@ class StockList(APIView):
 
     # get the response data 
     def get_response_data(self, request):
-        queried_user = request.user
-        stock_list = queried_user.stock_set.all()
+        stock_list = Stock.objects.filter(user=request.user)
         response_data = StockSerializer(stock_list, many=True).data
         return response_data
     
@@ -26,10 +24,10 @@ class StockList(APIView):
         return Response(response_data)
     
     # POST method, add the stock the list of stock of user 
-    # return the new list of stocks
+    @transaction.atomic
     def post(self, request, format=None): 
         request_data = request.data 
-        request_data["user"] = request.user.id
+        request_data["user"] = request.user.pk
         symbol = request_data["symbol"]
 
         # load the price data of the stock with the given symbol 
@@ -51,9 +49,9 @@ class StockList(APIView):
             stock_price_list = [] 
             for i in range(len(stock_price_data)): 
                 stock_price_list.append(DateStockPrice(
-                    Stock=created_stock, date=stock_price_data[i], given_date_close=stock_price_data[i]["given_date_close"]))
-            with transaction.atomic():
-                DateStockPrice.objects.bulk_create(stock_price_list)
+                    stock=created_stock, date=stock_price_data[i]["date"], given_date_close=stock_price_data[i]["given_date_close"]
+                ))
+            DateStockPrice.objects.bulk_create(stock_price_list)
 
             # return the response data
             response_data = self.get_response_data(request)
@@ -66,15 +64,15 @@ class StockPriceDetail(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_response_data(self, request, symbol): 
-        queried_user = request.user
-        stock = get_object_or_404(Stock, user=queried_user, symbol=symbol)
+        stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
         # list of prices of the stock 
         stock_price_list = stock.datestockprice_set.order_by("date")
 
         # response data 
-        response_data = {}
-        response_data["stock"] = StockSerializer(stock).data
-        response_data["price_list"] = {}
+        response_data = {
+            "stock": StockSerializer(stock).data, 
+            "price_list": {}
+        }
 
         price_list = StockPriceSerializer(stock_price_list, many=True).data
         for price in price_list: 
@@ -88,13 +86,14 @@ class StockPriceDetail(APIView):
     
     # PUT method, update the stock 
     def put(self, request, symbol, format=None): 
-        queried_user, request_data = request.user, request.data
-        request_data["user"] = queried_user.id
-        stock = get_object_or_404(Stock, user=queried_user, symbol=symbol)
+        request_data = request.data
+        request_data["user"] = request.user.pk
+        stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
 
         updated_stock_serializer = StockSerializer(stock, data=request_data)
         if updated_stock_serializer.is_valid(): 
             updated_stock_serializer.save() 
+
             # return the response data
             response_data = self.get_response_data(request, symbol)
             return Response(response_data, status=status.HTTP_202_ACCEPTED)
@@ -102,19 +101,17 @@ class StockPriceDetail(APIView):
     
     # DELETE method, delete the stock 
     def delete(self, request, symbol, format=None): 
-        queried_user = request.user
-        stock = get_object_or_404(Stock, user=queried_user, symbol=symbol)
+        stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
         stock.delete()
         return Response({"message": "Stock deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+    
 
+class PortfolioValueList(APIView): 
+    permission_classes = [IsAuthenticated] 
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def portfolio_value_list(request): 
-    if request.method == "GET": 
+    def get(self, request, format=None): 
         # query the list of portfolios
-        queried_user = request.user
-        portfolio_value_list = PortfolioValue.objects.filter(user=queried_user).order_by("date")
+        portfolio_value_list = PortfolioValue.objects.filter(user=request.user).order_by("date")
         original_data = PortfolioValueSerializer(portfolio_value_list, many=True).data 
 
         response_data = {}

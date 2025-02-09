@@ -23,18 +23,22 @@ class Register(generics.CreateAPIView):
         portfolio_value_list = [] 
         while current_date < last_date: 
             portfolio_value_list.append(PortfolioValue(
-                user=created_user, date=current_date, given_date_value=Decimal(0)
+                user=created_user, date=current_date, given_date_value=Decimal(0.00)
             ))
             current_date += timedelta(days=1)
+
         # ensure the integrity of the query 
         with transaction.atomic():
             PortfolioValue.objects.bulk_create(portfolio_value_list) 
+        return created_user
 
 
 # handling the info of the financial summary of the user 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def user_summary_detail(request): 
+
+    # get method only 
     if request.method == "GET": 
         queried_user = request.user
         # first and last dates of month
@@ -59,9 +63,10 @@ def user_summary_detail(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def user_full_summary_detail(request): 
+
+    # get method only 
     if request.method == "GET": 
-        queried_user = request.user
-        interval_expense_dict = interval_total_expense(queried_user)
+        interval_expense_dict = interval_total_expense(request.user)
 
         # initial first date and last date 
         initial_first_date = interval_expense_dict["month"][0]["first_date"]
@@ -69,11 +74,11 @@ def user_full_summary_detail(request):
 
         # compute the initial list of transactions
         initial_transactions = Transaction.objects.filter(
-            user=queried_user,
+            user=request.user,
             occur_date__gte=initial_first_date, 
             occur_date__lte=initial_last_date).order_by("-occur_date")
+        
         initial_transaction_data = TransactionSerializer(initial_transactions, many=True).data
-
         # structure of the response data
         response_data = {
             "latest_interval_expense": interval_expense_dict,

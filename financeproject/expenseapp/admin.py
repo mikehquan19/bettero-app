@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     BudgetPlan, User, Account, 
-    Transaction, Bills, Stock, 
+    Transaction, Bill, Stock, 
     DateStockPrice, PortfolioValue, OverdueBillMessage
 )
 
@@ -9,7 +9,7 @@ admin.site.register(User)
 admin.site.register(Account)
 admin.site.register(Transaction)
 admin.site.register(BudgetPlan)
-admin.site.register(Bills)
+admin.site.register(Bill)
 admin.site.register(Stock)
 admin.site.register(DateStockPrice)
 admin.site.register(PortfolioValue)

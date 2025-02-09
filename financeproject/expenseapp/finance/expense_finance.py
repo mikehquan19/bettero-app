@@ -3,7 +3,7 @@
 from typing import Dict, List, Tuple
 from django.db.models import Sum
 from datetime import date, timedelta
-from expenseapp.models import Account, Transaction, User
+from expenseapp.models import Account, Transaction, User, category_dict
 from .utils import *
 
 
@@ -26,9 +26,10 @@ def total_income(arg_user: User, arg_first_date: date=None, arg_last_date: date=
 
     # query the list of incomes of the user between the first and last date 
     income_list = Transaction.objects.filter(
-        user=arg_user, from_account=False, 
+        user=arg_user, category="Income", 
         occur_date__gte=first_date, occur_date__lte=last_date
     )
+
     # compute the total income 
     total_income = income_list.aggregate(total=Sum("amount", default=0))["total"]
     return total_income 
@@ -38,47 +39,57 @@ def total_income(arg_user: User, arg_first_date: date=None, arg_last_date: date=
 # up until the current date 
 def daily_expense(arg_user: User, arg_first_date: date=None, arg_last_date: date=None) -> Dict: 
     daily_exepense = {} # result dict 
-    if not arg_first_date: 
-        first_date = date(year=date.today().year, month=date.today().month, day=1)
-        last_date = date.today() 
+
+    if not arg_first_date or not arg_last_date: 
+        first_date , last_date = date(
+            year=date.today().year, 
+            month=date.today().month, 
+            day=1), date.today()
     else: 
-        first_date = arg_first_date
-        last_date = arg_last_date 
+        first_date, last_date = arg_first_date, arg_last_date
     
     # loop through the dates from first date to today 
     current_date = first_date
     while current_date <= last_date: 
         # query list of expenses between current date and next date 
         current_expense_list = Transaction.objects.filter(
-            user=arg_user, from_account=True, 
+            user=arg_user, 
             occur_date__gte=current_date, 
-            occur_date__lt=(current_date + timedelta(days=1)))
+            occur_date__lt=(current_date + timedelta(days=1))).exclude(category="Income")
+        
         # compute the total_expense 
-        total_expense = current_expense_list.aggregate(total=Sum("amount", default=0))["total"]
+        total_expense = float(current_expense_list.aggregate(total=Sum("amount", default=0))["total"])
 
         # add the mapping betweeen date and expense to the dict
         daily_exepense[current_date.strftime("%m/%d/%Y")] = total_expense
         current_date += timedelta(days=1)
+
     return daily_exepense 
 
 
-# calculate the percent composition of each expense category
-# return the dict mapping each category to its composition percentage 
+"""
+    calculate the percent composition of each expense category
+    return the dict mapping each category to its composition percentage
+""" 
 def expense_composition_percentage(arg_obj, arg_first_date: date=None, arg_last_date: date=None) -> Dict: 
-    first_date, last_date = get_current_dates("month", arg_first_date, arg_last_date)
     # dictionary mapping the category to the total expense this month 
+    first_date, last_date = get_current_dates("month", arg_first_date, arg_last_date)
     category_expense = category_expense_dict(arg_obj, first_date, last_date)
     
-    # dictionary mapping the expense's category to the percentage of expense
-    composition_percent = {"Grocery": 0, "Dining": 0, "Shopping": 0, "Bills": 0, "Gas": 0, "Others": 0, "Income": 0}
+    """
+        dictionary mapping the expense's category to the percentage of expense
+        avoid hardcoding the category 
+    """
+    composition_percentage = {category : 0.0 for category in list(category_dict.keys()) if category != "Income"}
 
     # total expense indicates that no transactions have been made 
     if category_expense["Total"] != 0:  
         # list of the keys of this dictionary
-        for category in list(composition_percent.keys()):  
-            composition_percent[category] = (category_expense[category] / category_expense["Total"]) * 100
-            composition_percent[category] = round(composition_percent[category], 2)
-    return composition_percent
+        for category in list(composition_percentage.keys()):  
+            composition_percentage[category] = (category_expense[category] / category_expense["Total"]) * 100
+            composition_percentage[category] = round(composition_percentage[category], 2)
+
+    return composition_percentage
 
 
 # calculate how the total expenses and expense of each category have changed 
@@ -87,43 +98,44 @@ def expense_change_percentage(arg_obj, period_type: str="month", arg_first_date:
     curr_date1, curr_date2 = get_current_dates(period_type, arg_first_date, arg_last_date)
     prev_date1, prev_date2 = get_previous_dates(period_type, curr_date1, curr_date2)
 
-    # dictionary mapping the expense's category to amount for the current and previous month 
+    # dict mapping the expense's category to amount for the current and previous month 
     curr_expense_dict = category_expense_dict(arg_obj, curr_date1, curr_date2)
     prev_expense_dict = category_expense_dict(arg_obj, prev_date1, prev_date2)
 
-    # calculate the change percentage 
     # dict mapping each category to the list [current, previous, change percentage]
-    change_percent = {"Grocery": 0, "Dining": 0, "Shopping": 0, "Bills": 0, "Gas": 0, "Others": 0, "Income": 0}
+    change_percentage = {category : 0.0 for category in list(category_dict.keys()) if category != "Income"}
 
-    for category in list(change_percent.keys()): 
+    # calculate the change percentage 
+    for category in list(change_percentage.keys()): 
         if prev_expense_dict[category] != 0: 
             # calculate the percentage change and then add to the dict
-            change_percent[category] = curr_expense_dict[category] - prev_expense_dict[category]
-            change_percent[category] = round((change_percent[category] / prev_expense_dict[category]) * 100, 2)
+            change_percentage[category] = curr_expense_dict[category] - prev_expense_dict[category]
+            change_percentage[category] = (change_percentage[category] / prev_expense_dict[category]) * 100
+            change_percentage[category] = round(change_percentage[category], 2)
         else: 
             # if no expenses made during previous month, obviously expenses increase 100% 
-            if curr_expense_dict[category] != 0: 
-                change_percent[category]= 100.00
-            else: 
-                change_percent[category]= 0.00
-    return change_percent
+            change_percentage[category] = 100.00 if curr_expense_dict[category] != 0 else 0.00
+
+    return change_percentage
 
 
 # adjust the balance of the debit account based on the amount and flow
 # return nothing
-def adjust_account_balance(user_account: Account, user_transaction: Transaction) -> None: 
-    # multiplier will determine the result based on if amount is extracted for added
+def adjust_account_balance(account: Account, transaction: Transaction) -> None: 
+    # multiplier will determine the result based on if transaction is expense or income
     multiplier = 1 
-    if not user_transaction.from_account:
+    if transaction.category == "Income":
         multiplier = -1
-    # if the account is debit, amount is extracted from the balance
-    # otherwise, amount is added to the balance
-    if user_account.account_type == "Debit":
-        user_account.balance -= multiplier * user_transaction.amount
+    """
+        if the account is debit, amount is extracted from the balance
+        otherwise, amount is added to the balance
+    """
+    if account.account_type == "Debit":
+        account.balance -= multiplier * transaction.amount
     else:  
-        user_account.balance += multiplier * user_transaction.amount
+        account.balance += multiplier * transaction.amount
     # save the adjustment to the database 
-    user_account.save() 
+    account.save() 
 
 
 # return the list of latest intervals (month, bi_week, or week), intervals = tuple (first_date, last_date)
@@ -140,11 +152,10 @@ def latest_periods(period_type: str, num_periods: int) -> List:
 # return the total expense of each interval depending on the type of the interval
 def interval_total_expense(arg_user: User) -> Dict: 
     # the latest months, bi-weeks, and weeks in the dictionary 
-    latest_periods_dict = {
-        "month": latest_periods("month", 5), 
-        "bi_week": latest_periods("bi_week", 5),
-        "week": latest_periods("week", 5)
-    }
+    latest_periods_dict = {}
+    num_latest_periods = 5 # get the data of 5 latest periods 
+    for time_type in ["month", "bi_week", "week"]: 
+        latest_periods_dict[time_type] = latest_periods(time_type, num_latest_periods)
 
     # the dictionary mapping the interval type to the list of expense of each interval
     period_expense_dict = {}
@@ -175,5 +186,5 @@ def interval_total_expense(arg_user: User) -> Dict:
                 "expense_composition": expense_composition,
                 "daily_expense": period_daily_expense,
             })
-    # return the dictionary 
+     
     return period_expense_dict

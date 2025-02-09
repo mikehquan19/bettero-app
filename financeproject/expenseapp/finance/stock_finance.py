@@ -7,16 +7,14 @@ import yfinance as yf
 def get_first_and_last_dates(): 
     current_date = date.today() # the last date (which is today)
 
-    # the first date (which is first date of last month)
-    # month and year of the last date 
-    current_month = current_date.month 
-    current_year = current_date.year 
-
-    prev_month = current_month - 1
-    prev_year = current_year
+    """
+        the first date (which is first date of last month)
+        month and year of the last date 
+    """
+    current_month, current_year = current_date.month, current_date.year
+    prev_month, prev_year = current_month - 1, current_year
     if prev_month < 0: 
-        prev_month = 12
-        prev_year -= 1
+        prev_month, prev_year = 12, prev_year - 1
 
     first_date_last_month = date(year=prev_year, month=prev_month, day=1)
     return first_date_last_month, current_date
@@ -33,8 +31,10 @@ def to_date(arg_str):
     return date(year=int(str_arr[0]), month=int(str_arr[1]), day=int(str_arr[2]))
 
 
-# load the initial price of the stock since first date of last month
-# till the today along with current data of the stock 
+"""
+    load the initial price of the stock since first date of last month
+    till the today along with current data of the stock 
+"""
 def load_stock_data(symbol: str) -> Dict: 
     # get the first and last date 
     first_date, last_date = get_first_and_last_dates()

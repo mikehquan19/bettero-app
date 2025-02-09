@@ -1,9 +1,0 @@
-version: 0.1 
-
-endpoints: 
-  - name: "Expense App Service"
-    port: 8000
-    type: REST
-    networkVisibility: Public
-    context: /
-    schemaFilePath: greeting_openapi.yaml
