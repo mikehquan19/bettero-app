@@ -1,0 +1,116 @@
+.pagination {
+    display: flex;
+    flex-flow: row nowrap; 
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+.pagination button {
+    background-color: white;
+    border: 0.1rem solid gray;
+    border-left: none;
+    font-size: 0.8rem;
+    padding: 0.7rem;
+}
+
+
+.latest-transactions {
+    width: calc(85% + 10px);
+    margin: 20px auto 0 auto; 
+}
+
+@media only screen and (max-width: 500px) {
+    .latest-transactions {width: 98%;}
+    .table-caption h3 {font-size: 16px;}
+    .transaction-detail #first {padding: 0 10px;}
+    .transaction-detail h4 {
+        margin: 5px 0; 
+        font-size: 17px;
+    }
+    .transaction-detail p {
+        text-align: left; 
+        font-size: 16px; 
+        margin: 5px 0;
+    }
+    .transaction-detail p span {
+        font-weight: bold;
+        font-size: 14px;
+    }
+    .transaction-detail button {
+        font-size: 16px;
+        background-color: green; 
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 5px;
+    }
+}   
+
+.table-caption {
+    text-align: left;
+    display: flex;
+    align-items: center;
+    background-color: darkcyan;
+    color: white;
+    border-top-left-radius: 15px;
+    border-top-right-radius: 15px;
+    padding: 0 10px; 
+}
+
+.latest-transactions table {
+    width: 100%;
+    background-color: rgba(0, 255, 0, 0.5);
+    border-bottom-left-radius: 15px;
+    border-bottom-right-radius: 15px;
+    border-collapse: collapse;
+    overflow: hidden;
+}
+
+.latest-transactions th {
+    text-align: center;
+    padding: 10px 0; 
+    background-color: green;
+    color: white;
+    font-size: 18px;
+}
+
+.latest-transactions td {
+    padding: 20px 0;
+    text-align: center;
+    font-size: 16px;
+    border-top: 1.5px solid green;
+}
+
+.latest-transactions tr:nth-child(even) {
+    background-color: rgba(0, 255, 0, 0.75);
+}
+
+@media only screen and (min-width: 1000px) {
+    .latest-transactions th:nth-child(1) {width: 20%}
+    .latest-transactions th:nth-child(2) {width: 30%}
+    .latest-transactions th:nth-child(3) {width: 12.5%;}
+    .latest-transactions th:nth-child(4) {width: 25%;}
+    .latest-transactions th:nth-child(5) {width: 12.5%;}
+}
+
+@media only screen and (max-width: 1000px) and (min-width: 500px) {
+    .latest-transactions th:nth-child(1) {width: 22%}
+    .latest-transactions th:nth-child(2) {width: 40%}
+    .latest-transactions th:nth-child(3) {width: 18%;}
+    .latest-transactions th:nth-child(4) {width: 20%;}
+}
+
+@media only screen and (max-width: 500px) {
+    .latest-transactions th {
+        font-size: 16px;
+        padding: 10px;
+    }
+    .latest-transactions th:nth-child(1) {width: 25%}
+    .latest-transactions th:nth-child(2) {width: 50%;}
+    .latest-transactions th:nth-child(3) {width: 25%;}
+    .latest-transactions td {
+        font-size: 14.5px;
+        padding: 12px 0;
+    }
+
+}

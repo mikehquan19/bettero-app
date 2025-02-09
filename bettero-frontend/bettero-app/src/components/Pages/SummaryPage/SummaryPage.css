@@ -1,0 +1,179 @@
+.interval-button-wrapper {
+    text-align: center;
+}
+
+.interval-button-list {
+    display: inline-flex; 
+    flex-direction: row;
+    background-color: rgba(0, 139, 139, 0.5); 
+    border-radius: 10px;
+    margin: 20px auto; 
+    padding: 7px;
+    gap: 5px;
+}
+
+.interval-button-list button {
+    font-size: 17px;
+    padding: 7px;
+    color: rgb(255, 255, 255); 
+    border: none;
+    border-radius: 5px;
+}
+
+.expense-interval-chart-wrapper {
+    width: calc(85% - 20px);
+    margin: 20px auto; 
+    padding: 10px 20px;
+    background-color: skyblue;
+    border-radius: 15px;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 40px;
+}
+
+.expense-interval-chart-wrapper div {
+    width: 30%;
+    height: 45vh;
+}
+
+@media only screen and (max-width: 500px) {
+    .mobile-expense-interval-chart {
+        border-radius: 15px;
+        background-color: skyblue;
+        width: calc(98% - 20px);
+        height: 38vh;
+        margin: 10px auto 40px auto;
+        padding: 10px;
+    }
+}
+
+.summary-info-wrapper {
+    width: 85%;
+    height: 180vh;
+    display: flex; 
+    flex-flow: row nowrap; 
+    gap: 10px;
+    margin: 20px auto 0 auto;
+    justify-content: center;
+}
+
+.interval-panel-wrapper {
+    width: calc(30% - 5px);
+    background-color: rgba(0, 255, 0, 0.5);
+    border-radius: 15px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+}
+
+.interval-panel-wrapper h3 {
+    font-size: 22px;
+    margin: 0;
+}
+
+.interval-wrapper {
+    font-size: 22px;
+    color: rgba(0, 0, 0, 0.25);
+    border: 1.5px solid rgba(0, 0, 0, 0.25);
+    border-radius: 15px;
+    margin: 0 auto 10px auto;
+    padding: 20px 10px;
+}
+
+.summary-chart-wrapper {
+    width: calc(70% - 5px);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    background-color: skyblue;
+    border-radius: 15px;
+    padding: 15px;
+}
+
+.summary-chart-wrapper p {
+    color: darkcyan;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+}
+
+@media only screen and (max-width: 500px) {
+    .summary-info-wrapper {
+        width: 98%;
+        height: 180vh;
+        flex-flow: column nowrap; 
+
+    }
+    .interval-panel-wrapper {
+        width: calc(100% - 20px); 
+        height: 10%;
+    }
+    .interval-panel-wrapper h3 {font-size: 18px;}
+    .super-interval-wrapper {
+        border: 1.5px solid black;
+        border-radius: 15px;
+        width: calc(100% - 10px);
+        padding: 5px;
+        display: flex; 
+        flex-flow: row nowrap;
+        gap: 5px;
+        overflow-x: auto;
+
+        /* Hide scrollbar for IE, Edge and Firefox */
+        -ms-overflow-style: none;
+        /* IE and Edge */
+        scrollbar-width: none;
+        /* Firefox */
+        
+    }
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    .super-interval-wrapper::-webkit-scrollbar {
+        display: none;
+    }
+
+    .interval-wrapper {
+        font-size: 18px;
+        font-weight: 500;
+        margin: 0; 
+        padding: 12px 7px;
+    }
+    .summary-chart-wrapper {
+        width: calc(100% - 20px);
+        height: 90%;
+        padding: 10px; 
+    }
+    .summary-chart-wrapper p {
+        font-size: 16px;
+    }
+}
+
+.summary-chart-wrapper .timeseries-chart {
+    width: 97%; 
+    height: 34%;
+}
+
+.summary-chart-wrapper .change-chart {
+    margin-top: 20px; 
+    width: 70%; 
+    height: 28%; 
+}
+
+.summary-chart-wrapper .composition-chart {
+    margin-top: 20px;
+    width: 80%; 
+    height: 28%;
+}
+
+.summary-transaction-table {
+    margin-top: 30px;
+}
+
+@media only screen and (max-width: 500px) {
+    .summary-chart-wrapper .timeseries-chart {width: 100%;}
+    .summary-chart-wrapper .change-chart {width: 98%}
+    .summary-chart-wrapper .composition-chart {width: 98%;}
+}

@@ -1,0 +1,97 @@
+.bills-list {
+    width: 80%; 
+    margin: 25px auto 10px auto;
+}
+
+.bills-list .table-title {
+    background-color: darkcyan;
+    color: white; 
+    border-top-left-radius: 15px;
+    border-top-right-radius: 15px;
+    padding: 10px;
+    text-align: left;
+}
+
+.bills-list table {
+    width: 100%;
+    background-color: rgba(0, 255, 0, 0.5);
+    border-bottom-left-radius: 15px;
+    border-bottom-right-radius: 15px;
+    border-collapse: collapse;
+    overflow: hidden;
+}
+
+.bills-list th {
+    padding: 10px 0;
+    background-color: green;
+    text-align: center;
+    color: white;
+    font-size: 18px;
+}
+
+.bills-list td {
+    padding: 10px 0; 
+    text-align: center;
+    font-size: 17px;
+    border-top: 1px solid green;
+}
+
+.bills-list tr:nth-child(even) {
+    background-color: rgba(0, 255, 0, 0.75);
+}
+
+.bill-button {
+    background-color: darkcyan;
+    color: white; 
+    border: none;
+    border-radius: 10px;
+    padding: 10px;
+    font-size: 15px;
+}
+
+.add-bill-button {
+    display: block;
+    background-color: darkcyan;
+    color: white;
+    font-size: 16px;
+    padding: 10px;
+    margin: 20px auto 0 auto;
+    border: none; 
+    border-radius: 10px;
+
+}
+
+@media only screen and (min-width: 1000px) {
+    .bills-list th:nth-child(1) {width: 20%}
+    .bills-list th:nth-child(2) {width: 15%}
+    .bills-list th:nth-child(3) {width: 10%}
+    .bills-list th:nth-child(4) {width: 20%}
+    .bills-list th:nth-child(5) {width: 15%}
+    .bills-list th:nth-child(6) {width: 10%}
+    .bills-list th:nth-child(7) {width: 10%}
+}
+
+@media only screen and (min-width: 500px) and (max-width: 1000px) {
+    .bills-list th:nth-child(1) {width: 40%}
+    .bills-list th:nth-child(2) {width: 20%}
+    .bills-list th:nth-child(3) {width: 20%}
+    .bills-list th:nth-child(4) {width: 20%}
+}
+
+@media only screen and (max-width: 500px) {
+    .bills-list {width: 98%; margin-top: 20px;}
+    .bills-list th {font-size: 16.5px}
+    .bills-list td {font-size: 15.5px}
+    .bills-list th:nth-child(1) {width: 40%}
+    .bills-list th:nth-child(2) {width: 30%}
+    .bills-list th:nth-child(3) {width: 30%}
+    .bill-detail {padding-left: 10px}
+    .bill-detail h3, p {margin: 7px;}
+    .bill-detail p {text-align: left;}
+    .bill-detail div {margin-top: 20px;}
+    .bill-button {padding: 7px}
+    .add-bill-button {
+        padding: 7px;
+        font-size: 14px;
+    }
+}
