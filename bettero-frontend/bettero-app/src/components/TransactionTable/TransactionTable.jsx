@@ -7,7 +7,10 @@ const Pagination = ({ transPerPage, numTrans, handlePagination }) => {
   const [clickedNumber, setClickedNumber] = useState(1);
   const [firstIndex, setFirstIndex] = useState(0);
 
-  useEffect(() => setClickedNumber(firstIndex + 1), [firstIndex])
+  useEffect(() => {
+    setClickedNumber(firstIndex + 1);
+    handlePagination(firstIndex + 1);
+  }, [firstIndex])
 
   const pageNumbers = []; // the array of the numbers in the page
   for (let i = 1; i <= Math.ceil(numTrans / transPerPage); i++) {
