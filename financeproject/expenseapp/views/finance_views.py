@@ -72,13 +72,13 @@ def user_full_summary_detail(request):
         initial_first_date = interval_expense_dict["month"][0]["first_date"]
         initial_last_date = interval_expense_dict["month"][0]["last_date"]
 
-        # compute the initial list of transactions
+        # compute the initial list of transaction
         initial_transactions = Transaction.objects.filter(
             user=request.user,
-            occur_date__gte=initial_first_date, 
-            occur_date__lte=initial_last_date).order_by("-occur_date")
+            occur_date__gte=initial_first_date, occur_date__lte=initial_last_date).order_by("-occur_date")[:10]
         
         initial_transaction_data = TransactionSerializer(initial_transactions, many=True).data
+        
         # structure of the response data
         response_data = {
             "latest_interval_expense": interval_expense_dict,

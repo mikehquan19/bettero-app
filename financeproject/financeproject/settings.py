@@ -103,15 +103,6 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
-"""
-CRONJOBS = [
-    ('0 0 * * *', 'expenseapp.tasks.update_info_and_create_price'), 
-    ('0 0 * * *', 'expenseapp.tasks.delete_price'),
-    ('0 0 * * *', 'expenseapp.tasks.delete_transactions'),
-    ('0 0 * * *', 'expenseapp.tasks.delete_overdue_bills_and_messages'),
-]
-"""
-
 # DON'T DO IT IN PRODUCTION ENVIRONMENT
 CORS_ORIGIN_ALLOW_ALL = True
 
