@@ -1,7 +1,6 @@
 from django.contrib import admin
 from .models import (
-    BudgetPlan, User, Account, 
-    Transaction, Bill, Stock, 
+    BudgetPlan, User, Account, Transaction, Bill, Stock, 
     DateStockPrice, PortfolioValue, OverdueBillMessage
 )
 

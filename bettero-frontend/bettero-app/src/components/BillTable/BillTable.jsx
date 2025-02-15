@@ -136,7 +136,7 @@ const BillTable = () => {
         </thead>
         <tbody>
           {billList.length === 0 && ( // rendering the messages when there are no bills
-            <tr><td colSpan={isMobileDevice ? 3 : 6}>You haven't added any bills</td></tr>
+            <tr><td colSpan={isMobileDevice ? 3 : 7} style={{fontWeight: "bold"}}>You haven't added any bills</td></tr>
           )}
           {billList.map(bill =>
             <BillTableRow key={bill.id} billInfo={bill}
