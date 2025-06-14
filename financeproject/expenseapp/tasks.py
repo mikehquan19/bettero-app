@@ -16,15 +16,19 @@ def update_credit_due_date(self) -> None:
     try:
         # query the list of credit accounts 
         credit_accounts_to_create = []
-        for account in Account.objects.filter(account_type="Credit", due_date__lte=date.today()): 
+        for account in Account.objects.filter(
+            account_type="Credit", due_date__lte=date.today()
+        ): 
             # increment the due date 
             if account.due_date.month == 12:
                 account.due_date.replace(year=account.due_date.year + 1, month=1)
             else: 
                 account.due_date.replace(month=account.due_date.month + 1)
+
             # append to the list 
             credit_accounts_to_create.append(account)
-        # credit account to 
+
+        # credit account to update 
         Account.objects.bulk_update(credit_accounts_to_create, ["due_date"])
     except Exception as exc: 
         # print the traceback of the errors 
@@ -43,15 +47,23 @@ def update_info_and_create_price(self) -> None:
             return  
         
         updated_stock_list = []
-        updated_field_list = ["previous_close", "current_close", "open", "low", "high", "volume", "last_updated_date"]
+        updated_field_list = [
+            "previous_close", 
+            "current_close", 
+            "open", 
+            "low", 
+            "high", 
+            "volume", 
+            "last_updated_date"
+        ]
 
         for stock in Stock.objects.all(): 
             # fetch the updated info about the stock 
             updated_stock_data = update_stock_data(stock.symbol)
 
             """
-                update the data of each stock instance in the database
-                current close, previous_close, open, low, high, volume
+            update the data of each stock instance in the database
+            current close, previous_close, open, low, high, volume
             """
             stock.previous_close = stock.current_close
             stock.current_close = updated_stock_data["new_close"]
@@ -78,7 +90,8 @@ def update_info_and_create_price(self) -> None:
         created_stock_price_list = []
         for updated_stock in updated_stock_queryset: 
             created_stock_price_list.append(DateStockPrice(
-                stock=updated_stock, date=updated_stock.last_updated_date, 
+                stock=updated_stock, 
+                date=updated_stock.last_updated_date, 
                 given_date_close=updated_stock.current_close,
             ))
         # bulk_create() to make it more efficient 
@@ -100,8 +113,12 @@ def create_portfolio_value() -> None:
 
     for user in User.objects.all(): 
         # compute the total value of the user's portfolio 
-        user_portfolio = Stock.objects.filter(user=user).annotate(total_value=F("current_close") * F("shares"))
-        total_value = user_portfolio.aggregate(total=Sum("total_value", default=0))["total_value"]
+        user_portfolio = Stock.objects.filter(
+            user=user).annotate(total_value=F("current_close") * F("shares")
+        )
+        total_value = user_portfolio.aggregate(
+            total=Sum("total_value", default=0)
+        )["total_value"]
 
         created_portfolio_value_list.append(PortfolioValue(
             user=user, date=previous_date, given_date_value=total_value
@@ -109,7 +126,7 @@ def create_portfolio_value() -> None:
     PortfolioValue.objects.bulk_create(created_portfolio_value_list)
 
 
-# delete the list of date prices and portfolio prices that were beyond first day of last month
+# Delete the list of date prices and portfolio prices that were beyond first day of last month
 @shared_task(bind=True, max_retries=1, default_retry_delay=60)
 def delete_price(self) -> None: 
     try:
@@ -132,11 +149,16 @@ def delete_price(self) -> None:
 def delete_transactions(self) -> None: 
     try:
         # compute the first date of 5 months ago 
-        first_date_this_month = date(year=date.today().year, month=date.today().month, day=1)
+        first_date_this_month = date(
+            year=date.today().year, 
+            month=date.today().month, 
+            day=1)
         filter_date = first_date_this_month - timedelta(weeks=18)
 
         # query the list of transactions that are 5months old and delete
-        old_transaction_list = Transaction.objects.filter(occur_date__lt=filter_date)
+        old_transaction_list = Transaction.objects.filter(
+            occur_date__lt=filter_date
+        )
         old_transaction_list.delete()
     except Exception as exc: 
         self.retry(exc=exc)
@@ -155,17 +177,19 @@ def delete_overdue_bills_and_messages(self) -> None:
             # add the overdue message corresponding to the bills
             for overdue_bill in overdue_bill_list: 
                 created_overdue_message_list.append(OverdueBillMessage(
-                    user=user, bill_description=overdue_bill.description, 
-                    bill_amount=overdue_bill.amount, bill_due_date=overdue_bill.due_date, 
-                     appear_date=date.today()
+                    user=user, 
+                    bill_description=overdue_bill.description, 
+                    bill_amount=overdue_bill.amount, 
+                    bill_due_date=overdue_bill.due_date, 
+                    appear_date=date.today()
                 ))
             OverdueBillMessage.objects.bulk_create(created_overdue_message_list)
             # delete the queryset 
             overdue_bill_list.delete()
         
         """
-            automatically delete the overdue bills message that are one day old
-            query the list of 1-day-old overdue messages and delete them 
+        Automatically delete the overdue bills message that are one day old
+        query the list of 1-day-old overdue messages and delete them 
         """
         overdue_message_list = OverdueBillMessage.objects.filter(appear_date__lt=date.today())
         overdue_message_list.delete()

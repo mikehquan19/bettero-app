@@ -4,19 +4,21 @@ from rest_framework.serializers import ValidationError as DRFValidationError
 from rest_framework import serializers, fields
 import json
 
+# the serializer to handle registration
 class RegisterSerializer(serializers.ModelSerializer): 
     class Meta: 
         model = models.User
         fields = ["first_name", "last_name", "email address", "username", "password", "password_again"]
 
     # field of second password 
-    # TODO: what is the write_only parameters ?
     password_again = serializers.CharField(max_length=20, required=True, write_only=True)
 
     # validate if 2 passwords the user entered match each other 
     def validate(self, attrs):
         if attrs.get('password') != attrs.get('password_again'): 
-            raise DRFValidationError({"password": "2 passwords don't match."})
+            raise DRFValidationError({
+                "password": "2 passwords don't match."
+            })
         return attrs
 
     # create the new user with the given validated info 
@@ -56,7 +58,9 @@ class TransactionSerializer(serializers.ModelSerializer):
         # create the transaction with the associated user, and account 
         account = validated_data.pop("account")
         user = account.user
-        transaction = models.Transaction.objects.create(user=user, account=account, **validated_data)
+        transaction = models.Transaction.objects.create(
+            user=user, account=account, **validated_data
+        )
         return transaction 
 
     # overidding the representation of the datetime field 

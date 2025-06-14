@@ -28,16 +28,22 @@ def upload_category_transactions(num_transaction_each: int=3):
         for i in range(num_transaction_each):
             # append transaction for this month 
             transactions_to_create.append(Transaction(
-                user=User.objects.get(username="mikeusername"), account=Account.objects.get(account_number=1000),
-                description=f"Test {category} Transaction #{i + 1} this month", category=category,
-                amount=round(random.uniform(5, 100), 2), occur_date=timezone.now()
+                user=User.objects.get(username="mikeusername"), 
+                account=Account.objects.get(account_number=1000),
+                description=f"Test {category} Transaction #{i + 1} this month", 
+                category=category,
+                amount=round(random.uniform(5, 100), 2), 
+                occur_date=timezone.now()
             ))
 
             # one transaction for the previous month 
             transactions_to_create.append(Transaction(
-                user=User.objects.get(username="mikeusername"), account=Account.objects.get(account_number=1000),
-                description=f"Test {category} Transaction #{i + 1} previous month", category=category,
-                amount=round(random.uniform(5, 100), 2), occur_date=(timezone.now() - timedelta(days=28))
+                user=User.objects.get(username="mikeusername"), 
+                account=Account.objects.get(account_number=1000),
+                description=f"Test {category} Transaction #{i + 1} previous month", 
+                category=category,
+                amount=round(random.uniform(5, 100), 2), 
+                occur_date=(timezone.now() - timedelta(days=28))
             ))
 
     created_transactions = Transaction.objects.bulk_create(transactions_to_create)
@@ -55,10 +61,14 @@ def upload_category_transactions(num_transaction_each: int=3):
     )
     
     # compute category composition 
-    category_composition = expense_composition_percentage(arg_obj=User.objects.get(username="mikeusername"))
+    category_composition = expense_composition_percentage(
+        arg_obj=User.objects.get(username="mikeusername")
+    )
     
     # compute category change 
-    category_change = expense_change_percentage(arg_obj=User.objects.get(username="mikeusername"))
+    category_change = expense_change_percentage(
+        arg_obj=User.objects.get(username="mikeusername")
+    )
     
     print(json.dumps(this_month_category_expense, indent=4))
     print(json.dumps(prev_month_category_expense, indent=4))
@@ -79,7 +89,7 @@ def upload_interval_transactions(num_transactions_each: int=2):
     current_date = date.today() - timedelta(weeks=17)
     while current_date <= date.today(): 
         # convert the date to the timezone-aware datetime object 
-        converted_datetime = timezone.make_aware(datetime.combine(current_date, datetime.min.time()))
+        date = timezone.make_aware(datetime.combine(current_date, datetime.min.time()))
 
         # for each date, create the num transactions 
         for i in range(num_transactions_each): 
@@ -87,9 +97,12 @@ def upload_interval_transactions(num_transactions_each: int=2):
 
             # append one transaction for this month 
             transactions_to_create.append(Transaction(
-                user=User.objects.get(username="mikeusername"), account=Account.objects.get(account_number=random.choice(test_account_numbers)),
-                description=f"Test {current_date.strftime("%m/%d/%Y")} {cat} Transaction #{i + 1}", category=cat,
-                amount=round(random.uniform(20, 50), 2), occur_date=converted_datetime
+                user=User.objects.get(username="mikeusername"), 
+                account=Account.objects.get(account_number=random.choice(test_account_numbers)),
+                description=f"Test {current_date.strftime("%m/%d/%Y")} {cat} Transaction #{i + 1}", 
+                category=cat,
+                amount=round(random.uniform(20, 50), 2), 
+                occur_date=date
             ))
 
         current_date += timedelta(days=1)
@@ -113,14 +126,18 @@ def upload_test_portfolio_values():
     first_date, last_date = get_first_and_last_dates()
     current_date = first_date 
     while current_date <= last_date: 
-        date_prices = DateStockPrice.objects.filter(date=current_date, stock__in=stocks)
-        date_prices = date_prices.annotate(total_value=F("given_date_close") * F("stock__shares"))
-        total_value = date_prices.aggregate(total=Sum("total_value", default=0))["total"]
+        date_prices = DateStockPrice.objects.filter(
+            date=current_date, stock__in=stocks)
+        date_prices = date_prices.annotate(
+            total_value=F("given_date_close") * F("stock__shares"))
+        total_value = date_prices.aggregate(
+            total=Sum("total_value", default=0))["total"]
 
         if total_value != 0: 
             created_portfolio_values.append(
                 PortfolioValue(user=user, date=current_date, given_date_value=total_value))
-        # INCREMENT
+            
+        # INCREMENT the day
         current_date += timedelta(days=1)
     num_values = PortfolioValue.objects.bulk_create(created_portfolio_values)
     print(f"{len(num_values)} created!")

@@ -193,9 +193,11 @@ class Stock(models.Model):
         return self.symbol
     
 
-# the price of the stock of the specific date 
-# only store the price of the stock on any date as of the first date of last month 
-# (1 month + x days of this month)
+"""
+The price of the stock of the specific date 
+only store the price of the stock on any date as of the first date of last month 
+(1 month & number of days of this month)
+"""
 class DateStockPrice(models.Model): 
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE, default=1)
     date = models.DateField()

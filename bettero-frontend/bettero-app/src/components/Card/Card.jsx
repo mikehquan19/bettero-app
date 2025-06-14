@@ -18,8 +18,12 @@ const Card = ({ accountInfo, theme = {
 
   return (
     <div className="account-card" style={commonStyle}>
-      <div className="institution-name" style={{fontSize: "20px"}}>{accountInfo.institution}</div>
-      <div className="account-name" style={{fontSize: "16px"}}>{accountInfo.name}</div>
+      <div className="institution-name" style={{fontSize: "20px"}}>
+        {accountInfo.institution}
+      </div>
+      <div className="account-name" style={{fontSize: "16px"}}>
+        {accountInfo.name}
+      </div>
       <div className="account-num" style={{ position: "relative", top: "120px" }}>
         ****{accountInfo.account_number}
       </div>

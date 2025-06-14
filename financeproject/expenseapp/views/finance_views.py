@@ -38,20 +38,20 @@ class Register(generics.CreateAPIView):
 @permission_classes([IsAuthenticated])
 def user_summary_detail(request): 
 
-    # get method only 
+    # Get method only 
     if request.method == "GET": 
         queried_user = request.user
         # first and last dates of month
-        first_date, last_date = get_current_dates("month")
+        first_date, last_date = get_curr_dates("month")
 
         response_data = {
-            # calculate the financial info of the user 
+            # Calculate the financial info of the user 
             "total_balance": total_balance_and_amount_due(queried_user)[0], 
             "total_amount_due": total_balance_and_amount_due(queried_user)[1], 
             "total_income": total_income(queried_user), 
             "total_expense": category_expense_dict(queried_user, first_date, last_date)["Total"], 
 
-            # calculate the daily expense, the change, and composition percentage of user 
+            # Calculate the daily expense, the change, and composition percentage of user 
             "change_percentage": expense_change_percentage(queried_user), 
             "composition_percentage": expense_composition_percentage(queried_user), 
             "daily_expense": daily_expense(queried_user), 
@@ -69,13 +69,14 @@ def user_full_summary_detail(request):
         interval_expense_dict = interval_total_expense(request.user)
 
         # initial first date and last date 
-        initial_first_date = interval_expense_dict["month"][0]["first_date"]
-        initial_last_date = interval_expense_dict["month"][0]["last_date"]
+        initial_date1 = interval_expense_dict["month"][0]["first_date"]
+        initial_date2 = interval_expense_dict["month"][0]["last_date"]
 
         # compute the initial list of transaction
         initial_transactions = Transaction.objects.filter(
             user=request.user,
-            occur_date__gte=initial_first_date, occur_date__lte=initial_last_date).order_by("-occur_date")[:10]
+            occur_date__gte=initial_date1, 
+            occur_date__lte=initial_date2).order_by("-occur_date")[:10]
         
         initial_transaction_data = TransactionSerializer(initial_transactions, many=True).data
         

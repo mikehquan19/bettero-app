@@ -5,10 +5,11 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from expenseapp.models import DateStockPrice, Stock, PortfolioValue
-from expenseapp.serializers import PortfolioValueSerializer, StockSerializer, StockPriceSerializer
+from expenseapp.serializers import (
+    PortfolioValueSerializer, StockSerializer, StockPriceSerializer)
 from expenseapp.finance import load_stock_data
 
-# handling the list of stocks 
+# Views to handle the list of stocks 
 class StockList(APIView): 
     permission_classes = [IsAuthenticated]
 
@@ -28,13 +29,17 @@ class StockList(APIView):
     def post(self, request, format=None): 
         request_data = request.data 
         request_data["user"] = request.user.pk
-        symbol = request_data["symbol"]
 
         # load the price data of the stock with the given symbol 
         try: 
+            symbol = request_data["symbol"]
             stock_data = load_stock_data(symbol)
-        except IndexError: # if the stock with the given symbol isn't found 
-            return Response({"error": "No stock with the given symbol"}, status=status.HTTP_404_NOT_FOUND)
+        except IndexError: 
+            # If the stock with the given symbol isn't found 
+            return Response(
+                {"error": "No stock with the given symbol"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
         
         stock_price_data = stock_data.pop("price_data")
         for data_field in list(stock_data.keys()): 
@@ -49,14 +54,19 @@ class StockList(APIView):
             stock_price_list = [] 
             for i in range(len(stock_price_data)): 
                 stock_price_list.append(DateStockPrice(
-                    stock=created_stock, date=stock_price_data[i]["date"], given_date_close=stock_price_data[i]["given_date_close"]
+                    stock=created_stock, 
+                    date=stock_price_data[i]["date"], 
+                    given_date_close=stock_price_data[i]["given_date_close"]
                 ))
             DateStockPrice.objects.bulk_create(stock_price_list)
 
             # return the response data
             response_data = self.get_response_data(request)
             return Response(response_data, status=status.HTTP_201_CREATED)
-        return Response(new_stock_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            new_stock_serializer.errors, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
     
 
 # handling the price detail of the stock 
@@ -65,15 +75,14 @@ class StockPriceDetail(APIView):
 
     def get_response_data(self, request, symbol): 
         stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
-        # list of prices of the stock 
+        # List of prices of the stock 
         stock_price_list = stock.datestockprice_set.order_by("date")
 
-        # response data 
+        # Response data 
         response_data = {
             "stock": StockSerializer(stock).data, 
             "price_list": {}
         }
-
         price_list = StockPriceSerializer(stock_price_list, many=True).data
         for price in price_list: 
             response_data["price_list"][price["date"]] = price["given_date_close"]
@@ -88,22 +97,29 @@ class StockPriceDetail(APIView):
     def put(self, request, symbol, format=None): 
         request_data = request.data
         request_data["user"] = request.user.pk
-        stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
 
+        stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
         updated_stock_serializer = StockSerializer(stock, data=request_data)
+        
         if updated_stock_serializer.is_valid(): 
             updated_stock_serializer.save() 
 
             # return the response data
             response_data = self.get_response_data(request, symbol)
             return Response(response_data, status=status.HTTP_202_ACCEPTED)
-        return Response(updated_stock_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            updated_stock_serializer.errors, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
     
     # DELETE method, delete the stock 
     def delete(self, request, symbol, format=None): 
         stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
         stock.delete()
-        return Response({"message": "Stock deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {"message": "Stock deleted successfully"}, 
+            status=status.HTTP_204_NO_CONTENT
+        )
     
 
 class PortfolioValueList(APIView): 
@@ -111,7 +127,8 @@ class PortfolioValueList(APIView):
 
     def get(self, request, format=None): 
         # query the list of portfolios
-        portfolio_value_list = PortfolioValue.objects.filter(user=request.user).order_by("date")
+        portfolio_value_list = PortfolioValue.objects.filter(
+            user=request.user).order_by("date")
         original_data = PortfolioValueSerializer(portfolio_value_list, many=True).data 
 
         response_data = {}

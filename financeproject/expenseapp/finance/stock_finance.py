@@ -8,11 +8,12 @@ def get_first_and_last_dates():
     current_date = date.today() # the last date (which is today)
 
     """
-        the first date (which is first date of last month)
-        month and year of the last date 
+    the first date (which is first date of last month)
+    month and year of the last date 
     """
-    current_month, current_year = current_date.month, current_date.year
-    prev_month, prev_year = current_month - 1, current_year
+    curr_month, curr_year = current_date.month, current_date.year
+    prev_month, prev_year = curr_month - 1, curr_year
+    
     if prev_month < 0: 
         prev_month, prev_year = 12, prev_year - 1
 
@@ -32,14 +33,17 @@ def to_date(arg_str):
 
 
 """
-    load the initial price of the stock since first date of last month
-    till the today along with current data of the stock 
+Load the initial price of the stock since first date of last month
+till the today along with current data of the stock 
 """
 def load_stock_data(symbol: str) -> Dict: 
-    # get the first and last date 
+    # Get the first and last date 
     first_date, last_date = get_first_and_last_dates()
-    # load data of the stock's info 
-    recent_data = yf.download([symbol], start=to_string(first_date), end=to_string(last_date))
+
+    # Load data of the stock's info 
+    recent_data = yf.download(
+        [symbol], start=to_string(first_date), end=to_string(last_date)
+    )
 
     # current info of the stock 
     custom_data = {
@@ -51,7 +55,7 @@ def load_stock_data(symbol: str) -> Dict:
         "volume": int(recent_data["Volume"].iloc[-1]),
     }
 
-    # the price of the stock over the past
+    # The price of the stock over the past
     custom_data["price_data"] = []
     current_date = first_date 
     while current_date < last_date: 
@@ -62,23 +66,23 @@ def load_stock_data(symbol: str) -> Dict:
                 "given_date_close": float(round(given_date_price, 2))
             }
             custom_data["price_data"].append(item_data)
-        # the key error means that the price of stock on that date doesn't exist
+        # The key error means that the price of stock on that date doesn't exist
         except KeyError: 
             pass
-        current_date += timedelta(days=1) # increment the date
+        current_date += timedelta(days=1) # Increment the date
 
-    # the date the price of the stock was updated 
+    # The date the price of the stock was updated 
     last_updated_date = custom_data["price_data"][-1]["date"]
     custom_data["last_updated_date"] = last_updated_date
     return custom_data
 
 
-# update the info the stock, and add new record of the stock price 
+# Update the info the stock, and add new record of the stock price 
 def update_stock_data(symbol: str) -> Dict: 
     previous_date = to_string(date.today() - timedelta(days=1))
     today = to_string(date.today())
     
-    # return the Panda data frame 
+    # Return the Panda data frame 
     updated_data = yf.download(symbol, start=previous_date, end=today)
     
     custom_data = {
