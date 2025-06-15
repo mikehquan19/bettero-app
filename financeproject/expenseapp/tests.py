@@ -1,7 +1,5 @@
-from .models import (
-    category_dict,
-    User, Account, Transaction, DateStockPrice, Stock, PortfolioValue
-)
+from .models import User, Account, Transaction, DateStockPrice, Stock, PortfolioValue
+from .constants import CATEGORY_DICT
 from .finance import get_first_and_last_dates
 from django.utils import timezone
 from django.db import transaction
@@ -41,7 +39,7 @@ def upload_category_transactions(num_transaction: int=3):
     random.seed(4) # to ensure same sequence of random floats were generated 
     transactions_to_create = []
 
-    for category in list(category_dict.keys()):
+    for category in list(CATEGORY_DICT.keys()):
         for i in range(num_transaction):
             random_account = Account.objects.get(account_number=random.choice(TEST_ACCOUNT_NUMBERS))
 
@@ -84,7 +82,7 @@ def upload_interval_transactions(num_transactions: int=1):
 
         # for each date, create the num transactions 
         for i in range(num_transactions): 
-            category = random.choice(list(category_dict.keys()))
+            category = random.choice(list(CATEGORY_DICT.keys()))
 
             # append one transaction for this month 
             transactions_to_create.append(Transaction(
