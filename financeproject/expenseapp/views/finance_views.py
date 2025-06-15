@@ -41,17 +41,16 @@ def user_summary_detail(request):
     # Get method only 
     if request.method == "GET": 
         queried_user = request.user
-        # first and last dates of month
         first_date, last_date = get_curr_dates("month")
 
         response_data = {
-            # Calculate the financial info of the user 
+            # calculate the financial info of the user 
             "total_balance": total_balance_and_amount_due(queried_user)[0], 
             "total_amount_due": total_balance_and_amount_due(queried_user)[1], 
             "total_income": total_income(queried_user), 
             "total_expense": category_expense_dict(queried_user, first_date, last_date)["Total"], 
 
-            # Calculate the daily expense, the change, and composition percentage of user 
+            # calculate the daily expense, the change, and composition percentage of user 
             "change_percentage": expense_change_percentage(queried_user), 
             "composition_percentage": expense_composition_percentage(queried_user), 
             "daily_expense": daily_expense(queried_user), 

@@ -37,8 +37,7 @@ class StockList(APIView):
         except IndexError: 
             # If the stock with the given symbol isn't found 
             return Response(
-                {"error": "No stock with the given symbol"}, 
-                status=status.HTTP_404_NOT_FOUND
+                {"error": "No stock with the given symbol"}, status=status.HTTP_404_NOT_FOUND
             )
         
         stock_price_data = stock_data.pop("price_data")
@@ -63,10 +62,8 @@ class StockList(APIView):
             # return the response data
             response_data = self.get_response_data(request)
             return Response(response_data, status=status.HTTP_201_CREATED)
-        return Response(
-            new_stock_serializer.errors, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        
+        return Response(new_stock_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
 # handling the price detail of the stock 
@@ -86,6 +83,7 @@ class StockPriceDetail(APIView):
         price_list = StockPriceSerializer(stock_price_list, many=True).data
         for price in price_list: 
             response_data["price_list"][price["date"]] = price["given_date_close"]
+    
         return response_data
     
     # GET method, return the detail of the stock, including its list of price
@@ -107,18 +105,15 @@ class StockPriceDetail(APIView):
             # return the response data
             response_data = self.get_response_data(request, symbol)
             return Response(response_data, status=status.HTTP_202_ACCEPTED)
-        return Response(
-            updated_stock_serializer.errors, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        
+        return Response(updated_stock_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     # DELETE method, delete the stock 
     def delete(self, request, symbol, format=None): 
         stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
         stock.delete()
         return Response(
-            {"message": "Stock deleted successfully"}, 
-            status=status.HTTP_204_NO_CONTENT
+            {"message": "Stock deleted successfully"}, status=status.HTTP_204_NO_CONTENT
         )
     
 
@@ -127,8 +122,7 @@ class PortfolioValueList(APIView):
 
     def get(self, request, format=None): 
         # query the list of portfolios
-        portfolio_value_list = PortfolioValue.objects.filter(
-            user=request.user).order_by("date")
+        portfolio_value_list = PortfolioValue.objects.filter(user=request.user).order_by("date")
         original_data = PortfolioValueSerializer(portfolio_value_list, many=True).data 
 
         response_data = {}

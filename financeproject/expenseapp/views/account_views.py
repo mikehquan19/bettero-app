@@ -18,7 +18,6 @@ class AccountList(APIView):
     def get_response_data(self, request):
         # Query and serialize the account list 
         account_list = Account.objects.filter(user=request.user)
-
         response_data = AccountSerializer(account_list, many=True).data
         return response_data
 

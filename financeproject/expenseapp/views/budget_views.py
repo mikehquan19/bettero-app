@@ -23,10 +23,7 @@ class UserBudget(APIView):
             "week": {}
         }
         for type in list(response_data.keys()): 
-            response_data[type] = get_budget_response_data(
-                arg_user=request.user, 
-                period_type=type
-            )
+            response_data[type] = get_budget_response_data(arg_user=request.user, period_type=type)
         return response_data
     
     # GET method 
@@ -46,10 +43,8 @@ class UserBudget(APIView):
             # return new budget plan
             response_data = self.get_response_data(request)
             return Response(response_data, status=status.HTTP_201_CREATED)
-        return Response(
-            new_plan_serializer.errors, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        
+        return Response(new_plan_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
 # handling the the budget plan of each interval type 
@@ -59,9 +54,7 @@ class UserBudgetDetail(APIView):
     def get_budget_plan(self, request, interval_type): 
         # Query the user and check if the user has plan of this type
         try: 
-            queried_plan = request.user.budgetplan_set.get(
-                interval_type=interval_type
-            )
+            queried_plan = request.user.budgetplan_set.get(interval_type=interval_type)
         except BudgetPlan.DoesNotExist: 
             raise Http404("Budget plan with given type doesn't exist.")
         
@@ -93,12 +86,9 @@ class UserBudgetDetail(APIView):
             # Period type 
             for type in list(custom_data.keys()): 
                 custom_data[type] = get_budget_response_data(request.user, type)
-
             return Response(custom_data, status=status.HTTP_202_ACCEPTED)
-        return Response(
-            updated_plan_serializer.errors, 
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        
+        return Response(updated_plan_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     # DELETE method, delete the plan 
     def delete(self, request, interval_type, format=None): 
@@ -132,6 +122,7 @@ class BillList(APIView):
             # return the new list of bills 
             response_data = self.get_response_data(request)
             return Response(response_data, status=status.HTTP_201_CREATED)
+        
         return Response(new_bill_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -150,14 +141,14 @@ class BillsDetail(generics.RetrieveUpdateDestroyAPIView):
     # overriding the destroying behavior 
     def perform_destroy(self, instance):
         # if there is pay account and the bills isn't overdue yet
-        if instance.pay_account != None and instance.due_date >= date.today():
-    
+        if instance.pay_account is not None and instance.due_date >= date.today():
             # Create transactions indicating that user's paid the bills 
             new_transaction = Transaction.objects.create(
                 account=instance.pay_account, user=instance.user, 
                 description=f"Payment: {instance.description}", category=instance.category,
                 amount=instance.amount, occur_date=datetime.now()
             )
+            
             # Adjust the account 
             adjust_account_balance(new_transaction.account, new_transaction)
 
@@ -169,11 +160,7 @@ class OverdueMessageList(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None): 
-        overdue_message_list = OverdueBillMessage.objects.filter(
-            user=request.user
-        )
-        response_data = OverdueBillMessageSerializer(
-            overdue_message_list, many=True
-        ).data
+        overdue_message_list = OverdueBillMessage.objects.filter(user=request.user)
+        response_data = OverdueBillMessageSerializer(overdue_message_list, many=True).data
         return Response(response_data)
     
