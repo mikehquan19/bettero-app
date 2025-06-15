@@ -10,12 +10,11 @@ import {
   TimeScale,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-import ChartDataLabels from 'chartjs-plugin-datalabels';
 import 'chartjs-adapter-date-fns';
 
 // register the tool to be able to to use it in the hand-shakeable way 
 ChartJS.register(CategoryScale, LinearScale, PointElement,
-  LineElement, TimeScale, Title, Tooltip, Legend, ChartDataLabels);
+  LineElement, TimeScale, Title, Tooltip, Legend);
 
 // reformat the date for value of the date field in the form 
 const reformatDate = (argDate) => {
@@ -27,7 +26,9 @@ const reformatDate = (argDate) => {
 }
 
 // the chart showing that 
-const TimeseriesChart = ({ contentType = "expense", stockSymbol = null, intervalType = "month", timeseriesObject = null }) => {
+const TimeseriesChart = ({ 
+  contentType = "expense", stockSymbol = null, intervalType = "month", timeseriesObject = null 
+}) => {
 
   if (timeseriesObject !== null) {
     // labels and data of the timeseries chart 

@@ -37,6 +37,7 @@ const ChangeChart = ({ intervalType = "month", changeObject }) => {
 					}
 					return elementBackgroundColor;
 				},
+        
 				// the color of the bar when hovered over
 				hoverBackgroundColor: "rgb(0, 0, 0, 0.5)",
 				hoverBorderColor: "white",

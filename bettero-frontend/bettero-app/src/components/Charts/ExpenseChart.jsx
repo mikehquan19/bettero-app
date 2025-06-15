@@ -29,6 +29,7 @@ const ExpenseChart = ({ intervalType = "month", expenseObject }) => {
         label: "the expense of the given " + intervalType,
         data: expenseData,
         backgroundColor: "rgba(0, 0, 255, 0.5)",
+        
         // the color of the bar when hovered over
         hoverBackgroundColor: "rgb(255, 0, 0, 0.5)",
         hoverBorderColor: "black",
