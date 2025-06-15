@@ -50,18 +50,17 @@ def budget_progress_percentage(arg_user: User, interval_type: str) -> Dict:
     first_date, last_date = get_curr_dates(interval_type) 
     category_expense = category_expense_dict(arg_user, first_date, last_date)
 
-    """
-    Dictionary mapping each category to its current expense,
-    budget, and its progress percentage 
-    """
-    percent_dict = {"Expense": {"budget": total_budget}}
+    # Dictionary mapping each category to its current expense, budget, and its progress percentage 
+    percent_dict = {
+        "Expense": {
+            "budget": total_budget
+        }
+    }
 
     # Add budget to the category first
     for key in list(plan.category_portion.keys()):
         this_category_budget = float(plan.category_portion[key])
-        percent_dict[key] = {
-            "budget": this_category_budget * total_budget / 100
-        }
+        percent_dict[key] = { "budget": this_category_budget * total_budget / 100 }
 
     # Iterate through each key in the progress percentage dict to add current
     for key in list(percent_dict.keys()):
@@ -90,8 +89,7 @@ def get_budget_response_data(arg_user: User, period_type: str) -> Dict:
     try: 
         plan = BudgetPlan.objects.get(user=arg_user, interval_type=period_type)
     except BudgetPlan.DoesNotExist: 
-        # Return the empty dictionary 
-        return budget_response 
+        return budget_response # Return the empty dictionary 
     
     # composition percentage and progress percentage
     composition_dict = budget_composition_percentage(arg_user, period_type)
