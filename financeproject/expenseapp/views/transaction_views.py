@@ -1,7 +1,6 @@
-from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import status, generics
-from rest_framework.views import APIView
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.validators import ValidationError
@@ -12,40 +11,44 @@ from datetime import date
 from calendar import monthrange
 from expenseapp.finance import adjust_account_balance
 
-# TODO: ADD PAGINATION
-
 # base transaction view to handle pagination 
-class TransactionView(APIView): 
+class TransactionView(generics.ListAPIView): 
     permission_classes = [IsAuthenticated]
+    serializer_class = TransactionSerializer
+    pagination_class = PageNumberPagination
 
 
 # handling the list of transactions of the user 
-class UserTransactionList(APIView): 
+class UserTransactionList(generics.ListCreateAPIView): 
     permission_classes = [IsAuthenticated]
+    pagination_class = PageNumberPagination
 
-    # get custom data as a response to the API 
-    def get_response_data(self, request):
+    # get response with pagination of transactions 
+    def get_response(self, request):
         transaction_list = Transaction.objects.filter(user=request.user).order_by("-occur_date")[:20]
-        response_data = TransactionSerializer(transaction_list, many=True).data
-        return response_data
+        paginator = self.pagination_class()
+        transaction_page = paginator.paginate_queryset(transaction_list, request)
+
+        return paginator.get_paginated_response(
+            TransactionSerializer(transaction_page, many=True).data
+        )
     
-    # GET method, return the list of 20 latest transactions 
-    def get(self, request, format=None): 
-        response_data = self.get_response_data(request)
-        return Response(response_data)
-    
-    # POST method, create new transaction
-    def post(self, request, format=None): 
+    # list of 20 latest transactions with pagination
+    def list(self, request, *args, **kwargs):
+        return self.get_response(request)
+
+    # create new transaction
+    def create(self, request, *args, **kwargs):
         new_trans_serializer = TransactionSerializer(data=request.data)
         if new_trans_serializer.is_valid(): 
             new_transaction = new_trans_serializer.save() # call the create method 
+
             # adjust balance of the associated account 
             adjust_account_balance(new_transaction.account, new_transaction)
 
-            response_data = self.get_response_data(request)
-            return Response(response_data, status=status.HTTP_201_CREATED)
+            return self.get_response(request)
         
-        return Response(new_trans_serializer.errors, status = status.HTTP_400_BAD_REQUEST)
+        return Response(new_trans_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 """
@@ -55,29 +58,27 @@ params: first_date, last_date
 """
 class IntervalTransactionList(TransactionView): 
 
-    def get(self, request, format=None): 
+    def get_queryset(self):
         # get the params 
-        first_date_str = request.query_params.get("first_date")
-        last_date_str = request.query_params.get("last_date")
+        first_str = self.request.query_params.get("first_date")
+        last_str = self.request.query_params.get("last_date")
 
         # Validate
-        if not first_date_str or not last_date_str: 
+        if not first_str or not last_str: 
             raise ValidationError({"message": "First date or last date unspecified"})
         
         # Convert string to actual date obj
-        first_list = first_date_str.split("-")
-        last_list = last_date_str.split("-")
+        first_list = first_str.split("-")
+        last_list = last_str.split("-")
+
         first_date = date(int(first_list[0]), int(first_list[1]), int(first_list[2]))
         last_date = date(int(last_list[0]), int(last_list[1]), int(last_list[2]))
 
         # List of transactions between 2 dates 
-        transaction_list = Transaction.objects.filter(
-            user=request.user, 
+        return Transaction.objects.filter(
+            user=self.request.user, 
             occur_date__gte=first_date, 
             occur_date__lte=last_date).order_by("-occur_date")
-
-        # Return serialized data
-        return Response(TransactionSerializer(transaction_list, many=True).data)
     
 
 """
@@ -86,20 +87,18 @@ requires pagination
 """
 class CategoryTransactionList(TransactionView): 
 
-    def get(self, request, arg_cat, format=None): 
+    def get_queryset(self):
         # get query param and validate 
-        if not arg_cat: 
+        if not self.kwargs['arg_cat']: 
             raise ValidationError({"error": "Category not specified"})
-
+        
         first_date, last_date = get_curr_dates(period_type="month")
 
-        transaction_list = Transaction.objects.filter(
-            user=request.user, 
-            category=arg_cat,
+        return Transaction.objects.filter(
+            user=self.request.user, 
+            category=self.kwargs['arg_cat'],
             occur_date__gte=first_date, 
             occur_date__lte=last_date).order_by("-occur_date")
-        
-        return Response(TransactionSerializer(transaction_list, many=True).data)
     
 
 """
@@ -109,36 +108,33 @@ params: first_date, last_date, category
 """ 
 class BothTransactionList(TransactionView): 
 
-    def get(self, request, format=None): 
+    def get_queryset(self):
         # get the query params and validate 
-        category = request.query_params.get("category")
+        category = self.request.query_params.get("category")
         if not category:
             raise ValidationError({"message": "Category not specified"})
 
-        first_str = request.query_params.get("first_date")
-        last_str = request.query_params.get("last_date")
+        first_str = self.request.query_params.get("first_date")
+        last_str = self.request.query_params.get("last_date")
         if not first_str or not last_str: 
             raise ValidationError({"message": "first date or last date not specified"})
         
         # Process 
         first_list = first_str.split("-")
         last_list = last_str.split("-")
+
         first_date = date(int(first_list[0]), int(first_list[1]), int(first_list[2]))
         last_date = date(int(last_list[0]), int(last_list[1]), int(last_list[2]))
 
-        transaction_list = Transaction.objects.filter(
-            user=request.user, 
+        return Transaction.objects.filter(
+            user=self.request.user, 
             category=category, 
             occur_date__gte=first_date, 
             occur_date__lte=last_date).order_by("-occur_date")
-        
-        return Response(TransactionSerializer(transaction_list, many=True).data)
 
 
 # view to handle the 20 latest transactions of the account
-class AccountTransactionList(generics.ListAPIView): 
-    permission_classes = [IsAuthenticated]
-    serializer_class = TransactionSerializer
+class AccountTransactionList(TransactionView): 
 
     def get_queryset(self):
         queried_account = get_object_or_404(Account, pk=self.kwargs["pk"])
@@ -152,17 +148,18 @@ params: category
 """
 class AccBothTransactionList(TransactionView): 
 
-    def get(self, request, pk, format=None):
-        arg_category = request.query_params.get("category")
+    def get_queryset(self):
+        arg_category = self.request.query_params.get("category")
         if not arg_category: 
             raise ValidationError({"error": "Category not specified"})
-        queried_account = get_object_or_404(Account, pk=pk)
+        
+        queried_account = get_object_or_404(Account, pk=self.kwargs['pk'])
         
         # the list of transactions with picked category 
         first_date, last_date = get_curr_dates(period_type="month")
-        transaction_list = Transaction.objects.filter(
-            account=queried_account, category=arg_category, 
+
+        return Transaction.objects.filter(
+            account=queried_account, 
+            category=arg_category, 
             occur_date__gte=first_date, 
             occur_date__lte=last_date).order_by("-occur_date")
-        
-        return Response(TransactionSerializer(transaction_list, many=True).data)
