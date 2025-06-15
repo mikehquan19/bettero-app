@@ -3,7 +3,7 @@
 from ast import Tuple
 from typing import Dict
 from django.db.models import Sum
-from expenseapp.models import category_dict
+from expenseapp.constants import CATEGORY_DICT
 from datetime import date, timedelta
 from calendar import monthrange
 
@@ -18,7 +18,6 @@ def get_curr_dates(
     if period_type != "month": 
         # The number of days of an interval (week or bi_week)
         days_between = 7 if period_type == "week" else 14
-
         # First and last date of the current interval 
         last_date = date.today() + timedelta(days=(6 - date.today().weekday()))
         first_date = last_date - timedelta(days=(days_between - 1))
@@ -58,6 +57,19 @@ def get_prev_dates(period_type: str, first_date: date, last_date: date) -> Tuple
     return prev_first_date, prev_last_date 
 
 
+# get the first date of last month and current date 
+def get_first_and_last_dates(): 
+    current_date = date.today() # the last date, which is today
+
+    # the first date (which is first date of last month), month and year of the last date 
+    prev_month, prev_year = current_date.month - 1, current_date.year
+    if prev_month < 0: 
+        prev_month, prev_year = 12, prev_year - 1
+
+    first_date_last_month = date(year=prev_year, month=prev_month, day=1)
+    return first_date_last_month, current_date
+
+
 # Return the dict mapping the expense's category to amount 
 # between 2 dates
 def category_expense_dict(arg_obj, first_date: date, last_date: date) -> Dict:
@@ -76,8 +88,7 @@ def category_expense_dict(arg_obj, first_date: date, last_date: date) -> Dict:
     Calculate the total expense and each category's expense
     using the GROUP_BY 
     """ 
-    category_expense = {category: 0.0 for category in list(category_dict.keys())
-}
+    category_expense = { category: 0.0 for category in list(CATEGORY_DICT.keys()) }
     annotated_results = expense_list.values("category").annotate(
         total_amount=Sum("amount", default=0)
     ).order_by()
@@ -90,7 +101,6 @@ def category_expense_dict(arg_obj, first_date: date, last_date: date) -> Dict:
         "Expense": float(expense_list.aggregate(total=Sum("amount", default=0))["total"]), 
         "Income": float(income_list.aggregate(total=Sum("amount", default=0))["total"])
     })
-
     # total transactions is really just sum of expense and income 
     category_expense["Total"] = category_expense["Expense"] + category_expense["Income"]
     return category_expense
