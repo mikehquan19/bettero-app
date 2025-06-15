@@ -1,7 +1,14 @@
 from django.contrib import admin
 from .models import (
-    BudgetPlan, User, Account, Transaction, Bill, Stock, 
-    DateStockPrice, PortfolioValue, OverdueBillMessage
+    BudgetPlan, 
+    User, 
+    Account, 
+    Transaction, 
+    Bill, 
+    Stock, 
+    DateStockPrice,
+    PortfolioValue, 
+    OverdueBillMessage
 )
 
 admin.site.register(User)
