@@ -3,19 +3,21 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
+from .constants import CATEGORY_DICT
 
-category_dict = {
-    "Income": "INCOME",
-    "Housing": "HOUSING",
-    "Automobile": "AUTO",
-    "Medical": "MEDICAL",
-    "Subscription": "SUBSCRIPTION",
-    "Grocery": "GROCERY", 
-    "Dining": "FOOD & DRINK", 
-    "Shopping": "SHOPPING", 
-    "Gas": "GAS",
-    "Others": "OTHERS",
-}
+
+def get_default_dict(): 
+    return dict(
+        Housing=10, 
+        Automobile=10, 
+        Medical=10, 
+        Subscription=10, 
+        Grocery=10,
+        Dining=10,
+        Shopping=10,
+        Gas=10,
+        Others=20
+    )
 
 # the user account of the app 
 class User(AbstractUser): 
@@ -49,7 +51,7 @@ class Transaction(models.Model):
     account = models.ForeignKey(Account, on_delete=models.CASCADE, default=1)
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     description = models.CharField(max_length=200)
-    category = models.CharField(max_length=30, choices=category_dict)
+    category = models.CharField(max_length=30, choices=CATEGORY_DICT)
     amount = models.DecimalField(
         max_digits=12, decimal_places=2, default = 0, 
         validators=[MinValueValidator(limit_value=Decimal(0.01))]
@@ -59,20 +61,7 @@ class Transaction(models.Model):
     # representation of the transaction 
     def __str__(self): 
         return self.description
-    
 
-def get_default_dict(): 
-    return dict(
-        Housing=10, 
-        Automobile=10, 
-        Medical=10, 
-        Subscription=10, 
-        Grocery=10,
-        Dining=10,
-        Shopping=10,
-        Gas=10,
-        Others=20
-    )
 
 # the budget plan of the user over the 
 class BudgetPlan(models.Model): 
@@ -131,7 +120,7 @@ class Bill(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     pay_account = models.ForeignKey(Account, null=True, blank=True, on_delete=models.SET_NULL, default=1)
     description = models.CharField(max_length=200)
-    category = models.CharField(max_length=30, choices=category_dict, default="Housing")
+    category = models.CharField(max_length=30, choices=CATEGORY_DICT, default="Housing")
     amount = models.DecimalField(
         max_digits=10, decimal_places=2, default = 0, 
         validators=[MinValueValidator(limit_value=Decimal(1.00))])
@@ -194,7 +183,7 @@ class Stock(models.Model):
     
 
 """
-The price of the stock of the specific date 
+The price of the stock of the specific date, 
 only store the price of the stock on any date as of the first date of last month 
 (1 month & number of days of this month)
 """
