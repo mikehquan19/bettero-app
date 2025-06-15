@@ -4,19 +4,7 @@ from os import symlink
 from typing import Dict
 from datetime import date, timedelta
 import yfinance as yf
-
-# get the first date of last month and current date 
-def get_first_and_last_dates(): 
-    current_date = date.today() # the last date, which is today
-
-    # the first date (which is first date of last month), month and year of the last date 
-    prev_month, prev_year = current_date.month - 1, current_date.year
-    if prev_month < 0: 
-        prev_month, prev_year = 12, prev_year - 1
-
-    first_date_last_month = date(year=prev_year, month=prev_month, day=1)
-    return first_date_last_month, current_date
-
+from .utils import get_first_and_last_dates
 
 # convert the date obj to string 
 def to_string(arg_date): 
