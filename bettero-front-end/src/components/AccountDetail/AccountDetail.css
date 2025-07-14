@@ -1,0 +1,108 @@
+.account-detail-card {
+    width: 85%;
+    margin: 0 auto 20px auto;
+    padding: 10px;
+    background-color: skyblue;
+    border-radius: 10px;
+}
+
+@media only screen and (max-width: 500px) {
+    .account-detail-card {width: calc(98% - 10px);}
+}
+
+.account-info {
+    background-color: rgba(0, 255, 0, 0.5);
+    border: 1px solid black;
+    border-radius: 10px;
+    padding: 10px;
+    height: 120px;
+}
+
+.account-detail-card .institution-name {font-size: 16px;}
+
+.account-detail-card .account-name-num {
+    position: relative;
+    top: 5px;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.account-name-num .account-num {
+    font-size: 15px;
+    font-weight: normal;
+}
+
+.account-detail-card .due-date {
+    position: relative;
+    top: 10px;
+    font-weight: 500;
+    font-size: 18px;
+}
+
+.account-detail-card .credit-limit {
+    font-size: 22px;
+    font-weight: 600;
+    position: relative;
+    top: 38px;
+}
+
+.account-detail-card .balance {
+    font-size: 22px;
+    font-weight: 600;
+    float: right;
+}
+
+@media only screen and (max-width: 500px) {
+    .account-detail-card .credit-limit {font-size: 18px;}
+    .account-detail-card .balance {font-size: 22px;}
+}
+
+.account-detail-card .button-list {
+    margin-top: 10px;
+    display: flex; 
+    flex-flow: row nowrap; 
+    justify-content: center;
+    gap: 10px;
+}
+
+.account-detail-card .button-list button, .go-back-button {
+    background-color: darkcyan;
+    color: white; 
+    padding: 5px;
+    font-size: 15px;
+    border: 1px solid darkcyan;
+    border-radius: 10px;
+}
+
+.account-detail-card .charts {
+    display: flex;
+    flex-flow: row nowrap;
+    justify-content: center;
+    gap: 20px;
+    width: 100%;
+    height: 55vh;
+}
+
+.account-detail-card .charts div {
+    width: 47%; 
+    height: 100%;
+}
+
+@media only screen and (max-width: 500px) {
+    .account-detail-card .charts {
+        width: 100%; 
+        height: 90vh; 
+        flex-flow: column nowrap; 
+    }
+
+    .account-detail-card .charts div {
+        margin: 0 auto;
+        width: 95%;
+        height: calc(50% - 10px);
+    }
+}
+
+.go-back-button {
+    display: block;
+    margin: 20px auto 0 auto; 
+}

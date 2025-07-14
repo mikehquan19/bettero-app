@@ -1,0 +1,35 @@
+.financial-info-title {
+    font-size: 23px;
+    margin: 0 auto 20px auto;
+    width: 85%; 
+}
+
+.financial-cards-wrapper {
+    width: 85%;
+    margin: 0 auto 20px auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.financial-card {
+    background-color: skyblue;
+    border-radius: 15px;
+    padding: 10px;
+    height: 70px;
+}
+
+.financial-card h4 {
+    color: green;
+    margin: 0;
+    font-size: 16px;
+}
+
+.financial-card div {
+    color: green;
+    font-weight: 600;
+    font-size: 26px;
+    position: relative;
+    top: 25px;
+    float: right;
+}

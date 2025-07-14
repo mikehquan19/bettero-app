@@ -1,0 +1,91 @@
+/* for mobile sreen */ 
+@media only screen and (max-width: 500px) {
+    .financial-info-title {font-size: 20px;}
+    .financial-card {height: 50px;}
+    .financial-card h4 {font-size: 14px;}
+
+    .financial-cards-wrapper {
+        width: 98%;
+        grid-template-columns: repeat(2, 1fr); 
+        grid-template-rows: repeat(2, 1fr);
+    }
+
+    .financial-card div {
+        font-size: 24px;
+        top: 12px;
+    }
+
+}
+
+
+.charts {
+    background-color: skyblue;
+    width: 85%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    border-radius: 15px;
+}
+
+.main-charts {
+    height: 120vh;
+}
+
+.main-charts p {
+    margin-top: 20px; 
+	color: darkcyan;
+	font-size: 18px;
+	font-weight: bold;
+    text-align: center;
+}
+
+.timeseries-chart-wrapper {
+    position: relative;
+    height: 48%;
+    width: 90%;
+    margin: auto;
+}
+
+.chart-wrapper {
+    height: 42%;
+    width: 90%;
+    margin: 20px auto 0 auto;
+    display: flex;
+    flex-flow: row nowrap;
+    gap: 10px;
+}
+
+.change-chart-wrapper, .composition-chart-wrapper {
+    position: relative;
+    width: calc(50% - 5px);
+    height: 100%;
+}
+
+/* displaying charts for mobile */
+@media only screen and (max-width: 500px) {
+    .charts { width: 98%;}
+    .main-charts {height: 150vh;}
+    .main-charts p {margin-top: 20px; font-size: 16px;}
+
+    .timeseries-chart-wrapper {
+        position: relative;
+        width: 95%;
+        height: 29%;
+    }
+
+    .chart-wrapper {
+        height: 61%;
+        width: 95%;
+        margin: 20px auto 0 auto;
+        flex-flow: column;
+        gap: 20px;
+        justify-content: center;
+    }
+
+    .change-chart-wrapper, .composition-chart-wrapper {
+        position: relative;
+        width: 100%; 
+        height: 50%;
+    }
+}
