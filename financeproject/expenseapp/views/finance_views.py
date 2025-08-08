@@ -1,4 +1,5 @@
 from rest_framework import generics
+from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -7,19 +8,22 @@ from django.db import transaction
 from expenseapp.serializers import RegisterSerializer, TransactionSerializer
 from expenseapp.finance import *
 
-# handling the the registration, which is allowed for anyone 
 class Register(generics.CreateAPIView): 
-    permission_classes = [AllowAny] # anyone visiting the page could login 
+    """ Handling the the registration, which is allowed for anyone  """
+
+    permission_classes = [AllowAny]  
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
 
     def perform_create(self, serializer):
+        """
+        Override method ```perform_create()``` to create the list of initial portfolio value of the user 
+        """
+
         created_user = serializer.save()
-
-        # create the list of initial portfolio value of the user 
         first_date, last_date = get_first_and_last_dates()
+        
         current_date = first_date 
-
         portfolio_value_list = [] 
         while current_date < last_date: 
             portfolio_value_list.append(PortfolioValue(
@@ -27,61 +31,39 @@ class Register(generics.CreateAPIView):
             ))
             current_date += timedelta(days=1)
 
-        # ensure the integrity of the query 
+        # Ensure the integrity of the query with atomic transaction
         with transaction.atomic():
             PortfolioValue.objects.bulk_create(portfolio_value_list) 
         return created_user
+    
 
+class UserSummaryDetail(APIView): 
+    """ Handling the info of the financial summary of the user  """
 
-# handling the info of the financial summary of the user 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def user_summary_detail(request): 
+    permission_classes = [IsAuthenticated]
 
-    # Get method only 
-    if request.method == "GET": 
-        queried_user = request.user
+    def get(self, request, format=None) -> Response:
         first_date, last_date = get_curr_dates("month")
+        total_balance, total_amount_due = total_balance_and_amount_due(request.user)
+        financial_info = {
+            "total_balance": round(total_balance, 2), 
+            "total_amount_due": round(total_amount_due, 2), 
+            "total_income": round(total_income(request.user), 2),
+            "total_expense": round(category_expense_dict(request.user, first_date, last_date)["Total"], 2)
+        }
 
-        response_data = {
-            # calculate the financial info of the user 
-            "total_balance": total_balance_and_amount_due(queried_user)[0], 
-            "total_amount_due": total_balance_and_amount_due(queried_user)[1], 
-            "total_income": total_income(queried_user), 
-            "total_expense": category_expense_dict(queried_user, first_date, last_date)["Total"], 
-
-            # calculate the daily expense, the change, and composition percentage of user 
-            "change_percentage": expense_change_percentage(queried_user), 
-            "composition_percentage": expense_composition_percentage(queried_user), 
-            "daily_expense": daily_expense(queried_user), 
+        response_data = { 
+            "financial_info": financial_info,
+            "change_percentage": expense_change_percentage(request.user), 
+            "composition_percentage": expense_composition_percentage(request.user), 
+            "daily_expense": daily_expense(request.user), 
         }
         return Response(response_data)
+    
 
-
-# handling the fully detailed financial summary of the user 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def user_full_summary_detail(request): 
-
-    # get method only 
-    if request.method == "GET": 
+class UserFullSummaryDetail(APIView): 
+    """ Handling the fully detailed financial summary of the user """
+    
+    def get(self, request, format=None) -> Response: 
         interval_expense_dict = interval_total_expense(request.user)
-
-        # initial first date and last date 
-        initial_date1 = interval_expense_dict["month"][0]["first_date"]
-        initial_date2 = interval_expense_dict["month"][0]["last_date"]
-
-        # compute the initial list of transaction
-        initial_transactions = Transaction.objects.filter(
-            user=request.user,
-            occur_date__gte=initial_date1, 
-            occur_date__lte=initial_date2).order_by("-occur_date")[:10]
-        
-        initial_transaction_data = TransactionSerializer(initial_transactions, many=True).data
-        
-        # structure of the response data
-        response_data = {
-            "latest_interval_expense": interval_expense_dict,
-            "initial_transaction_data": initial_transaction_data,
-        }
-        return Response(response_data)
+        return Response(interval_expense_dict)

@@ -7,26 +7,18 @@ from .constants import CATEGORY_DICT
 
 
 def get_default_dict(): 
-    return dict(
-        Housing=10, 
-        Automobile=10, 
-        Medical=10, 
-        Subscription=10, 
-        Grocery=10,
-        Dining=10,
-        Shopping=10,
-        Gas=10,
-        Others=20
-    )
+    return dict(Housing=10, Automobile=10, Medical=10, Subscription=10, Grocery=10, Dining=10, Shopping=10, Gas=10, Others=20)
 
-# the user account of the app 
-class User(AbstractUser): 
+class User(AbstractUser):
+    """ The user account of the app  """
+
     def __str__(self):
         return self.username; 
 
 
-# the financial account of the user, in general 
 class Account(models.Model): 
+    """ The financial account of the user, in general  """
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     account_number = models.IntegerField()
     name = models.CharField(max_length=50)
@@ -36,19 +28,21 @@ class Account(models.Model):
         max_digits=12, decimal_places=2, default=0, 
         validators=[MinValueValidator(limit_value=Decimal(0.0))]
     )
+
     # this is strictly for credit accounts 
     credit_limit = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
 
-    # representation of the account using the account's name 
     def __str__(self): 
         return self.name
     
 
-# transaction in general of the account 
-class Transaction(models.Model): 
-    # user and account associated with it 
+class Transaction(models.Model):
+    """ Transaction in general of the account  """
+
+    # account associated with transaction 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, default=1)
+    # user associated with transaction
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     description = models.CharField(max_length=200)
     category = models.CharField(max_length=30, choices=CATEGORY_DICT)
@@ -58,16 +52,21 @@ class Transaction(models.Model):
     )
     occur_date = models.DateTimeField("The date transaction was made") # hours were used to sort 
 
-    # representation of the transaction 
     def __str__(self): 
+        """ Representation of the transaction  """
         return self.description
 
 
-# the budget plan of the user over the 
 class BudgetPlan(models.Model): 
+    """ The budget plan of the user """
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     # type of the budget plan (budget over month, bi-week, or week)
-    interval_type = models.CharField(max_length=20, choices={"month": "MONTH", "bi_week": "BI WEEK", "week": "WEEK"})
+    interval_type = models.CharField(max_length=20, choices={ 
+        "month": "MONTH", 
+        "bi_week": "BI WEEK", 
+        "week": "WEEK"
+    })
     recurring_income = models.DecimalField(
         max_digits=10, decimal_places=2, default=Decimal(0.01), 
         validators=[MinValueValidator(limit_value=Decimal(0.01))]
@@ -79,16 +78,19 @@ class BudgetPlan(models.Model):
             MinValueValidator(limit_value=Decimal(0)),
             MaxValueValidator(limit_value=Decimal(100)), 
         ])
-    category_portion = models.JSONField(default=get_default_dict) # it needs to have same field as category_dict
+
+    # it needs to have same field as category_dict
+    category_portion = models.JSONField(default=get_default_dict)
 
     class Meta: 
         ordering = ["user"] # this will group the budget plans of same user together 
 
-    # validate the budget plan 
     def clean(self): 
+        """ Customly validate the budget plan """
+
         # the queryset of user's budget plan, excluding this instance. if no instance, id = None
         budget_plan_list = self.user.budgetplan_set.exclude(id=self.id)
-        max_plan_count = 3 # the max number of budget plans
+        max_plan_count = 3
 
         # validate if the number of budget plans exceed 3 
         if budget_plan_list.count() > max_plan_count - 1: 
@@ -103,20 +105,21 @@ class BudgetPlan(models.Model):
         total_percent = sum([float(percent) for percent in list(self.category_portion.values())])
         if total_percent != 100: 
             raise ValidationError("All of the category portions don't add up to 100%")
-
-
-    # override in order to invoke clean() method before saving the instance 
+ 
     def save(self, *args, **kwargs): 
+        """ Override in order to invoke clean() method before saving the instance """
+
         self.full_clean()
         return super().save(*args, **kwargs)
 
-    # representation of the budget plan using the plan's user name and its type
     def __str__(self): 
+        """ Represent the budget plan using the plan's user name and its type """
         return f"{self.user}'s {self.interval_type} budget plan"
 
-
-# the montly bills of the user 
+ 
 class Bill(models.Model): 
+    """ The montly bills of the user """
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     pay_account = models.ForeignKey(Account, null=True, blank=True, on_delete=models.SET_NULL, default=1)
     description = models.CharField(max_length=200)
@@ -130,8 +133,9 @@ class Bill(models.Model):
         return self.description
     
 
-# the value of the user's portfolio
 class PortfolioValue(models.Model): 
+    """ The value of the user's portfolio """
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     date = models.DateField()
 
@@ -143,8 +147,9 @@ class PortfolioValue(models.Model):
         return f"{self.user}'s portfolio value on {self.date}"
 
 
-# the stock that the user holds
 class Stock(models.Model):
+    """ The stock that the user holds """
+
     min_validator = [MinValueValidator(limit_value=Decimal(0.00))]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
@@ -165,29 +170,30 @@ class Stock(models.Model):
     volume = models.BigIntegerField(default=0)  # volume of the stock's trading 
     last_updated_date = models.DateField("The last date the stock was updated")
 
-    # validate if the user has 2 different stocks of the same symbol 
     def clean(self): 
-        # the list of stock with this stock symbol, but excluding this stock, if no instance, id = None
+        """ Validate if the user has 2 different stocks of the same symbol  """
+
+        # the list of stock with this stock symbol, excluding this stock, if no instance, id = None
         stock_list = self.user.stock_set.exclude(id=self.id).filter(symbol=self.symbol)
         if stock_list.exists(): 
             raise ValidationError(f"This stock overlaps the previous ones ({self.id})")
     
-     # override in order to invoke clean() method before saving the instance 
     def save(self, *args, **kwargs): 
+        """ Override in order to invoke clean() method before saving the instance  """
         self.full_clean()
         return super().save(*args, **kwargs) 
-
-    # representation of the stock 
+ 
     def __str__(self): 
+        """ Representation of the stock """
         return self.symbol
     
 
-"""
-The price of the stock of the specific date, 
-only store the price of the stock on any date as of the first date of last month 
-(1 month & number of days of this month)
-"""
 class DateStockPrice(models.Model): 
+    """
+    The price of the stock of the specific date, 
+    only store the price of the stock on any date as of the first date of last month (1 month & number of days of this month)
+    """
+
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE, default=1)
     date = models.DateField()
     given_date_close =  models.DecimalField(  # the close price of the given stock on the given date 
@@ -195,17 +201,16 @@ class DateStockPrice(models.Model):
         validators=[MinValueValidator(limit_value=Decimal(0.00))]
     )
     
-    class Meta: 
-        # order the stock price based on the stock and the date 
-        ordering = ["stock", "date"]
+    class Meta:  
+        ordering = ["stock", "date"] # order the stock price based on the stock and the date
     
-    # representation of the stock's price 
     def __str__(self): 
+        """ Representation of the stock's price  """
         return f"{self.stock.symbol}'s close on {self.date}"
     
 
-# the message telling the user that the there are overdue bills 
 class OverdueBillMessage(models.Model): 
+    """ The message telling the user that the there are overdue bills  """
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     bill_description = models.CharField(max_length=200)
     bill_amount = models.DecimalField(

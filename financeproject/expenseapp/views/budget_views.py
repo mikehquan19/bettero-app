@@ -1,22 +1,22 @@
 from django.http import Http404
+from django.shortcuts import get_object_or_404
 from rest_framework import status, generics
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from expenseapp.models import BudgetPlan, OverdueBillMessage, Transaction, Bill
-from expenseapp.serializers import (
-    BudgetPlanSerializer, 
-    BillSerializer, 
-    OverdueBillMessageSerializer
-)
+from expenseapp.serializers import BudgetPlanSerializer, BillSerializer, OverdueBillMessageSerializer
+
 from expenseapp.finance import get_budget_response_data, adjust_account_balance
 from datetime import date, datetime
 
-# handling the budget plan of the user 
-class UserBudget(APIView): 
+class UserBudget(APIView):
+    """ View to handle the budget plan of the user  """
+
     permission_classes = [IsAuthenticated]
 
     def get_response_data(self, request): 
+        """ Get custome """
         response_data = {
             "month": {}, 
             "bi_week": {}, 
@@ -26,33 +26,34 @@ class UserBudget(APIView):
             response_data[type] = get_budget_response_data(arg_user=request.user, period_type=type)
         return response_data
     
-    # GET method 
-    def get(self, request, format=None): 
+    def get(self, request, format=None) -> Response: 
+        """ GET method """
+
         response_data = self.get_response_data(request)
         return Response(response_data)
     
-    # POST method 
-    def post(self, request, format=None): 
+    def post(self, request, format=None) -> Response: 
+        """ POST method """
+        
         request_data = request.data
         request_data["user"] = request.user.pk
 
         new_plan_serializer = BudgetPlanSerializer(data=request_data)
         if new_plan_serializer.is_valid(): 
-            new_plan_serializer.save() # call the create method 
-
-            # return new budget plan
+            new_plan_serializer.save() 
             response_data = self.get_response_data(request)
             return Response(response_data, status=status.HTTP_201_CREATED)
         
         return Response(new_plan_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 
-# handling the the budget plan of each interval type 
-class UserBudgetDetail(APIView): 
+class UserBudgetDetail(APIView):
+    """ View of handle the budget plan of the user each interval type  """
+
     permission_classes = [IsAuthenticated]
 
-    def get_budget_plan(self, request, interval_type): 
-        # Query the user and check if the user has plan of this type
+    def get_budget_plan(self, request, interval_type: str): 
+        """ query the user and check if the user has plan of this type """
         try: 
             queried_plan = request.user.budgetplan_set.get(interval_type=interval_type)
         except BudgetPlan.DoesNotExist: 
@@ -60,13 +61,15 @@ class UserBudgetDetail(APIView):
         
         return queried_plan
     
-    # GET method, just return the plan of the given interval type
-    def get(self, request, interval_type, format=None): 
+    def get(self, request, interval_type: str, format=None) -> Response: 
+        """ GET method, return the plan of the given interval type """
+
         response_data = get_budget_response_data(request.user, interval_type)
         return Response(response_data)
-    
-    # PUT method, update the plan of the given interval type 
-    def put(self, request, interval_type, format=None): 
+     
+    def put(self, request, interval_type: str, format=None) -> Response: 
+        """ PUT method, update the plan of the given interval type """
+
         request_data = request.data
         request_data["user"] = request.user.pk
         
@@ -77,47 +80,50 @@ class UserBudgetDetail(APIView):
             updated_plan_serializer.save() # call update() method 
 
             # custom data to be returned 
-            custom_data = {
+            response_data = {
                 "month": {}, 
                 "bi_week": {}, 
                 "week": {}
             }
 
             # Period type 
-            for type in list(custom_data.keys()): 
-                custom_data[type] = get_budget_response_data(request.user, type)
-            return Response(custom_data, status=status.HTTP_202_ACCEPTED)
+            for type in list(response_data.keys()): 
+                response_data[type] = get_budget_response_data(request.user, type)
+            return Response(response_data, status=status.HTTP_202_ACCEPTED)
         
         return Response(updated_plan_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    # DELETE method, delete the plan 
-    def delete(self, request, interval_type, format=None): 
+    def delete(self, request, interval_type, format=None) -> Response: 
+        """ DELETE method, delete the plan  """
+
         plan = self.get_budget_plan(request, interval_type)
         plan.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-# handling the list of bills of the user 
 class BillList(APIView): 
-    # get the response data 
+    """ View to handle the list of bills of the user """
+ 
     def get_response_data(self, request):
         bills_list = Bill.objects.filter(user=request.user)
         response_data = BillSerializer(bills_list, many=True).data
         return response_data 
     
-    # GET method, return list of bills for the user 
-    def get(self, request, format=None): 
+    def get(self, request, format=None) -> Response: 
+        """ GET method, return list of bills for the user """
+
         response_data = self.get_response_data(request)
         return Response(response_data)
     
-    # POST method, add new bill to the list of bills 
-    def post(self, request, format=None): 
+    def post(self, request, format=None) -> Response: 
+        """ POST method, add new bill to the list of bills  """
+
         request_data = request.data
         request_data["user"] = request.user.pk
         
         new_bill_serializer = BillSerializer(data=request_data)
         if new_bill_serializer.is_valid(): 
-            new_bill_serializer.save() # call the create() method 
+            new_bill_serializer.save() 
 
             # return the new list of bills 
             response_data = self.get_response_data(request)
@@ -126,23 +132,25 @@ class BillList(APIView):
         return Response(new_bill_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# handling the detail of the bills 
 class BillsDetail(generics.RetrieveUpdateDestroyAPIView):
+    """ View to handle the detail of the bills  """
+
     permission_classes = [IsAuthenticated]
     serializer_class = BillSerializer
 
-    # get object and the serializer class 
     def get_object(self):
+        """ Override ```get_object(self)``` to get from pk by the endpoint"""
         try: 
             return Bill.objects.get(pk=self.kwargs["pk"])
         except Bill.DoesNotExist: 
             raise Http404("Bill with the given pk not found.")
 
-    # overriding the destroying behavior 
     def perform_destroy(self, instance):
-        # if there is pay account and the bills isn't overdue yet
+        """ Override the destroying behavior """
+
         if instance.pay_account is not None and instance.due_date >= date.today():
-            # Create transactions indicating that user's paid the bills 
+            # if there is pay account and the bills isn't overdue yet
+            # create transactions indicating that user's paid the bills 
             new_transaction = Transaction.objects.create(
                 account=instance.pay_account, user=instance.user, 
                 description=f"Payment: {instance.description}", category=instance.category,
@@ -159,7 +167,8 @@ class BillsDetail(generics.RetrieveUpdateDestroyAPIView):
 class OverdueMessageList(APIView): 
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, format=None): 
+    def get(self, request, format=None) -> Response: 
+        """ GET method """
         overdue_message_list = OverdueBillMessage.objects.filter(user=request.user)
         response_data = OverdueBillMessageSerializer(overdue_message_list, many=True).data
         return Response(response_data)

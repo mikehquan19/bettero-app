@@ -6,8 +6,15 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: {
-      '@': './src',
+    alias: { 
+      '@Pages': path.resolve(__dirname, './src/components/Pages'),
+      '@Forms': path.resolve(__dirname, './src/components/Forms'),
+      '@Tables': path.resolve(__dirname, './src/components/Tables'),
+      '@Charts': path.resolve(__dirname, './src/components/Charts'),
+      '@components': path.resolve(__dirname, './src/components'),
+      '@provider': path.resolve(__dirname, './src/provider'),
+      '@utils': path.resolve(__dirname, './src/utils'),
+      '@interface': path.resolve(__dirname, './src/interface')
     }
   }
 })

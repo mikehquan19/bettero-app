@@ -1,6 +1,6 @@
 from .models import User, Account, Transaction, DateStockPrice, Stock, PortfolioValue
 from .constants import CATEGORY_DICT
-from .finance import get_first_and_last_dates
+from .finance import get_first_and_last_dates, to_string
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import F, Sum
@@ -11,9 +11,10 @@ import random
 TEST_ACCOUNT_NUMBERS = [1000, 1001, 2000, 3000] 
 AVAILABLE_INSTITUTIONS = ["Chase", "Bank of America", "Wells Fargo", "Citi Bank", "Capital One", "Discover"]
 
-# upload the account 
 @transaction.atomic
-def upload_accounts(): 
+def upload_mock_accounts(): 
+    """ Upload the mock accounts """
+
     random.seed(4)
     accounts_to_create = [] 
     for acc_num in TEST_ACCOUNT_NUMBERS: 
@@ -32,11 +33,12 @@ def upload_accounts():
     print(f"{created_accounts} accounts were created.")
 
 
-# upload data to database so that we can test utils
 @transaction.atomic
 def upload_category_transactions(num_transaction: int=3): 
+    """ Upload data to database so that we can test utils """
+
     # create the transactions 
-    random.seed(4) # to ensure same sequence of random floats were generated 
+    random.seed(4)
     transactions_to_create = []
 
     for category in list(CATEGORY_DICT.keys()):
@@ -88,7 +90,7 @@ def upload_interval_transactions(num_transactions: int=1):
             transactions_to_create.append(Transaction(
                 user=User.objects.get(username="mikequan"), 
                 account=Account.objects.get(account_number=random.choice(TEST_ACCOUNT_NUMBERS)),
-                description=f"Test {category} Transaction {i + 1}", 
+                description=f"Test {category} Transaction {i + 1} on {to_string(current_date)}", 
                 category=category,
                 amount=round(random.uniform(20, 50), 2), 
                 occur_date=converted_date
@@ -101,13 +103,13 @@ def upload_interval_transactions(num_transactions: int=1):
 
 
 @transaction.atomic
-def delete_test_transactions(): 
+def delete_mock_transactions(): 
     Transaction.objects.filter(description__contains="Test").delete()
     print("Test Transaction deleted successfully")
 
 
 @transaction.atomic
-def upload_test_portfolio_values(): 
+def upload_mock_portfolio_values(): 
     user = User.objects.get(username="mikequan")
     stocks = [stock for stock in Stock.objects.filter(user=user)]
     created_portfolio_values = []
@@ -116,13 +118,11 @@ def upload_test_portfolio_values():
     current_date = first_date 
     while current_date <= last_date: 
         date_prices = DateStockPrice.objects.filter(date=current_date, stock__in=stocks)
-        date_prices = date_prices.annotate(
-            total_value=F("given_date_close") * F("stock__shares"))
+        date_prices = date_prices.annotate(total_value=F("given_date_close") * F("stock__shares"))
         total_value = date_prices.aggregate(total=Sum("total_value", default=0))["total"]
 
-        if total_value != 0: 
-            created_portfolio_values.append(
-                PortfolioValue(user=user, date=current_date, given_date_value=total_value))
+        created_portfolio_values.append(
+            PortfolioValue(user=user, date=current_date, given_date_value=total_value))
         current_date += timedelta(days=1)
 
     num_values = PortfolioValue.objects.bulk_create(created_portfolio_values)

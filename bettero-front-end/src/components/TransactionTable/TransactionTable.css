@@ -13,6 +13,19 @@
     padding: 0.7rem;
 }
 
+.left-pagination-button {
+    color: darkcyan;
+    border-left: 0.1rem solid gray !important;
+    border-top-left-radius: 12px;
+    border-bottom-left-radius: 12px;
+}
+
+.right-pagination-button {
+    color: darkcyan;
+    border-right: 0.1rem solid gray;
+    border-top-right-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
 
 .latest-transactions {
     width: calc(85% + 10px);
@@ -23,9 +36,9 @@
     .latest-transactions {width: 98%;}
     .table-caption h3 {font-size: 16px;}
     .transaction-detail #first {padding: 0 10px;}
-    .transaction-detail h4 {
+    .transaction-detail h3 {
         margin: 5px 0; 
-        font-size: 17px;
+        font-size: 18px;
     }
     .transaction-detail p {
         text-align: left; 
@@ -85,22 +98,22 @@
     background-color: rgba(0, 255, 0, 0.75);
 }
 
-@media only screen and (min-width: 1000px) {
-    .latest-transactions th:nth-child(1) {width: 20%}
+@media only screen and (min-width: 1200px) {
+    .latest-transactions th:nth-child(1) {width: 15%}
     .latest-transactions th:nth-child(2) {width: 30%}
-    .latest-transactions th:nth-child(3) {width: 12.5%;}
+    .latest-transactions th:nth-child(3) {width: 15%;}
     .latest-transactions th:nth-child(4) {width: 25%;}
-    .latest-transactions th:nth-child(5) {width: 12.5%;}
+    .latest-transactions th:nth-child(5) {width: 15%;}
 }
 
-@media only screen and (max-width: 1000px) and (min-width: 500px) {
+@media only screen and (max-width: 1200px) and (min-width: 700px) {
     .latest-transactions th:nth-child(1) {width: 22%}
     .latest-transactions th:nth-child(2) {width: 40%}
     .latest-transactions th:nth-child(3) {width: 18%;}
     .latest-transactions th:nth-child(4) {width: 20%;}
 }
 
-@media only screen and (max-width: 500px) {
+@media only screen and (max-width: 700px) {
     .latest-transactions th {
         font-size: 16px;
         padding: 10px;

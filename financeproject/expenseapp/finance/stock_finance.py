@@ -6,35 +6,38 @@ from datetime import date, timedelta
 import yfinance as yf
 from .utils import get_first_and_last_dates
 
-# convert the date obj to string 
-def to_string(arg_date): 
-    return f"{arg_date.year}-{arg_date.month}-{arg_date.day}"
+def to_string(arg_date: date) -> str: 
+    """ Convert a date object to a string """
+
+    month = f"0{arg_date.month}" if arg_date.month < 10 else str(arg_date.month)
+    day = f"0{arg_date.day}" if arg_date.day < 10 else str(arg_date.day)
+    return f"{arg_date.year}-{month}-{day}"
 
 
-# convert string to the date obj
-def to_date(arg_str): 
+def to_date(arg_str: str) -> date: 
+    """ Convert a string to a date object """
+    
     str_arr = arg_str.split("-")
     return date(year=int(str_arr[0]), month=int(str_arr[1]), day=int(str_arr[2]))
 
 
-"""
-Load the initial price of the stock since first date of last month
-till the today along with current data of the stock 
-"""
 def load_stock_data(symbol: str) -> Dict: 
-    # Get the first and last date 
+    """
+    Load the initial price of the stock since first date of last month until the today 
+    along with current data of the stock 
+    """
+
+    # get the first and last date of a stock price's duration 
     first_date, last_date = get_first_and_last_dates()
-
     # Load data of the stock's info 
-    recent_data = yf.download(symbol, start=to_string(first_date), end=to_string(last_date))
-
+    recent_data = yf.download([symbol], start=to_string(first_date), end=to_string(last_date))
     # current info of the stock 
     stock_data = {}
     for field in ["current_close", "previous_close", "open", "high", "low", "volume"]: 
         frame_col = field.split('_')[-1].capitalize()
         index = -2 if field == "previous_close" else -1
         value = recent_data[frame_col][symbol].iloc[index] 
-        stock_data[field] = round(int(value), 2) if field == "volume" else round(Decimal(value), 2)
+        stock_data[field] =  round(int(value) if field == "volume" else Decimal(value), 2)
 
     # The price of the stock over the past
     stock_data["price_data"] = []
@@ -60,11 +63,11 @@ def load_stock_data(symbol: str) -> Dict:
     return stock_data
 
 
-# Update the info the stock, and add new record of the stock price 
 def update_stock_data(symbol: str) -> Dict: 
+    """ Update the info the stock, and add new record of the stock price """
+
     previous_date = to_string(date.today() - timedelta(days=1))
     today = to_string(date.today())
-
     # Return the Panda data frame 
     updated_data = yf.download(symbol, start=previous_date, end=today)
 
@@ -72,7 +75,6 @@ def update_stock_data(symbol: str) -> Dict:
     for field in ["new_close", "new_open", "new_high", "new_low", "new_volume"]: 
         frame_col = field.split('_')[-1].capitalize()
         value = updated_data[frame_col][symbol].iloc[0]
-        value = int(value) if field == "new_volume" else Decimal(value)
-        custom_data[field] = round(value, 2)
+        custom_data[field] = round(int(value) if field == "volume" else Decimal(value), 2)
 
     return custom_data

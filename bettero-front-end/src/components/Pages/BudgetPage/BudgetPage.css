@@ -1,6 +1,6 @@
 .overdue-message-list {
     color: red;
-    width: 80%; 
+    width: 85%; 
     margin: 0 auto;
 }
 .overdue-message-wrapper {
@@ -91,7 +91,7 @@
 .budget-plan-header {
     font-size: 20px;
     background-color: skyblue;
-    width: calc(80% - 20px);
+    width: calc(85% - 20px);
     margin: 0 auto;
     padding: 10px;
     border-top-left-radius: 20px;
@@ -100,7 +100,7 @@
 
 .budget-plan-panel {
     background-color: rgba(0, 255, 0, 0.5);
-    width: 80%; 
+    width: 85%; 
     margin: 0 auto; 
     padding: 5px 0 15px 0; 
     border-bottom-left-radius: 20px;

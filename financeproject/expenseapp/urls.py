@@ -13,8 +13,8 @@ urlpatterns = [
     path("logout", TokenBlacklistView.as_view()),
     
     # user's financial summary
-    path("summary", views.user_summary_detail),
-    path("full_summary", views.user_full_summary_detail),
+    path("summary", views.UserSummaryDetail.as_view()),
+    path("full_summary", views.UserFullSummaryDetail.as_view()),
 
     # account list, detail, and financial summary
     path("accounts", views.AccountList.as_view()),
@@ -27,7 +27,9 @@ urlpatterns = [
     path("transactions/interval", views.IntervalTransactionList.as_view()),
     path("transactions/category/<str:arg_cat>", views.CategoryTransactionList.as_view()),
     path("transactions/both", views.BothTransactionList.as_view()),
+    path("transactions/initial", views.LatestSummaryTransactionList.as_view()),
 
+    # transaction list of accounts 
     path("accounts/<int:pk>/transactions", views.AccountTransactionList.as_view()),
     path("accounts/<int:pk>/transactions/both", views.AccBothTransactionList.as_view()),
 

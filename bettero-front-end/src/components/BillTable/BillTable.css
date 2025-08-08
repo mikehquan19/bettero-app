@@ -1,5 +1,5 @@
 .bills-list {
-    width: 80%; 
+    width: 85%; 
     margin: 25px auto 10px auto;
 }
 
@@ -62,13 +62,13 @@
 }
 
 @media only screen and (min-width: 1000px) {
-    .bills-list th:nth-child(1) {width: 20%}
-    .bills-list th:nth-child(2) {width: 15%}
+    .bills-list th:nth-child(1) {width: 23.5%}
+    .bills-list th:nth-child(2) {width: 10%}
     .bills-list th:nth-child(3) {width: 10%}
-    .bills-list th:nth-child(4) {width: 20%}
+    .bills-list th:nth-child(4) {width: 23.5%}
     .bills-list th:nth-child(5) {width: 15%}
-    .bills-list th:nth-child(6) {width: 10%}
-    .bills-list th:nth-child(7) {width: 10%}
+    .bills-list th:nth-child(6) {width: 9%}
+    .bills-list th:nth-child(7) {width: 9%}
 }
 
 @media only screen and (min-width: 500px) and (max-width: 1000px) {

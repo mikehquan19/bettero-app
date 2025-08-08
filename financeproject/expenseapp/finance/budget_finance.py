@@ -2,11 +2,12 @@
 
 from typing import Dict
 from expenseapp.models import BudgetPlan, User
-from .utils import *
+from .utils import get_curr_dates, category_expense_dict
 
 
-# Calculate the actual compostion percentage of each category vs the goal
 def budget_composition_percentage(arg_user: User, period_type: str) -> Dict: 
+    """ Calculate the actual compostion percentage of each category along with the goal """
+
     plan = BudgetPlan.objects.get(user=arg_user, interval_type=period_type)
  
     # The total expense of each category 
@@ -36,17 +37,15 @@ def budget_composition_percentage(arg_user: User, period_type: str) -> Dict:
     return percent_dict
 
 
-# Calculate the the progress percentage of each towards that category's budget
 def budget_progress_percentage(arg_user: User, interval_type: str) -> Dict: 
+    """ Calculate the the progress percentage of each towards that category's budget """
 
     # Budget plan and total budget
     plan = BudgetPlan.objects.get(user=arg_user, interval_type=interval_type)
     total_budget = float(plan.recurring_income * plan.portion_for_expense / 100)
  
-    """
-    The total expense of each category 
-    dates of the current interval of given type
-    """
+    
+    # The total expense of each category dates of the current interval of given type
     first_date, last_date = get_curr_dates(interval_type) 
     category_expense = category_expense_dict(arg_user, first_date, last_date)
 
@@ -60,7 +59,9 @@ def budget_progress_percentage(arg_user: User, interval_type: str) -> Dict:
     # Add budget to the category first
     for key in list(plan.category_portion.keys()):
         this_category_budget = float(plan.category_portion[key])
-        percent_dict[key] = { "budget": this_category_budget * total_budget / 100 }
+        percent_dict[key] = { 
+            "budget": this_category_budget * total_budget / 100 
+        }
 
     # Iterate through each key in the progress percentage dict to add current
     for key in list(percent_dict.keys()):
@@ -82,10 +83,15 @@ def budget_progress_percentage(arg_user: User, interval_type: str) -> Dict:
     return percent_dict
 
 
-# get response data for budget plan
 def get_budget_response_data(arg_user: User, period_type: str) -> Dict: 
+    """ 
+    Get the custom response data used for budget plan, which includes the plan's info along with 
+    its composition and progress percentage.
+    """
+
     # Budget data
     budget_response = {}
+
     try: 
         plan = BudgetPlan.objects.get(user=arg_user, interval_type=period_type)
     except BudgetPlan.DoesNotExist: 
