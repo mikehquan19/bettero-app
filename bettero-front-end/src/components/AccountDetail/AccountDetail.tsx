@@ -9,7 +9,7 @@ import { getElementAtEvent } from 'react-chartjs-2';
 import { reformatDate } from '@utils';
 import { getAccountSummary, getAccountTransactions } from '@provider/api';
 import { Account, CategoryObject, Transaction } from '@interface';
-import './AccountDetail.css';
+import './AccountDetail.scss';
 
 interface AccountDetailProps {
   type: string,

@@ -5,7 +5,7 @@ import handleError from "@provider/handleError";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faX } from "@fortawesome/free-solid-svg-icons";
 import { ADD_STOCK_VALIDATTION } from "./Validation";
-import './FormStyle.css';
+import './Form.scss';
 import { Stock } from "@interface";
 
 interface StockFormProps {

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faHouse, faChartSimple, faMoneyBill, faArrowTrendUp } from '@fortawesome/free-solid-svg-icons'
 import LogoutForm from '@Forms/DeleteForms/LogoutForm';
-import './Navbar.css';
+import './Navbar.scss';
 
 
 function Navbar() {

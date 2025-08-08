@@ -1,6 +1,6 @@
 import { useState, useEffect, CSSProperties } from 'react';
 import { useMediaQuery } from "@uidotdev/usehooks";
-import './TransactionTable.css';
+import './TransactionTable.scss';
 import { Transaction } from '@interface';
 
 interface PaginationProps {

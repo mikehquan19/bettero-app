@@ -2,7 +2,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { expenseappClient } from '@provider/api';
 import handleError from '@provider/handleError';
 import { faX } from '@fortawesome/free-solid-svg-icons';
-import './DeleteFormStyle.css';
+import './DeleteFormStyle.scss';
  
 interface DeletePlanProps {
   intervalType: string, 

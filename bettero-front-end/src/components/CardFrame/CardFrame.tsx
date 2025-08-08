@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import './CardFrame.css';
+import './CardFrame.scss';
 import { MouseEvent, ReactNode } from 'react';
 
 interface CardFrameProps {

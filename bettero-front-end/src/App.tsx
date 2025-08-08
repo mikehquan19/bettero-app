@@ -13,7 +13,7 @@ import {faBars, faX, faHouse, faChartSimple, faMoneyBill, faArrowTrendUp } from 
 import { CSSProperties, MouseEvent, useState } from 'react';
 import { useMediaQuery } from '@uidotdev/usehooks';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import './App.css';
+import './App.scss';
 
 function HeaderBar() {
   const [menuPresent, setMenuPresent] = useState(false);

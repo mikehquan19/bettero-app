@@ -10,7 +10,7 @@ import { getElementAtEvent } from 'react-chartjs-2';
 import { useMediaQuery } from '@uidotdev/usehooks';
 import { reformatDate, latestIntervals, latestIntervalExpense, latestIntervalChart } from '@utils';
 import { Interval, Transaction } from '@interface';
-import './SummaryPage.css';
+import './SummaryPage.scss';
 
 interface SummaryPageProps {
   navbarWidth: number, 

@@ -1,6 +1,6 @@
 import { Account } from '@interface';
 import { CSSProperties } from 'react';
-import './Card.css'
+import './Card.scss'
 
 
 interface CardProps {

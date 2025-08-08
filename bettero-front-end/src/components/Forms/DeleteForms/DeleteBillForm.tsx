@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { expenseappClient } from '@provider/api';
 import handleError from '@provider/handleError';
 import { Bill } from '@interface';
-import './DeleteFormStyle.css';
+import './DeleteFormStyle.scss';
 
 interface DeleteAccountFormInterface {
   billId: number,  

@@ -6,7 +6,7 @@ import { getUserAccounts } from '@provider/api';
 import handleError from '@provider/handleError';
 import { useMediaQuery } from '@uidotdev/usehooks';
 import { Account } from '@interface';
-import './AccountPage.css';
+import './AccountPage.scss';
 
 interface AccountPageProps {
   navbarWidth: number, 

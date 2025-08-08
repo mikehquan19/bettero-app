@@ -4,7 +4,7 @@ import { faX } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { expenseappClient } from "@provider/api";
 import handleError from "@provider/handleError";
-import "./BudgetPlanForm.css";
+import "./BudgetPlanForm.scss";
 import { BudgetPlan } from "@interface";
 
 interface BudgetPlanFormProps {

@@ -6,7 +6,7 @@ import { expenseappClient, getUserAccounts } from "@provider/api";
 import handleError from "@provider/handleError";
 import { Account, Bill } from "@interface";
 import { ADD_BILL_VALIDATION } from "./Validation";
-import './FormStyle.css';
+import './Form.scss';
 
 interface BillFormProps {
   type: 'ADD' | 'UPDATE', 

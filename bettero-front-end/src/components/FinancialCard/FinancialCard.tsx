@@ -1,4 +1,4 @@
-import './FinancialCard.css';
+import './FinancialCard.scss';
 import { FinancialInfo } from '@interface';
 
 interface FinancialCardProps {

@@ -1,7 +1,7 @@
 import { MouseEvent } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCirclePlus } from '@fortawesome/free-solid-svg-icons';
-import './Button.css';
+import './Button.scss';
 
 interface ButtonProps {
   content: string, 

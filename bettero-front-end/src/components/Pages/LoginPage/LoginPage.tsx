@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ACCESS_TOKEN, REFRESH_TOKEN, loginUser, registerUser } from "@provider/api";
 import handleError from "@provider/handleError";
-import './LoginPage.css';
+import './LoginPage.scss';
 
 interface LoginPageProps {
   type: string

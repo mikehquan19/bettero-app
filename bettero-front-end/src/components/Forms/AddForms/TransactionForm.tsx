@@ -3,7 +3,7 @@ import { postUserTransactions } from '@provider/api';
 import handleError from '@provider/handleError';
 import { faX } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import './FormStyle.css'; 
+import './Form.scss'; 
 import { Account } from '@interface';
 
 interface TransactionFormProps {

@@ -9,7 +9,7 @@ import DeleteStockForm from "@Forms/DeleteForms/DeleteStockForm";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { reformatDate } from "@utils";
 import { Stock } from "@interface";
-import './InvestmentPage.css';
+import './InvestmentPage.scss';
 
 interface StockTableRowProps {
   stockInfoData: Stock, 

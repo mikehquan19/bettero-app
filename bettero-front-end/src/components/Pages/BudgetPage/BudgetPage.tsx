@@ -7,7 +7,7 @@ import { getBudgetPlan, getOverdueMessages } from '@provider/api';
 import handleError from '@provider/handleError';
 import { faPlusCircle, faCaretDown } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import './BudgetPage.css';
+import './BudgetPage.scss';
 import { BudgetPlan, CategoryObject, CategoryProgress, OverdueBillMessage } from '@interface';
 
 // the progress bar 

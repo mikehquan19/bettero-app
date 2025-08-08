@@ -6,7 +6,7 @@ import { postOrPutUserAccount } from '@provider/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { ADD_ACCOUNT_VALIDATION } from '@Forms/AddForms/Validation';
 import { Account } from '@interface';
-import './FormStyle.css';
+import './Form.scss';
 
 interface AccountFormProps {
   type: "ADD" | "UPDATE", 

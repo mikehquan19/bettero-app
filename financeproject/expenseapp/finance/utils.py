@@ -8,9 +8,7 @@ from expenseapp.constants import CATEGORY_DICT, EXPENSE, INCOME, MONTH, TOTAL, W
 from datetime import date, timedelta
 from calendar import monthrange
 
-def get_curr_dates(
-    period_type: str=None, arg_first_date: date=None, arg_last_date: date=None
-) -> Tuple: 
+def get_curr_dates(period_type: str=None, arg_first_date: date=None, arg_last_date: date=None) -> Tuple: 
     """ 
     Get the first and last dates of the current interval based on the interval type
     """

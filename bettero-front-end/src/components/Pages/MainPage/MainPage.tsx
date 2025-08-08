@@ -13,7 +13,7 @@ import { getUserAccounts, getUserTransactions, getFinancialSummary, getCategoryT
 import { useEffect, useState, MouseEvent } from 'react';
 import { getElementAtEvent } from 'react-chartjs-2';
 import { Account, CategoryObject, FinancialInfo, Transaction } from '@interface';
-import './MainPage.css';
+import './MainPage.scss';
 
 interface MainPageProps {
   navbarWidth: number, 

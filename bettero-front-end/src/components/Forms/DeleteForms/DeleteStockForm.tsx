@@ -3,7 +3,7 @@ import handleError from "@provider/handleError";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faX } from '@fortawesome/free-solid-svg-icons';
 import { Stock } from "@interface";
-import './DeleteFormStyle.css';
+import './DeleteFormStyle.scss';
 
 interface DeleteStockProps {
   stockSymbol: string, 

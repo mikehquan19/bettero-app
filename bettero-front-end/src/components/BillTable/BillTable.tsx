@@ -8,7 +8,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlusCircle } from '@fortawesome/free-solid-svg-icons';
 import { reformatDate } from '@utils';
 import { Bill } from '@interface';
-import './BillTable.css'
+import './BillTable.scss'
 
 interface BillTableRowProps {
   billInfo: Bill,
