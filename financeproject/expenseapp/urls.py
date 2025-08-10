@@ -27,7 +27,6 @@ urlpatterns = [
     path("transactions/interval", views.IntervalTransactionList.as_view()),
     path("transactions/category/<str:arg_cat>", views.CategoryTransactionList.as_view()),
     path("transactions/both", views.BothTransactionList.as_view()),
-    path("transactions/initial", views.LatestSummaryTransactionList.as_view()),
 
     # transaction list of accounts 
     path("accounts/<int:pk>/transactions", views.AccountTransactionList.as_view()),

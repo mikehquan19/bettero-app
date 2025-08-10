@@ -156,15 +156,3 @@ class AccBothTransactionList(TransactionView):
             occur_date__gte=first_date, 
             occur_date__lte=last_date).order_by("-occur_date")
     
-
-class LatestSummaryTransactionList(TransactionView): 
-    """ View to handle the list of initial transactions on the summary page """
-
-    def get_queryset(self):
-        # Initial data of the latest month
-        initial_date1, initial_date2 = latest_periods("month", 1)[0]
-
-        return Transaction.objects.filter(
-            user=self.request.user,
-            occur_date__gte=initial_date1, occur_date__lte=initial_date2
-        ).order_by("-occur_date")
