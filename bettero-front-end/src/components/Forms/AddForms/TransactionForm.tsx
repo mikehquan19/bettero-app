@@ -5,6 +5,7 @@ import { faX } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import './Form.scss'; 
 import { Account } from '@interface';
+import { ADD_TRANSACTION_VALIDATION } from './Validation';
 
 interface TransactionFormProps {
   accountList: Account[], 
@@ -12,7 +13,14 @@ interface TransactionFormProps {
   onHide: () => void
 }
 
-function TransactionForm({ accountList, onChangeTransList, onHide }: TransactionFormProps) {
+/**
+ * Form to add or update the transactions 
+ * @param {TransactionFormProps} props 
+ * @returns {JSX.Element}
+ */
+function TransactionForm(
+  { accountList, onChangeTransList, onHide }: TransactionFormProps
+): JSX.Element {
   const { register, handleSubmit, formState: { errors } } = useForm();
 
   // submit the form's data 
@@ -27,34 +35,12 @@ function TransactionForm({ accountList, onChangeTransList, onHide }: Transaction
     submittedData.occurDate += new Date().toISOString().substring(10);
 
     postUserTransactions(submittedData)
-      .then((response) => response ? onChangeTransList(response.data) : null)
+      .then((response) => {
+        if (response) onChangeTransList(response.data);
+      })
       .catch((error) => handleError(error));
     
     onHide();
-  }
-
-  // validate some fields of the form 
-  const registerOptions = {
-    // validation on the description field 
-    description: {
-      required: "Description is required",
-      maxLength: {
-        value: 200,
-        message: "Description must be less than 200 characters",
-      }
-    },
-    // validation on the amount field
-    amount: {
-      required: "Amount is required",
-      min: {
-        value: 0.01,
-        message: "Amount must be at least 0.01",
-      },
-      maxLength: {
-        value: 10,
-        message: "Amount must be less than 10 digits "
-      }
-    }
   }
 
   const categoryArr = ["Housing", "Automobile", "Medical", "Subscription", "Grocery", "Dining", "Shopping", "Gas", "Others", "Income"];
@@ -81,7 +67,7 @@ function TransactionForm({ accountList, onChangeTransList, onHide }: Transaction
               {errors?.description && errors?.description?.message as string}
             </small>
             <input type="text" placeholder="Description"
-              {...register("description", registerOptions.description)} />
+              {...register("description", ADD_TRANSACTION_VALIDATION.description)} />
           </div>
 
           <div className="form-field">
@@ -90,7 +76,7 @@ function TransactionForm({ accountList, onChangeTransList, onHide }: Transaction
               {errors?.amount && errors?.amount?.message as string}
             </small>
             <input type="text" placeholder="Amount"
-              {...register("amount", registerOptions.amount)} />
+              {...register("amount", ADD_TRANSACTION_VALIDATION.amount)} />
           </div>
 
           <div className="form-field">
