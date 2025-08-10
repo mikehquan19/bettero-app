@@ -1,9 +1,10 @@
 import { useState, useEffect, CSSProperties } from 'react';
 import { useMediaQuery } from "@uidotdev/usehooks";
-import './TransactionTable.scss';
 import { Transaction } from '@interface';
+import './TransactionTable.scss';
 
 interface PaginationProps {
+  currentIndex: number, 
   pageSize: number, 
   numRecords: number, 
   onNextPage: (index: number) => void,
@@ -11,17 +12,26 @@ interface PaginationProps {
 
 /**
  * The pagination bar used to switch between pages 
+ * @param {PaginationProps} props
+ * @returns {JSX.Element | undefined}
  */
-function Pagination({ pageSize, numRecords, onNextPage }: PaginationProps) {
-  const [selectedIndex, setSelectedIndex] = useState<number>(1);
-  const [firstIndex, setFirstIndex] = useState<number>(0); // First index in the pagination bar 
+function Pagination(
+  { currentIndex, pageSize, numRecords, onNextPage }: PaginationProps
+): JSX.Element | undefined {
+  const [selectedIndex, setSelectedIndex] = useState<number>(currentIndex);
 
+  // First index in the pagination bar 
+  const firstIndex = Math.floor((selectedIndex - 1) / 5) * 5;
   // The array of page indices
   const numPages = [];
   for (let i = 1; i <= Math.ceil(numRecords / pageSize); i++) {
     numPages.push(i);
   }
   const numPresentPages = numPages.slice(firstIndex, firstIndex + 5);
+
+  // Selected index will change along with the current index
+  // List of transactions already changed with current index
+  useEffect(() => setSelectedIndex(currentIndex), [currentIndex]);
 
   /**
    * Handle the action to select the other page of the bar
@@ -33,33 +43,29 @@ function Pagination({ pageSize, numRecords, onNextPage }: PaginationProps) {
     onNextPage(pageIndex);
   }
 
-  useEffect(() => handleNextPage(firstIndex + 1), [firstIndex]);
-
   if (numRecords > pageSize) {
     return (
       <div className="pagination">
-        <button 
-          className="left-pagination-button"
-          onClick={() => {firstIndex - 5 >= 0 ? setFirstIndex(firstIndex - 5) : null}}
-        >
-          Prev
-        </button>
+        <button className="left-pagination-button"
+          onClick={() => {
+            if (firstIndex - 5 >= 0) handleNextPage(firstIndex - 4);
+          }}
+        >Prev</button>
 
-        {numPresentPages.map((presentPageIndex) =>
-          <button key={presentPageIndex} 
-            onClick={() => handleNextPage(presentPageIndex)}
+        {numPresentPages.map(presentPageIndex =>
+          <button key={presentPageIndex} onClick={() => handleNextPage(presentPageIndex)}
             style={selectedIndex === presentPageIndex ? 
-              { backgroundColor: "skyblue", color: "white" } as CSSProperties : 
-              { backgroundColor: "white", color: "skyblue" } as CSSProperties
+              { backgroundColor: "skyblue", color: "white" } : 
+              { backgroundColor: "white", color: "skyblue" }
             }
           >{presentPageIndex}</button>
         )}
 
         <button className="right-pagination-button"
-          onClick={() => firstIndex + 5 <= numPages.length - 1 ? setFirstIndex(firstIndex + 5) : null}
-        >
-          Next
-        </button>
+          onClick={() => {
+            if (firstIndex + 5 <= numPages.length - 1) handleNextPage(firstIndex + 6);
+          }}
+        >Next</button>
       </div>
     );
   }
@@ -73,10 +79,12 @@ interface TransactionTableRowProps {
 
 /**
  * Each row of the transaction table 
- * @param 
- * @returns 
+ * @param {TransactionTableRowProps} props
+ * @returns {JSX.Element}
  */
-function TransactionTableRow({ transactionInfo, isSmallDevice, isMediumDevice }: TransactionTableRowProps) {
+function TransactionTableRow(
+  { transactionInfo, isSmallDevice, isMediumDevice }: TransactionTableRowProps
+): JSX.Element {
   const [detailRowPresent, setDetailRowPresent] = useState<boolean>(false);
 
   return (
@@ -95,7 +103,7 @@ function TransactionTableRow({ transactionInfo, isSmallDevice, isMediumDevice }:
           <td colSpan={3}>
             <div className="transaction-detail">
               <h3>Transaction detail:</h3>
-              <div id="first">
+              <div className="first">
                 <p><span>Date:</span> {transactionInfo.occurDate.toString()}</p>
                 <p><span>Description:</span> {transactionInfo.description}</p>
                 <p><span>Category:</span> {transactionInfo.category}</p>
@@ -113,13 +121,19 @@ function TransactionTableRow({ transactionInfo, isSmallDevice, isMediumDevice }:
 
 interface TransactionTableProps {
   listName: string, 
+  currentIndex: number,
   transactionList: Transaction[], 
   transactionCount: number,
   onChangeTransList?: (pageIndex: number) => void, 
 }
 
+/**
+ * The table showing list of transactions 
+ * @param {TransactionTableProps} props
+ * @returns {JSX.Element}
+ */
 export default function TransactionTable(
-  { listName, transactionList, transactionCount, onChangeTransList }: TransactionTableProps
+  { listName, currentIndex, transactionList, transactionCount, onChangeTransList }: TransactionTableProps
 ): JSX.Element {
   const isSmallDevice = useMediaQuery("only screen and (max-width: 700px)");
   const isMediumDevice = useMediaQuery("only screen and (min-width: 700px) and (max-width: 1200px)");
@@ -156,10 +170,12 @@ export default function TransactionTable(
           </tbody>
         </table>
       </div>
-      <Pagination 
-        pageSize={transactionsPerPage} 
-        numRecords={transactionCount}
-        onNextPage={(pageIndex: number) => !!onChangeTransList ? onChangeTransList(pageIndex) : null} />
+      <Pagination
+        currentIndex={currentIndex}
+        pageSize={transactionsPerPage} numRecords={transactionCount}
+        onNextPage={(pageIndex: number) => {
+          if(!!onChangeTransList) onChangeTransList(pageIndex);
+        }} />
     </>
   );
 }
