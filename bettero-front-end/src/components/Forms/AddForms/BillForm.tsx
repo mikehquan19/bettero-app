@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { faX } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { expenseappClient, getUserAccounts } from "@provider/api";
+import { getBills, getUserAccounts, postOrPutBill } from "@provider/api";
 import handleError from "@provider/handleError";
 import { Account, Bill } from "@interface";
 import { ADD_BILL_VALIDATION } from "./Validation";
@@ -21,38 +21,44 @@ function BillForm({ type = "ADD", currentData, onChangeBillList, onHide }: BillF
   const { register, reset, handleSubmit, formState: { errors } } = useForm();
   const [payAccountList, setPayAccountList] = useState<Account[]>([]);
 
-
-  function fetchFormData(): void {
-    if (!!currentData) {
-      // pass the existing form data
-      reset({ ...currentData });
-    }
-  }
-
-  // function to fetch the data about the account list
+  /**
+   * Fetch the user's list of accounts to pay the bills 
+   * @returns {void}
+   */
   function fetchPayAccountList(): void {
     getUserAccounts()
       .then((response) => setPayAccountList(response.data))
       .catch((error) => handleError(error));
   }
 
-  // load all necessary data 
-  useEffect(() => {
-    fetchFormData();
-    fetchPayAccountList();
-  }, []);
+  /**
+   * Pass the existing form data, if any
+   * @returns {void}
+   */
+  function fetchFormData(): void {
+    if (!!currentData) {
+      reset({ 
+        ...currentData, 
+        dueDate: currentData.dueDate.toISOString().split('T')[0] 
+      });
+    }
+  }
+
+  // Load all necessary data 
+  useEffect(() => fetchPayAccountList(), []);
+  useEffect(() => fetchFormData(), [payAccountList]);
 
   function handleSubmitButton(data: Object): void {
     if (type === "ADD") {
-      expenseappClient.post("/bills", data)
+      postOrPutBill(type, data)
         .then((response) => !!onChangeBillList ? onChangeBillList(response.data) : null)
         .catch((error) => handleError(error));
     }
     else if (type === "UPDATE") {
-      expenseappClient.put(`/bills/${currentData!.id}`, data)
+      postOrPutBill(type, data)
         .then((response) => {
           if (response) {
-            expenseappClient.get(`/bills`)
+            getBills()
               .then((response) => !!onChangeBillList ? onChangeBillList(response.data) : null)
               .catch((error) => handleError(error));
           }
@@ -91,13 +97,13 @@ function BillForm({ type = "ADD", currentData, onChangeBillList, onHide }: BillF
           <div className="form-field">
             <label htmlFor="category">Category: </label>
             <select {...register("category")}>
-              {categoryArr.map(category => <option id={category} value={category}>{category}</option>)}
+              {categoryArr.map(category => <option key={category} value={category}>{category}</option>)}
             </select>
           </div>
 
           <div className="form-field">
             <label htmlFor="pay_account">Pay account:</label>
-            <select id="pay_account" {...register("pay_account")}>
+            <select {...register("payAccount")}>
               {payAccountList.map(payAccount =>
                 <option key={payAccount.id} value={payAccount.id}>{payAccount.name}</option>
               )}
@@ -106,7 +112,7 @@ function BillForm({ type = "ADD", currentData, onChangeBillList, onHide }: BillF
 
           <div className="form-field">
             <label htmlFor="due_date">Due date</label>
-            <input type="date" id="due_date" {...register("due_date")} />
+            <input type="date" id="dueDate" {...register("dueDate")} />
           </div>
         </form>
 
