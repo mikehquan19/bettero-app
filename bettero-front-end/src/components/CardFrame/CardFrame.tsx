@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import './CardFrame.scss';
 import { MouseEvent, ReactNode } from 'react';
+import { capitalize } from '@utils';
 
 interface CardFrameProps {
   children: ReactNode,
@@ -22,7 +23,7 @@ export default function CardFrame({ children, cardType, numCards }: CardFramePro
             e.currentTarget.style.color = "black";
           }}
         >
-          {cardType.charAt(0).toUpperCase() + cardType.slice(1)} Accounts ({numCards})
+          {capitalize(cardType)} Accounts ({numCards})
         </Link>
       </h3>
       <div className="card-list">{ children }</div>

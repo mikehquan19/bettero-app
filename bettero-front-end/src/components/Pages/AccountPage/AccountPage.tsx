@@ -5,22 +5,18 @@ import AccountDetail from '@components/AccountDetail/AccountDetail';
 import { getUserAccounts } from '@provider/api';
 import handleError from '@provider/handleError';
 import { useMediaQuery } from '@uidotdev/usehooks';
-import { Account } from '@interface';
+import { Account, PageProps } from '@interface';
+import { capitalize } from '@utils';
 import './AccountPage.scss';
-
-interface AccountPageProps {
-  navbarWidth: number, 
-  titleHeight: number
-}
 
 /**
  * AccountPage component displaying the details of all each account 
- * @param {AccountPageProps} 
+ * @param {PageProps} 
  * @returns {JSX.Element}
  */
-export default function AccountPage({ navbarWidth, titleHeight }: AccountPageProps): JSX.Element {
+export default function AccountPage({ navbarWidth, titleHeight }: PageProps): JSX.Element {
   const { type } = useParams();
-  const cardType = type!.charAt(0).toUpperCase() + type!.slice(1);
+  const cardType = capitalize(type!);
   const isMobileDevice = useMediaQuery("only screen and (max-width:500px)");
 
   // User and the list of accounts of this type 
