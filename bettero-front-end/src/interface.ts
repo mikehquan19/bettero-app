@@ -100,3 +100,7 @@ export interface Interval {
     lastDate: string
 }
 
+export interface PageProps {
+    navbarWidth: number, 
+    titleHeight: number
+}
