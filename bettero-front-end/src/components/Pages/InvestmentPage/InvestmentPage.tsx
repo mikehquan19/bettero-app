@@ -8,7 +8,7 @@ import StockForm from "@Forms/AddForms/StockForm";
 import DeleteStockForm from "@Forms/DeleteForms/DeleteStockForm";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { reformatDate } from "@utils";
-import { Stock } from "@interface";
+import { PageProps, Stock } from "@interface";
 import './InvestmentPage.scss';
 
 interface StockTableRowProps {
@@ -31,9 +31,13 @@ function StockTableRow({ stockInfoData, onChangeStockList }: StockTableRowProps)
   const [updateStockFormPresent, setUpdateStockFormPresent] = useState(false);
   const [deleteStockFormPresent, setDeleteStockFormPresent] = useState(false);
 
-  // conditional rendering with useMediaQuery 
   const isMobileDevice = useMediaQuery("only screen and (max-width : 500px)");
   const isMediumDevice = useMediaQuery("only screen and (max-width : 1000px)");
+
+  // the value and value change of shares of stock
+  const sharesValue = (stockInfo.currentClose * stockInfo.shares).toFixed(2);
+  const sharesValueChange = Number((stockInfo.change * stockInfo.shares).toFixed(2));
+
 
   /**
    * Fetch the list of price of the stocks 
@@ -42,23 +46,18 @@ function StockTableRow({ stockInfoData, onChangeStockList }: StockTableRowProps)
     // if the stock price hasn't been loaded yet, load it
     if (!loadStockPrice) {
       setLoadStockPrice(true);
-
       getStockPrice(stockInfo.symbol)
         .then((response) => setStockPriceObject(response.data.priceList))
         .catch((error) => handleError(error));
     }
   }
 
-  // compute the value and value change of shares of stock
-  const sharesValue = (stockInfo.currentClose * stockInfo.shares).toFixed(2);
-  const sharesValueChange = Number((stockInfo.change * stockInfo.shares).toFixed(2));
-
   return (
     <>
       <tr className="basic-row"
         onClick={() => {
-          // responsive if the the device's screen is mobile
           if (isMobileDevice) {
+            // Responsive if the the device's screen is mobile
             fetchPriceDetail();
             setDetailRowPresent(!detailRowPresent);
           }
@@ -81,7 +80,7 @@ function StockTableRow({ stockInfoData, onChangeStockList }: StockTableRowProps)
                 fetchPriceDetail(); // load the stock price first, if not yet
                 setDetailRowPresent(!detailRowPresent);
               }}>
-                {detailRowPresent ? (<span>Back</span>) : (<span>More</span>)}
+                {detailRowPresent ? "Back" : "More"}
               </button>
             </td>
             <td><button onClick={() => setUpdateStockFormPresent(true)}>Update</button></td>
@@ -131,7 +130,8 @@ function StockTableRow({ stockInfoData, onChangeStockList }: StockTableRowProps)
         updateStockFormPresent && 
           <tr>
             <td>
-              <StockForm type="UPDATE"
+              <StockForm 
+                type="UPDATE"
                 currentData={{
                   "corporation": stockInfo.corporation,
                   "name": stockInfo.name,
@@ -149,7 +149,8 @@ function StockTableRow({ stockInfoData, onChangeStockList }: StockTableRowProps)
         deleteStockFormPresent && 
           <tr>
             <td>
-              <DeleteStockForm stockSymbol={stockInfoData.symbol}
+              <DeleteStockForm 
+                stockSymbol={stockInfoData.symbol}
                 onChangeStockList={onChangeStockList}
                 onHide={() => setDeleteStockFormPresent(false)} />
             </td>
@@ -208,8 +209,7 @@ function StockTable(): JSX.Element {
           }
           {stockList.map(stock =>
             <StockTableRow
-              key={stock.id}
-              stockInfoData={stock}
+              key={stock.id} stockInfoData={stock}
               onChangeStockList={(newStockList: Stock[]) => setStockList(newStockList)} />
           )}
         </tbody>
@@ -227,21 +227,16 @@ function StockTable(): JSX.Element {
   );
 }
 
-
-interface InvestmentPageProps {
-  navbarWidth: number, 
-  titleHeight: number
-}
-
 /**
  * The investment page 
- * @param {InvestmentPageProps}
+ * @param {PageProps}
  * @returns {JSX.Element}
  */
-export default function InvestmentPage({ navbarWidth, titleHeight }: InvestmentPageProps): JSX.Element {
+export default function InvestmentPage({ navbarWidth, titleHeight }: PageProps): JSX.Element {
   const [porfolioValueList, setPortfolioValueList] = useState<Record<string, number>>({});
   const [portfolioValue, setPortfolioValue] = useState(0);
-  const [updatedDate, setUpdatedDate] = useState("");
+  const [updatedDate, setUpdatedDate] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   /**
    * Fetch the list of stocks and porfolio values 
@@ -254,11 +249,13 @@ export default function InvestmentPage({ navbarWidth, titleHeight }: InvestmentP
         setPortfolioValueList(response.data);
         setPortfolioValue(Object.values(response.data).at(-1) as number);
         setUpdatedDate(Object.keys(response.data).at(-1) as string);
+        setIsLoading(false);
       })
       .catch((error) => handleError(error));
   }
   useEffect(fetchPortfolioValuelist, []);
 
+  if (isLoading) return <div>Is Loading...</div>
   return (
     <div className="investment-page" style={{
       marginTop: `${titleHeight}px`,

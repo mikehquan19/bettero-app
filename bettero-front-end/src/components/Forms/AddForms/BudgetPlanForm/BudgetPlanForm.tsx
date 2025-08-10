@@ -6,6 +6,7 @@ import { expenseappClient } from "@provider/api";
 import handleError from "@provider/handleError";
 import "./BudgetPlanForm.scss";
 import { BudgetPlan } from "@interface";
+import { getAddBudgetPlanValidation } from "../Validation";
 
 interface BudgetPlanFormProps {
   type: string, 
@@ -16,15 +17,16 @@ interface BudgetPlanFormProps {
 }
 
 // the form to add or update the budget plan 
-function BudgetPlanForm({
-  type = "ADD", intervalType, currentData, onChangeBudgetPlanList, onHide 
-}: BudgetPlanFormProps) {
+export default function BudgetPlanForm(
+  { type = "ADD", intervalType, currentData, onChangeBudgetPlanList, onHide }: BudgetPlanFormProps
+): JSX.Element {
 
   const categoryArr = ["Total", "Housing", "Automobile", "Medical", "Subscription", "Grocery", "Dining", "Shopping", "Gas", "Others"];
 
-  // necessary components of useForm() hook 
+  // Necessary components of useForm() hook 
   const { register, reset, handleSubmit, formState: { errors } } = useForm();
   const [percentageNotAddUp, setPrecentageNotAddUp] = useState(false);
+  const ADD_PLAN_VALIDATION = getAddBudgetPlanValidation();
 
   // set the initial value for the form 
   useEffect(() => {
@@ -50,7 +52,6 @@ function BudgetPlanForm({
   }
 
   function handleBudgetFormSubsmit (data: any) {
-
     const submittedData = {
       interval_type: data.interval_type,
       recurring_income: data.recurring_income, 
@@ -67,8 +68,7 @@ function BudgetPlanForm({
     // validate if the all categories add up 100%
     if (sum !== 100) {
       setPrecentageNotAddUp(true);
-    }
-    else {
+    } else {
       setPrecentageNotAddUp(false);
       // call the correct API method based on the form's type
       const intervalType = !currentData ? null : currentData.interval_type;
@@ -80,36 +80,6 @@ function BudgetPlanForm({
     }
   }
 
-  // validation on the form 
-  const registerOptions = {
-    recurring_income: {
-      required: "*Income is required",
-      min: {
-        value: 0.01,
-        message: "*Income must be greater than 0",
-      },
-      maxLength: {
-        value: 12,
-        message: "*Income only has at most 12 digits",
-      }
-    },
-  } as Record<string, any>;
-
-  categoryArr.forEach(category => {
-    const field = category === 'Total' ? 'portion_for_expense' : category;
-    registerOptions[field] = {
-      required: `*${category} required`,
-      min: {
-        value: 0,
-        message: "*Percentage must be greater than or equal 0",
-      },
-      max: {
-        value: 100,
-        message: "*Percentage must be less than or equal 100",
-      }
-    }
-  })
-
   return (
     <>
       <div className="budget-plan-form-wrapper">
@@ -120,19 +90,19 @@ function BudgetPlanForm({
             <div className="form-field">
               <label htmlFor="estimated-income">Income ($):</label>
               <small className="error-message">
-                {errors.recurring_income && errors.recurring_income.message as string}
+                {errors?.recurringIncome && errors?.recurringIncome?.message as string}
               </small>
               <input type="number" id="estimated-income" placeholder="Estimated income"
-                {...register("recurring_income", registerOptions.recurring_income)} />
+                {...register("recurringIncome", ADD_PLAN_VALIDATION.recurringIncome)} />
             </div>
 
             <div className="form-field">
               <label htmlFor="total-budget">Expense portion (%):</label>
               <small className="error-message">
-                {errors.portion_for_expense && errors.portion_for_expense.message as string}
+                {errors?.portionForExpense && errors?.portionForExpense.message as string}
               </small>
               <input type="number" id="total-budget" placeholder="Total budget"
-                {...register("portion_for_expense", registerOptions.portion_for_expense)} />
+                {...register("portionForExpense", ADD_PLAN_VALIDATION.portionForExpense)} />
             </div>
           </div>
 
@@ -151,7 +121,7 @@ function BudgetPlanForm({
                     {errors[category] && errors[category].message as string}
                   </small>
                   <input type="number" id={category} placeholder={category}
-                    {...register(category, registerOptions[category])} />
+                    {...register(category, ADD_PLAN_VALIDATION[category])} />
                 </div>
               )
             }
@@ -170,5 +140,3 @@ function BudgetPlanForm({
     </>
   );
 }
-
-export default BudgetPlanForm; 

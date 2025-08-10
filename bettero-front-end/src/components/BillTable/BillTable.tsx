@@ -27,7 +27,9 @@ function BillTableRow({ billInfo, onChangeBillList }: BillTableRowProps): JSX.El
 
   return (
     <>
-      <tr onClick={() => { isMobileDevice ? setDetailRowPresent(!detailRowPresent) : null }}>
+      <tr onClick={() => {
+        if (isMobileDevice) setDetailRowPresent(!detailRowPresent);
+      }}>
         <td>{billInfo.description}</td>
         {(!isMediumDevice || isMobileDevice) && <td>${billInfo.amount}</td>}
         {(!isMediumDevice && !isMobileDevice) && <td>{billInfo.category}</td>}
@@ -46,44 +48,56 @@ function BillTableRow({ billInfo, onChangeBillList }: BillTableRowProps): JSX.El
           </>
         )}
       </tr>
-      {(isMobileDevice && detailRowPresent) && (
-        <tr><td colSpan={3}>
-          <div className="bill-detail">
-            <h3>Bill detail</h3>
-            <p><strong>Description:</strong> {billInfo.description}</p>
-            <p><strong>Amount:</strong> ${billInfo.amount}</p>
-            <p><strong>Categoty:</strong> {billInfo.category}</p>
-            <p><strong>Pay account:</strong> {billInfo.payAccount}</p>
-            <p><strong>Due date:</strong> {billInfo.dueDate.toString()}</p>
+      {(isMobileDevice && detailRowPresent) && 
+        <tr>
+          <td colSpan={3}>
+            <div className="bill-detail">
+              <h3>Bill detail</h3>
+              <p><strong>Description:</strong> {billInfo.description}</p>
+              <p><strong>Amount:</strong> ${billInfo.amount}</p>
+              <p><strong>Categoty:</strong> {billInfo.category}</p>
+              <p><strong>Pay account:</strong> {billInfo.payAccount}</p>
+              <p><strong>Due date:</strong> {billInfo.dueDate.toString()}</p>
 
-            {/* the button to delete the bills */}
-            <div style={{ display: "flex", flexDirection: "row", gap: "5px", justifyContent: "center" }}>
-              <button className="bill-button" onClick={() => setDetailRowPresent(false)}>Back</button>
-              <button className="bill-button" onClick={() => setDeleteBillFormPresent(true)}>Delete</button>
-              <button className="bill-button" onClick={() => setBillFormPresent(true)}>Update</button>
+              {/* the button to delete the bills */}
+              <div style={{ display: "flex", flexDirection: "row", gap: "5px", justifyContent: "center" }}>
+                <button className="bill-button" onClick={() => setDetailRowPresent(false)}>Back</button>
+                <button className="bill-button" onClick={() => setDeleteBillFormPresent(true)}>Delete</button>
+                <button className="bill-button" onClick={() => setBillFormPresent(true)}>Update</button>
+              </div>
             </div>
-          </div>
-        </td></tr>
-      )}
+          </td>
+        </tr>
+      }
       
-      {billFormPresent && (<BillForm
-        type="UPDATE"
-        currentData={{
-          id: billInfo.id,
-          description: billInfo.description,
-          amount: billInfo.amount,
-          category: billInfo.category, 
-          payAccount: billInfo.payAccount,
-          dueDate: new Date(reformatDate(billInfo.dueDate.toString(), '/', '-')),
-        } as Bill}
-
-        onChangeBillList={onChangeBillList}
-        onHide={() => setBillFormPresent(false)} />)}
-
-      {deleteBillFormPresent && (<DeleteBillForm
-        billId={billInfo.id}
-        onChangeBillList={onChangeBillList}
-        onHide={() => setDeleteBillFormPresent(false)} />)}
+      {billFormPresent && 
+        <tr>
+          <td>
+            <BillForm
+              type="UPDATE"
+              currentData={{
+                id: billInfo.id,
+                description: billInfo.description,
+                amount: billInfo.amount,
+                category: billInfo.category, 
+                payAccount: billInfo.payAccount,
+                dueDate: new Date(reformatDate(billInfo.dueDate.toString(), '/', '-')),
+              } as Bill}
+              onChangeBillList={onChangeBillList}
+              onHide={() => setBillFormPresent(false)} />
+          </td>
+        </tr>
+      }
+      {deleteBillFormPresent && 
+        <tr>
+          <td>
+            <DeleteBillForm
+              billId={billInfo.id}
+              onChangeBillList={onChangeBillList}
+              onHide={() => setDeleteBillFormPresent(false)} />
+          </td>
+        </tr>
+      }
     </>
   );
 }
@@ -113,11 +127,9 @@ export default function BillTable(): JSX.Element {
 
   return (
     <div className="bills-list">
-      {/* The title of the table of bill's list */}
       <div className="table-title">
         <h3 style={{display: "inline-block", margin: "0"}}>Bills this month ({billList.length})</h3>
       </div>
-      {/* The table of list of bills */}
       <table>
         <thead>
           <tr>
@@ -137,7 +149,9 @@ export default function BillTable(): JSX.Element {
         <tbody>
           {billList.length === 0 && 
             <tr>
-              <td colSpan={isMobileDevice ? 3 : 7} style={{fontWeight: "bold"}}>You haven't added any bills</td>
+              <td colSpan={isMobileDevice ? 3 : 7} style={{fontWeight: "bold"}}>
+                You haven't added any bills
+              </td>
             </tr>
           }
           {billList.map(bill =>

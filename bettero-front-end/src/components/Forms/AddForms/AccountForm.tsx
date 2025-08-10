@@ -18,7 +18,7 @@ interface AccountFormProps {
 }
 
 // the form to add component
-function AccountForm({
+export default function AccountForm({
   type = "ADD", isCreditAccount, currentData, onChangeAccInfo, onChangeAccList, onHide 
 }: AccountFormProps) {
 
@@ -28,7 +28,10 @@ function AccountForm({
   useEffect(() => {
     if (!!currentData) {
       // pass the current data as the default values of the form 
-      reset({ ...currentData, dueDate: currentData.dueDate?.toString() });
+      reset({ 
+        ...currentData, 
+        dueDate: currentData.dueDate?.toISOString().split('T')[0]
+      });
     } else {
       if (!isCreditAccount) {
         reset((previousData) => ({...previousData, accountType: "Debit"}));
@@ -41,7 +44,6 @@ function AccountForm({
 
   // handle the submission of the form 
   function handleSubmitButton(data: any) {
-    console.log(data);
     if (type == 'ADD') { 
       postOrPutUserAccount('ADD', data)
         .then((response) => {
@@ -133,5 +135,3 @@ function AccountForm({
     </>
   );
 }
-
-export default AccountForm;
