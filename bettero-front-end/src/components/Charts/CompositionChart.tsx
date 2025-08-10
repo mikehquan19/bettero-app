@@ -6,6 +6,7 @@ import { useRef } from 'react';
 import { Doughnut } from 'react-chartjs-2';
 import { CategoryObject } from '@interface';
 import { MouseEvent } from 'react';
+import { capitalize } from '@utils';
 
 // register the tool to be able to to use it in the hand-shakeable way 
 ChartJS.register(CategoryScale, LinearScale, ArcElement, Title, Tooltip, Legend);
@@ -25,7 +26,7 @@ export default function CompositionChart ({
   const chartRef = useRef();
 
   // list of categories of expense for labels 
-  const categories = Object.keys(compositionObject);
+  const categories = Object.keys(compositionObject).map(category => capitalize(category));
   const compositionData = Object.values(compositionObject);
 
   // data of the chart 

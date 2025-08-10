@@ -1,5 +1,5 @@
 import { useEffect, useState, MouseEvent, CSSProperties } from 'react';
-import { getFullFinancialSummary, getInitialTransactions, getSummaryTransactions } from '@provider/api';
+import { getFullFinancialSummary, getSummaryTransactions } from '@provider/api';
 import handleError from '@provider/handleError';
 import ChangeChart from '@Charts/ChangeChart';
 import CompositionChart from '@Charts/CompositionChart';
@@ -9,15 +9,10 @@ import TransactionTable from '@components/TransactionTable/TransactionTable';
 import { getElementAtEvent } from 'react-chartjs-2';
 import { useMediaQuery } from '@uidotdev/usehooks';
 import { reformatDate, latestIntervals, latestIntervalExpense, latestIntervalChart } from '@utils';
-import { Interval, Transaction } from '@interface';
+import { Interval, PageProps, Transaction } from '@interface';
 import './SummaryPage.scss';
 
-interface SummaryPageProps {
-  navbarWidth: number, 
-  titleHeight: number
-}
-
-export default function SummaryPage({ navbarWidth, titleHeight }: SummaryPageProps) {
+export default function SummaryPage({ navbarWidth, titleHeight }: PageProps) {
   const isMobileDevice = useMediaQuery("only screen and (max-width : 500px)");
 
   // Latest intervals and total expense of each interval
@@ -28,6 +23,7 @@ export default function SummaryPage({ navbarWidth, titleHeight }: SummaryPagePro
   const [clickedInterval, setClickedInterval] = useState(0);
   const [intervalTableObj, setIntervalTableObj] = useState({
     title: "All",
+    page: 1, 
     transactionCount: 0,
     transactionList: [] as Transaction[],
   });
@@ -36,10 +32,9 @@ export default function SummaryPage({ navbarWidth, titleHeight }: SummaryPagePro
    * Fetch the financial summary data 
    */
   function fetchFinancialSummary() {
-    Promise.all([getFullFinancialSummary(), getInitialTransactions()])
+    getFullFinancialSummary()
       .then((response) => {
-        setIntervalObject(response[0].data);
-        setIntervalTableObj((previousData) => ({ ...previousData, ...response[1].data }));
+        setIntervalObject(response.data);
         setIsLoading(false);
       })
       .catch((error) => handleError(error));
@@ -66,10 +61,12 @@ export default function SummaryPage({ navbarWidth, titleHeight }: SummaryPagePro
   /**
    * Fetch data about interval transactions based on click 
    */
-  function onIntervalClick(intervalIndex: number, firstDate: string, lastDate: string): void {
+  function handleIntervalClick(intervalIndex: number, firstDate: string, lastDate: string): void {
     if (intervalIndex !== clickedInterval) {
       setClickedInterval(intervalIndex);
-    } else {
+    } 
+    else if (intervalTableObj.title !== 'All') {
+      // If the selected interval is the same but table is currently showing category data
       getSummaryTransactions("interval", undefined, firstDate, lastDate)
         .then((response) => setIntervalTableObj({ 
           title: "All", ...response.data 
@@ -137,7 +134,7 @@ export default function SummaryPage({ navbarWidth, titleHeight }: SummaryPagePro
 
   useEffect(() => fetchFinancialSummary(), []);
   // Only call after re-rendering triggered by interval type and clicked interval
-  useEffect(() => { fetchPeriodTransactions() }, [intervalType, clickedInterval]);
+  useEffect(() => fetchPeriodTransactions(), [intervalType, clickedInterval, intervalObject]);
 
   if (isLoading) return <div>Is Loading...</div>;
 
@@ -206,7 +203,7 @@ export default function SummaryPage({ navbarWidth, titleHeight }: SummaryPagePro
               /* list of all the intervals */
               latestIntervalArr.map((interval: Interval, index: number) =>
                 <div key={index} className="interval-wrapper"
-                  onClick={() => onIntervalClick(index, selectedFirstDate, selectedLastDate)}
+                  onClick={() => handleIntervalClick(index, selectedFirstDate, selectedLastDate)}
                   style={{
                     // overriding the color if this interval wrapper is clicked
                     color: index === clickedInterval ? "rgba(0, 0, 0, 1)" : undefined,
@@ -249,9 +246,12 @@ export default function SummaryPage({ navbarWidth, titleHeight }: SummaryPagePro
             intervalTableObj.title + " Transactions From " +
             reformatDate(selectedFirstDate, '-', '/') + " To " + reformatDate(selectedLastDate, '-', '/')
           }
+          currentIndex={intervalTableObj.page}
           transactionCount={intervalTableObj.transactionCount} 
           transactionList={intervalTableObj.transactionList}
-          onChangeTransList={(pageIndex) => handleNextClick(pageIndex, selectedFirstDate, selectedLastDate)} />
+          onChangeTransList={(pageIndex) => {
+            handleNextClick(pageIndex, selectedFirstDate, selectedLastDate);
+          }} />
       </div>
     </div>
   );

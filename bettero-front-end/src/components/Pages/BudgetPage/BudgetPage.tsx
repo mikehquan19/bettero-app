@@ -8,7 +8,8 @@ import handleError from '@provider/handleError';
 import { faPlusCircle, faCaretDown } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import './BudgetPage.scss';
-import { BudgetPlan, CategoryObject, CategoryProgress, OverdueBillMessage } from '@interface';
+import { BudgetPlan, CategoryObject, CategoryProgress, OverdueBillMessage, PageProps } from '@interface';
+import { capitalize } from '@utils';
 
 // the progress bar 
 
@@ -81,10 +82,12 @@ interface BudgetPlanPanelProps {
 }
 
 // the panel showing the budget plan of the user 
-function BudgetPlanPanel({
+function BudgetPlanPanel(
+  {
   intervalType, estimatedIncome, budgetPercentage, budgetChartData,
   actualChartData, progressData, onChangePlanList
-}: BudgetPlanPanelProps) {
+  }: BudgetPlanPanelProps
+): JSX.Element {
 
   // whether the form is present or not 
   const [addFormPresent, setAddFormPresent] = useState(false);
@@ -167,7 +170,7 @@ function BudgetPlanPanel({
             <div className="progress-bars-part">
               {Object.keys(progressData).map(category =>
                 <ProgressBar key={category} categoryExpenseData={{
-                  name: category,
+                  name: capitalize(category),
                   budget: (progressData[category as keyof CategoryObject] as CategoryProgress).budget,
                   current: (progressData[category as keyof CategoryObject] as CategoryProgress).current,
                   percentage: (progressData[category as keyof CategoryObject] as CategoryProgress).percentage,
@@ -197,16 +200,11 @@ function BudgetPlanPanel({
   );
 }
 
-interface BudgetPageProps {
-  navbarWidth: number, 
-  titleHeight: number
-}
-
 /**
  * The budget page 
  * @returns 
  */
-const BudgetPage = ({ navbarWidth, titleHeight }: BudgetPageProps): JSX.Element => {
+const BudgetPage = ({ navbarWidth, titleHeight }: PageProps): JSX.Element => {
   const initialData: BudgetPlan = {
     income: 0,
     expensePortion: 0,
@@ -224,6 +222,7 @@ const BudgetPage = ({ navbarWidth, titleHeight }: BudgetPageProps): JSX.Element 
     biWeek: initialData, 
     week: initialData 
   });
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [overdueMessageList, setOverdueMessageList] = useState<OverdueBillMessage[]>([]);
   const [overdueMessageListPresent, setOverdueMessageListPresent] = useState(false);
   const [caretIconStyle, setCaretIconStyle] = useState<CSSProperties>({
@@ -258,7 +257,7 @@ const BudgetPage = ({ navbarWidth, titleHeight }: BudgetPageProps): JSX.Element 
     }
   }
 
-  function onCarretClick() {
+  function onCarretClick(): void {
     if (!overdueMessageListPresent) {
       setOverdueMessageListPresent(true);
       setCaretIconStyle({
@@ -283,17 +282,19 @@ const BudgetPage = ({ navbarWidth, titleHeight }: BudgetPageProps): JSX.Element 
       .then((response) => {
         setBudgetData(response[0].data);
         setOverdueMessageList(response[1].data);
+        setIsLoading(false);
       })
       .catch((error) => handleError(error));
   }, []);
 
+  if (isLoading) return <div>...Is Loading</div>
   return (
     <div className="budget-page" style={{
       marginTop: `${titleHeight}px`,
       marginLeft: `${navbarWidth}px`,
       width: `calc(100% - ${navbarWidth}px)`,
     }}>
-      <h2 style={{ width: "80%", margin: "0 auto" }}>List of your monthly bills and budget plans</h2>
+      <h2 style={{ width: "85%", margin: "0 auto" }}>List of your monthly bills and budget plans</h2>
 
       {overdueMessageList.length !== 0 && 
         <div className="overdue-message-list">

@@ -30,6 +30,7 @@ export default function AccountDetail({ type = "Debit", accountInfo, onChangeAcc
   const [transactionTablePresent, setTransactionTablePresent] = useState(false);
   const [accountTableObject, setAccountTableObject] = useState({
     title: 'Latest',
+    page: 1, 
     transactionCount: 0,
     transactionList: [] as Transaction[],
   });
@@ -41,6 +42,8 @@ export default function AccountDetail({ type = "Debit", accountInfo, onChangeAcc
   // position elements of the card depending on the card's type 
   const topSize = type === "Debit" ? "60px" : "10px";
   const isCreditAccount = type !== "Debit";
+
+  useEffect(() => fetchAccountSummary(), []);
 
   /**
    * Handle the category click action
@@ -64,6 +67,20 @@ export default function AccountDetail({ type = "Debit", accountInfo, onChangeAcc
   function fetchOriginalTransactions(): void {
     getAccountTransactions(accountInfo.id)
       .then((response) => setAccountTableObject({title: "Latest", ...response.data}))
+      .catch((error) => handleError(error));
+  }
+
+  /**
+   * Fetch data about the expense change and composition from API 
+   * @returns {void}
+   */
+  function fetchAccountSummary(): void {
+    getAccountSummary(accountInfo.id)
+      .then((response) => {
+        // set the expense change and expense composition
+        setExpenseChange(response.data.changePercentage);
+        setExpenseComposition(response.data.compositionPercentage);
+      })
       .catch((error) => handleError(error));
   }
 
@@ -103,17 +120,6 @@ export default function AccountDetail({ type = "Debit", accountInfo, onChangeAcc
       setTransactionTablePresent(false);
     }
   }
-
-  // Fetch data about the expense change and composition from API 
-  useEffect(() => {
-    getAccountSummary(accountInfo.id)
-      .then((response) => {
-        // set the expense change and expense composition
-        setExpenseChange(response.data.changePercentage);
-        setExpenseComposition(response.data.compositionPercentage);
-      })
-      .catch((error) => handleError(error));
-  }, []);
 
   return (
     <div className="account-detail-card">
@@ -176,6 +182,7 @@ export default function AccountDetail({ type = "Debit", accountInfo, onChangeAcc
           )}
           <TransactionTable
             listName={"Account's " + accountTableObject.title + " Transactions"}
+            currentIndex={accountTableObject.page}
             transactionCount={accountTableObject.transactionCount}
             transactionList={accountTableObject.transactionList}
             onChangeTransList={handleNextClick}
@@ -193,7 +200,13 @@ export default function AccountDetail({ type = "Debit", accountInfo, onChangeAcc
                 new Date(reformatDate(accountInfo.dueDate?.toString(), '/', '-')) : null,
             }}
             onHide={() => setUpdateFormPresent(false)}
-            onChangeAccInfo={(newAccountInfo: Account) => setAccountData({ ...newAccountInfo })}
+            onChangeAccInfo={(newAccountInfo: Account) => {
+              setAccountData({ ...newAccountInfo });
+              
+              // Reset the account's financial summary and transactions in case new transaction happens
+              fetchAccountSummary(); 
+              fetchOriginalTransactions();
+            }}
           />
         </>
       )}

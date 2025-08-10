@@ -1,6 +1,15 @@
 import { Interval } from "@interface";
 
 /**
+ * Capitalize the word 
+ * @param {string} word 
+ * @returns {string}
+ */
+export function capitalize(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/**
  * Reformat the date for value of the date field in the form
  * @param {string} argDate 
  * @param {string} fromDelimiter 

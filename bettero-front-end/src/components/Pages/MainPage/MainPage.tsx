@@ -12,26 +12,21 @@ import TimeseriesChart from '@Charts/TimeseriesChart';
 import { getUserAccounts, getUserTransactions, getFinancialSummary, getCategoryTransactions} from '@provider/api';
 import { useEffect, useState, MouseEvent } from 'react';
 import { getElementAtEvent } from 'react-chartjs-2';
-import { Account, CategoryObject, FinancialInfo, Transaction } from '@interface';
+import { Account, CategoryObject, FinancialInfo, PageProps, Transaction } from '@interface';
 import './MainPage.scss';
-
-interface MainPageProps {
-  navbarWidth: number, 
-  titleHeight: number, 
-}
 
 /**
  * The Main Page
- * @param {MainPageProps} {navbarWidth, titleHeight}
+ * @param {PageProps} {navbarWidth, titleHeight}
  * @returns {JSX.Element}
  */
-export default function MainPage({ navbarWidth, titleHeight }: MainPageProps): JSX.Element {
+export default function MainPage({ navbarWidth, titleHeight }: PageProps): JSX.Element {
 
   const [isLoading, setIsLoading] = useState(true);
-  // Data for charts 
   const [financialInfo, setFinancialInfo] = useState<FinancialInfo>();
 
-  const [expenseChange, setExpenseChange] = useState<CategoryObject>();
+  // Data for charts 
+  const [expenseChange, setExpenseChange] = useState<CategoryObject>({} as CategoryObject);
   const [expenseComposition, setExpenseComposition] = useState<CategoryObject>();
   const [timeseriesData, setTimeseriesData] = useState<Record<string, number>>({});
 
@@ -41,12 +36,14 @@ export default function MainPage({ navbarWidth, titleHeight }: MainPageProps): J
   const [categoryTablePresent, setCategoryTablePresent] = useState<boolean>(false);
   // The content of the latest transaction table
   const [latestTableObj, setLatestTableObj] = useState({
+    page: 1,
     transactionCount: 0, 
     transactionList: [] as Transaction[]
   });
   // The content of the categorical transaction table 
   const [categoryTableObj, setCategoryTableObj] = useState({
     category: "Grocery",
+    page: 1,
     transactionCount: 0, 
     transactionList: [] as Transaction[],
   });
@@ -156,6 +153,7 @@ export default function MainPage({ navbarWidth, titleHeight }: MainPageProps): J
                 categoryTableObj.category + " expenses this month" : 
                 categoryTableObj.category + " incomes this month"
               }
+              currentIndex={categoryTableObj.page}
               transactionCount={categoryTableObj.transactionCount} transactionList={categoryTableObj.transactionList}
               onChangeTransList={handleCategoryNextClick} />
             <Button 
@@ -175,11 +173,9 @@ export default function MainPage({ navbarWidth, titleHeight }: MainPageProps): J
             accountInfo={debitAccount} theme={{ backgroundColor: 'blue', color: 'white' }} type="debit" />)
         }
       </CardFrame>
-      {!debitFormPresent && 
-        <Button 
-          content="Add Account" 
-          onClick={() => setDebitFormPresent(!debitFormPresent)} />
-      }
+      <Button 
+        content="Add Account" 
+        onClick={() => setDebitFormPresent(!debitFormPresent)} />
 
       {/* Form to add debit accounts */}
       {debitFormPresent &&
@@ -201,11 +197,9 @@ export default function MainPage({ navbarWidth, titleHeight }: MainPageProps): J
             accountInfo={creditAccount} theme={{ backgroundColor: 'blue', color: 'white' }} type="credit" />
         )}
       </CardFrame>
-      {!creditFormPresent && 
-        <Button 
-          content="Add Account" 
-          onClick={() => setCreditFormPresent(!creditFormPresent)} />
-      }
+      <Button 
+        content="Add Account" 
+        onClick={() => setCreditFormPresent(!creditFormPresent)} />
 
       {/* Form to add credit accounts */}
       {creditFormPresent &&
@@ -217,19 +211,18 @@ export default function MainPage({ navbarWidth, titleHeight }: MainPageProps): J
 
       <TransactionTable
         listName="Latest transactions" 
+        currentIndex={latestTableObj.page}
         transactionCount={latestTableObj.transactionCount} transactionList={latestTableObj.transactionList}
         onChangeTransList={handleNextClick} />
-      {!transactionFormPresent && 
-        <Button 
-          content="Add Transaction" 
-          onClick={() => setTransactionFormPresent(!transactionFormPresent)} />
-      }
+      <Button 
+        content="Add Transaction" 
+        onClick={() => setTransactionFormPresent(!transactionFormPresent)} />
 
       {/* Form to add transactions */}
       {transactionFormPresent &&
         <TransactionForm
           accountList={[...debitAccountList, ...creditAccountList]} 
-          onChangeTransList={fetchData} 
+          onChangeTransList={(data) => setLatestTableObj(data)} 
           onHide={() => setTransactionFormPresent(!transactionFormPresent)} />
       }
     </div>

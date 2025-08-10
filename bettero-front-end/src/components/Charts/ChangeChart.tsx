@@ -10,6 +10,7 @@ import {
 	Color,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import { capitalize } from '@utils';
 
 // register the tool to be able to to use it in the hand-shakeable way 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -20,10 +21,12 @@ interface ChangeChartProps {
 }
 
 // chart indicating the change percentage from the previous month 
-export default function ChangeChart({ intervalType = "month", changeObject }: ChangeChartProps) {
+export default function ChangeChart(
+	{ intervalType = "month", changeObject }: ChangeChartProps
+): JSX.Element {
 
 	// list of categories of expense for labels 
-	const categories: string[] = Object.keys(changeObject);
+	const categories: string[] = Object.keys(changeObject).map(category => capitalize(category));
 	const changeData: number[] = Object.values(changeObject);
 
 	// data of chart 
@@ -53,7 +56,7 @@ export default function ChangeChart({ intervalType = "month", changeObject }: Ch
 		],
 	};
 
-	// options of the chart 
+	// Options of the chart 
 	const chartOptions = {
 		// this is to gain control of the width and height of the canvas
 		maintainAspectRatio: false,
@@ -68,7 +71,7 @@ export default function ChangeChart({ intervalType = "month", changeObject }: Ch
 			}
 		},
 		plugins: {
-			// set the title for the chart 
+			// Set the title for the chart 
 			title: {
 				display: true,
 				color: "black",
@@ -80,6 +83,6 @@ export default function ChangeChart({ intervalType = "month", changeObject }: Ch
 		},
 	};
 
-	// render the bar chart 
+	// Render the bar chart 
 	return <Bar data={chartData} options={chartOptions} />;
 }

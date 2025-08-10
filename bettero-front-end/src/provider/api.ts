@@ -65,6 +65,7 @@ export async function getUserTransactions(pageIndex?: number) {
         .then((response) => ({
             status: response.status, 
             data: {
+                "page": pageIndex ? pageIndex : 1,
                 "transactionCount": response.data.count as number, 
                 "transactionList": response.data.results as Transaction[]
             }
@@ -80,6 +81,7 @@ export async function postUserTransactions(data: any) {
         .then((response) => ({
             status: response.status, 
             data: {
+                page: 1,
                 transactionCount: response.data.count, 
                 transactionList: response.data.results as Transaction[]
             }
@@ -100,6 +102,14 @@ export async function getFullFinancialSummary() {
 export async function getBills() {
     return expenseappClient.get('/bills')
         .then((response) => humps.camelizeKeys(response) as AxiosResponse<any, any>); 
+}
+
+export async function postOrPutBill(type: 'ADD' | 'UPDATE', data: any) {
+    const promise = type === 'ADD' ? 
+        expenseappClient.post("/bills", humps.decamelizeKeys(data)) : 
+        expenseappClient.put(`/bills/${data.id}`, humps.decamelizeKeys(data));
+    
+    return promise.then((response) => humps.camelizeKeys(response) as AxiosResponse<any, any>);
 }
 
 /** 
@@ -161,8 +171,9 @@ export async function getCategoryTransactions(selectedCategory: string, pageInde
         .then((response) => ({
             status: response.status, 
             data: {
-                transactionCount: response.data.count, 
-                transactionList: response.data.results as Transaction[]
+                "page": pageIndex ? pageIndex : 1,
+                "transactionCount": response.data.count, 
+                "transactionList": response.data.results as Transaction[]
             }
         }));
 }
@@ -204,21 +215,7 @@ export async function getAccountTransactions(
         .then((response) => ({
             status: response.status, 
             data: {
-                transactionCount: response.data.count, 
-                transactionList: response.data.results as Transaction[]
-            }
-        }));
-}
-
-/**
- * Get initial list of transactions in the summary page 
- */
-export async function getInitialTransactions() {
-    return expenseappClient.get('/transactions/initial')
-        .then((response) => humps.camelizeKeys(response) as AxiosResponse<any, any>)
-            .then((response) => ({
-            status: response.status, 
-            data: {
+                page: pageIndex ? pageIndex : 1,
                 transactionCount: response.data.count, 
                 transactionList: response.data.results as Transaction[]
             }
@@ -251,6 +248,7 @@ export async function getSummaryTransactions(
         .then((response) => ({
             status: response.status, 
             data: {
+                page: pageIndex ? pageIndex : 1,
                 transactionCount: response.data.count, 
                 transactionList: response.data.results as Transaction[]
             }

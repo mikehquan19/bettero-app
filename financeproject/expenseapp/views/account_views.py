@@ -9,7 +9,7 @@ from expenseapp.serializers import AccountSerializer
 from expenseapp.finance import expense_change_percentage, expense_composition_percentage
 import datetime
 
-from expenseapp.constants import CREDIT
+from expenseapp.constants import CREDIT, OTHERS, INCOME
 
 class AccountList(APIView):   
     """ View to handle the list of accounts of the specific user  """
