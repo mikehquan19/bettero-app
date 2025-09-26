@@ -1,11 +1,10 @@
 from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from expenseapp.models import User, Transaction, PortfolioValue
+from expenseapp.models import User, PortfolioValue
 from django.db import transaction
-from expenseapp.serializers import RegisterSerializer, TransactionSerializer
+from expenseapp.serializers import RegisterSerializer
 from expenseapp.finance import *
 
 class Register(generics.CreateAPIView): 

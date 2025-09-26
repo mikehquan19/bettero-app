@@ -40,17 +40,15 @@ class Account(models.Model):
 class Transaction(models.Model):
     """ Transaction in general of the account  """
 
-    # account associated with transaction 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, default=1)
-    # user associated with transaction
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     description = models.CharField(max_length=200)
     category = models.CharField(max_length=30, choices=CATEGORY_DICT)
     amount = models.DecimalField(
-        max_digits=12, decimal_places=2, default = 0, 
+        max_digits=10, decimal_places=2, default = 0, 
         validators=[MinValueValidator(limit_value=Decimal(0.01))]
     )
-    occur_date = models.DateTimeField("The date transaction was made") # hours were used to sort 
+    occur_date = models.DateTimeField("The date this transaction was made", db_index=True)
 
     def __str__(self): 
         """ Representation of the transaction  """
@@ -59,7 +57,6 @@ class Transaction(models.Model):
 
 class BudgetPlan(models.Model): 
     """ The budget plan of the user """
-
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     # type of the budget plan (budget over month, bi-week, or week)
     interval_type = models.CharField(max_length=20, choices={ 
@@ -119,7 +116,6 @@ class BudgetPlan(models.Model):
  
 class Bill(models.Model): 
     """ The montly bills of the user """
-
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     pay_account = models.ForeignKey(Account, null=True, blank=True, on_delete=models.SET_NULL, default=1)
     description = models.CharField(max_length=200)
@@ -135,7 +131,6 @@ class Bill(models.Model):
 
 class PortfolioValue(models.Model): 
     """ The value of the user's portfolio """
-
     user = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
     date = models.DateField()
 
@@ -179,7 +174,7 @@ class Stock(models.Model):
             raise ValidationError(f"This stock overlaps the previous ones ({self.id})")
     
     def save(self, *args, **kwargs): 
-        """ Override in order to invoke clean() method before saving the instance  """
+        """ Override in invoke clean() method before saving the instance  """
         self.full_clean()
         return super().save(*args, **kwargs) 
  
@@ -193,7 +188,6 @@ class DateStockPrice(models.Model):
     The price of the stock of the specific date, 
     only store the price of the stock on any date as of the first date of last month (1 month & number of days of this month)
     """
-
     stock = models.ForeignKey(Stock, on_delete=models.CASCADE, default=1)
     date = models.DateField()
     given_date_close =  models.DecimalField(  # the close price of the given stock on the given date 

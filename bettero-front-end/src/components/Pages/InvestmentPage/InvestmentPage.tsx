@@ -108,7 +108,7 @@ function StockTableRow({ stockInfoData, onChangeStockList }: StockTableRowProps)
                 </div>
               </div>
               <div className="stock-price-chart">
-                <TimeseriesChart intervalType="month" contentType="stock price" timeSeriesObject={stockPriceObject} />
+                <TimeseriesChart intervalType="month" stockSymbol={stockInfo.symbol} contentType="stock price" timeSeriesObject={stockPriceObject} />
               </div>
             </div>
             <div className="button-area">

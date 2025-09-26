@@ -7,13 +7,10 @@ from rest_framework.validators import ValidationError
 from expenseapp.models import Account, Transaction
 from expenseapp.serializers import TransactionSerializer
 from expenseapp.finance import get_curr_dates
-from calendar import monthrange
 from expenseapp.finance import adjust_account_balance, to_date
-from expenseapp.finance.expense_finance import latest_periods
 
 class TransactionView(generics.ListAPIView): 
     """ Base transaction view to implement pagination """
-
     permission_classes = [IsAuthenticated]
     serializer_class = TransactionSerializer
     pagination_class = PageNumberPagination

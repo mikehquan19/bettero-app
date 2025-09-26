@@ -56,7 +56,10 @@ class AccountDetail(generics.RetrieveUpdateDestroyAPIView):
     
     @transaction.atomic
     def perform_update(self, serializer) -> None:
-        """ Override ```perform_update``` to  """
+        """ 
+        Override ```perform_update``` to add the new transaction showing change of balance.
+        Helping with the consistency of the word
+        """
         
         previous_balance = self.get_object().balance
         updated_account = serializer.save()
@@ -77,10 +80,11 @@ class AccountDetail(generics.RetrieveUpdateDestroyAPIView):
         # Create transaction to fill in the discrepancy in the account's balance
         Transaction.objects.create(
             user=updated_account.user, account=updated_account, description=description, 
-            amount=abs(balance_change), occur_date=datetime.datetime.now(), category=category
+            amount=abs(balance_change), occur_date=datetime.datetime.now(), 
+            category=category
         )
 
-        
+
 class AccountSummary(APIView): 
     """ View to handle the info of the financial summary of the specific account """
 

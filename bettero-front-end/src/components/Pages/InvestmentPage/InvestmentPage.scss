@@ -65,10 +65,6 @@
     font-size: 18px;
 }
 
-.stock-list tr:nth-child(even) {
-    background-color: rgba(0, 255, 0, 0.75);
-}
-
 .stock-list .basic-row td {
     padding: 20px 0; 
     text-align: center;
@@ -76,11 +72,8 @@
 }
 
 .detail-row-wrapper {
-    background-color: skyblue;
     width: 90%;
     margin: 20px auto;
-    border: 1.5px solid black;
-    border-radius: 15px;
 }
 
 

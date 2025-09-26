@@ -16,7 +16,6 @@ class UserBudget(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_response_data(self, request): 
-        """ Get custome """
         response_data = {
             "month": {}, 
             "bi_week": {}, 
@@ -27,14 +26,10 @@ class UserBudget(APIView):
         return response_data
     
     def get(self, request, format=None) -> Response: 
-        """ GET method """
-
         response_data = self.get_response_data(request)
         return Response(response_data)
     
     def post(self, request, format=None) -> Response: 
-        """ POST method """
-        
         request_data = request.data
         request_data["user"] = request.user.pk
 
