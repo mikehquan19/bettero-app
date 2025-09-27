@@ -21,7 +21,7 @@ def upload_mock_accounts():
         random_institution = random.choice(AVAILABLE_INSTITUTIONS)
 
         accounts_to_create.append(Account(
-            user=User.objects.get(username="mikequan"), 
+            user=User.objects.get(username="mikequan19"), 
             account_number=acc_num,
             name=f"Mike Quan's {random_institution}'s Test Account",
             institution=random_institution,
@@ -47,7 +47,7 @@ def upload_category_transactions(num_transaction: int=3):
 
             # append transaction for this month 
             transactions_to_create.append(Transaction(
-                user=User.objects.get(username="mikequan"), 
+                user=User.objects.get(username="mikequan19"), 
                 account=random_account,
                 description=f"Test {category} Transaction #{i + 1} this month", 
                 category=category,
@@ -88,7 +88,7 @@ def upload_interval_transactions(num_transactions: int=1):
 
             # append one transaction for this month 
             transactions_to_create.append(Transaction(
-                user=User.objects.get(username="mikequan"), 
+                user=User.objects.get(username="mikequan19"), 
                 account=Account.objects.get(account_number=random.choice(TEST_ACCOUNT_NUMBERS)),
                 description=f"Test {category} Transaction {i + 1} on {to_string(current_date)}", 
                 category=category,

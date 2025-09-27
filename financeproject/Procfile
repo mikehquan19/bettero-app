@@ -1,1 +1,1 @@
-web: gunicorn financeproject.wsgi:application
+web: gunicorn financeproject.wsgi:application --timeout 120 --workers 3
