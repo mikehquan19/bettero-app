@@ -95,7 +95,7 @@ class StockPriceDetail(APIView):
         """ PUT method, update the stock """
 
         request_data = request.data
-        request_data["user"] = request.user.pk
+        request_data["user"] = request.user.id
 
         stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
         updated_stock_serializer = StockSerializer(stock, data=request_data)
@@ -113,7 +113,8 @@ class StockPriceDetail(APIView):
 
         stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
         stock.delete()
-        return Response({ "message": "Stock deleted successfully" }, status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            { "message": "Stock deleted successfully" }, status=status.HTTP_204_NO_CONTENT)
     
 
 class PortfolioValueList(APIView): 

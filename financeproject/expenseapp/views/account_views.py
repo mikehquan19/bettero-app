@@ -34,7 +34,7 @@ class AccountList(APIView):
         """ POST method, create new account to list of accounts and then return them """
 
         request_data = request.data 
-        request_data["user"] = request.user.pk
+        request_data["user"] = request.user.id
         
         new_account_serializer = AccountSerializer(data=request_data)
         if new_account_serializer.is_valid(): 
@@ -60,14 +60,14 @@ class AccountDetail(generics.RetrieveUpdateDestroyAPIView):
         Override ```perform_update``` to add the new transaction showing change of balance.
         Helping with the consistency of the word
         """
-        
-        previous_balance = self.get_object().balance
+
         updated_account = serializer.save()
-        current_balance = updated_account.balance
-        balance_change = current_balance - previous_balance
+        # current balance - previous balance 
+        balance_change = updated_account.balance - self.get_object().balance
 
         # Create the transaction corresponding to the change, if any.
-        if balance_change == 0: return
+        if balance_change == 0: 
+            return
 
         # The transaction's description differs based on the change
         if balance_change > 0: 
@@ -87,16 +87,15 @@ class AccountDetail(generics.RetrieveUpdateDestroyAPIView):
 
 class AccountSummary(APIView): 
     """ View to handle the info of the financial summary of the specific account """
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk, format=None) -> None: 
-        queried_account = get_object_or_404(Account, pk=pk)
+        queried_account = get_object_or_404(Account, id=pk)
         
         # Get the change & composition percentage of the account 
         change_percentage = expense_change_percentage(queried_account)
         composition_percentage = expense_composition_percentage(queried_account)
-
+        
         response_data = {
             "change_percentage": change_percentage, 
             "composition_percentage": composition_percentage, 

@@ -140,16 +140,15 @@ class AccBothTransactionList(TransactionView):
         if not arg_category: 
             raise ValidationError({"error": "Category not specified"})
         
-        first_date_str = self.request.query_params.get("first_date")
-        last_date_str = self.request.query_params.get("last_date")
-        if not first_date_str or not last_date_str: 
+        first_str = self.request.query_params.get("first_date")
+        last_str = self.request.query_params.get("last_date")
+        if not first_str or not last_str: 
             first_date, last_date = get_curr_dates(period_type="month")
         else: 
-            first_date, last_date = to_date(first_date_str), to_date(last_date_str)
+            first_date, last_date = to_date(first_str), to_date(last_str)
         
         queried_account = get_object_or_404(Account, pk=self.kwargs['pk'])
         return Transaction.objects.filter(
             account=queried_account, category=arg_category, 
-            occur_date__gte=first_date, 
-            occur_date__lte=last_date).order_by("-occur_date")
+            occur_date__gte=first_date, occur_date__lte=last_date).order_by("-occur_date")
     

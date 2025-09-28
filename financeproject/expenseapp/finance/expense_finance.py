@@ -22,16 +22,16 @@ def total_balance_and_amount_due(user: User) -> Tuple:
 
 
 def total_income(
-    arg_user: User, arg_first_date: date=None, arg_last_date: date=None
+    arg_user: User, first_date: date=None, last_date: date=None
 ) -> float: 
     """ return the user's total income of given interval """
     # Determine the first and last date
-    first_date, last_date = get_curr_dates(MONTH, arg_first_date, arg_last_date)
+    proc_first_date, proc_last_date = get_curr_dates(MONTH, first_date, last_date)
 
     # List of incomes of the user of interval
     income_list = Transaction.objects.filter(
         user=arg_user, category=INCOME, 
-        occur_date__gte=first_date, occur_date__lte=last_date)
+        occur_date__gte=proc_first_date, occur_date__lte=proc_last_date)
 
     # Compute the total income 
     total_income = income_list.aggregate(total=Sum("amount", default=0))["total"]
@@ -39,21 +39,22 @@ def total_income(
 
 
 def daily_expense(
-    arg_user: User, arg_first_date: date=None, arg_last_date: date=None
+    arg_user: User, first_date: date=None, last_date: date=None
 ) -> Dict: 
     """ Return the dict mapping date to amount of expense of that date up until the current date """
     daily_expense = {} # Result dict 
 
-    if not arg_first_date or not arg_last_date: 
-        first_date , last_date = date(
+    if not first_date or not last_date: 
+        proc_first_date , proc_last_date = date(
             year=date.today().year, month=date.today().month, day=1
-        ), date.today()
+        ), 
+        date.today()
     else: 
-        first_date, last_date = arg_first_date, arg_last_date
+        proc_first_date, proc_last_date = first_date, last_date
     
     # Loop through the dates from first date to today 
-    current_date = first_date
-    while current_date <= last_date: 
+    current_date = proc_first_date
+    while current_date <= proc_last_date: 
         # Expenses between current date and next date 
         curr_expense_list = Transaction.objects.filter(
             user=arg_user, 
@@ -98,11 +99,11 @@ def expense_composition_percentage(
 
 
 def expense_change_percentage(
-    arg_obj, period_type: str=MONTH, arg_first_date: date=None, arg_last_date: date=None
+    arg_obj, period_type: str=MONTH, first_date: date=None, last_date: date=None
 ) -> Dict: 
     """ Calculate how the total expenses and expense of each category have changed """
     # First and last date of the current period and the previous period
-    curr_date1, curr_date2 = get_curr_dates(period_type, arg_first_date, arg_last_date)
+    curr_date1, curr_date2 = get_curr_dates(period_type, first_date, last_date)
     prev_date1, prev_date2 = get_prev_dates(period_type, curr_date1, curr_date2)
 
     # Dict mapping category to amount for the current and previous month 

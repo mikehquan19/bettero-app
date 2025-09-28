@@ -8,30 +8,33 @@ from expenseapp.constants import CATEGORY_DICT, EXPENSE, INCOME, MONTH, TOTAL, W
 from datetime import date, timedelta
 from calendar import monthrange
 
-def get_curr_dates(period_type: str=None, arg_first_date: date=None, arg_last_date: date=None) -> Tuple: 
+def get_curr_dates(
+        period_type: str=None, first_date: date=None, last_date: date=None
+    ) -> Tuple: 
     """ 
     Get the first and last dates of the current interval based on the interval type
     """
-
     # return first and last date if given in the arguments 
-    if arg_first_date: return arg_first_date, arg_last_date
-
-    if period_type != MONTH: 
-        # the number of days of an interval (week or bi_week)
-        days_between = 7 if period_type == WEEK else 14
-        # First and last date of the current interval 
-        last_date = date.today() + timedelta(days=(6 - date.today().weekday()))
-        first_date = last_date - timedelta(days=(days_between - 1))
+    if first_date and last_date: 
+        return first_date, last_date
     else: 
-        # If the type is month
-        # first date and last date of the current month
-        first_date = date(year=date.today().year, month=date.today().month, day=1)
-        last_date = date(
-            year=date.today().year, 
-            month=date.today().month, 
-            day=monthrange(date.today().year, date.today().month)[1]
-        )
-    return first_date, last_date 
+        if period_type != MONTH: 
+            # the number of days of an interval (week or bi_week)
+            days_between = 7 if period_type == WEEK else 14
+            # First and last date of the current interval 
+            proc_last_date = date.today() + timedelta(days=(6 - date.today().weekday()))
+            proc_first_date = last_date - timedelta(days=(days_between - 1))
+        else: 
+            # If the type is month, 
+            # first date and last date of the current month
+            proc_first_date = date(year=date.today().year, month=date.today().month, day=1)
+            proc_last_date = date(
+                year=date.today().year, 
+                month=date.today().month, 
+                day=monthrange(date.today().year, date.today().month)[1]
+            )
+
+        return proc_first_date, proc_last_date
 
 
 def get_prev_dates(period_type: str, first_date: date, last_date: date) -> Tuple: 
@@ -40,7 +43,7 @@ def get_prev_dates(period_type: str, first_date: date, last_date: date) -> Tuple
     if period_type != MONTH: 
         # The number of days of an interval (week or bi_week)
         days_between = 7 if period_type == WEEK else 14
-            
+
         prev_first_date = first_date - timedelta(days=days_between)
         prev_last_date = last_date - timedelta(days=days_between)
     else: 
@@ -62,7 +65,6 @@ def get_first_and_last_dates() -> Tuple:
     Get the first date of last month and today, which is defined in this project 
     as the duration of the stock price 
     """
-
     current_date = date.today() # the last date, which is today
 
     # the first date (which is first date of last month), month and year of the last date 
@@ -76,8 +78,8 @@ def get_first_and_last_dates() -> Tuple:
 
 def category_expense_dict(arg_obj: User | Account, first_date: date, last_date: date) -> Dict:
     """
-    Get the dictionary mapping all the expense category to the amount, associated with either a user 
-    or an account, during a given interval 
+    Get the dictionary mapping all the expense category to the amount, 
+    associated with either a user or an account, during a given interval 
     """
     
     # Queryset of incomes and expenses between 2 dates 
@@ -101,8 +103,12 @@ def category_expense_dict(arg_obj: User | Account, first_date: date, last_date: 
 
     # Compute total expense, and incomes 
     category_expense.update({
-        EXPENSE: float(expense_list.aggregate(total=Sum("amount", default=0))["total"]), 
-        INCOME: float(income_list.aggregate(total=Sum("amount", default=0))["total"])
+        EXPENSE: float(expense_list.aggregate(
+            total=Sum("amount", default=0)
+        )["total"]), 
+        INCOME: float(income_list.aggregate(
+            total=Sum("amount", default=0)
+        )["total"])
     })
     category_expense[TOTAL] = category_expense[EXPENSE] + category_expense[INCOME]
     

@@ -31,7 +31,7 @@ class UserBudget(APIView):
     
     def post(self, request, format=None) -> Response: 
         request_data = request.data
-        request_data["user"] = request.user.pk
+        request_data["user"] = request.user.id
 
         new_plan_serializer = BudgetPlanSerializer(data=request_data)
         if new_plan_serializer.is_valid(): 
@@ -81,7 +81,6 @@ class UserBudgetDetail(APIView):
                 "week": {}
             }
 
-            # Period type 
             for type in list(response_data.keys()): 
                 response_data[type] = get_budget_response_data(request.user, type)
             return Response(response_data, status=status.HTTP_202_ACCEPTED)
@@ -91,8 +90,8 @@ class UserBudgetDetail(APIView):
     def delete(self, request, interval_type, format=None) -> Response: 
         """ DELETE method, delete the plan  """
 
-        plan = self.get_budget_plan(request, interval_type)
-        plan.delete()
+        budget_plan = self.get_budget_plan(request, interval_type)
+        budget_plan.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -114,7 +113,7 @@ class BillList(APIView):
         """ POST method, add new bill to the list of bills  """
 
         request_data = request.data
-        request_data["user"] = request.user.pk
+        request_data["user"] = request.user.id
         
         new_bill_serializer = BillSerializer(data=request_data)
         if new_bill_serializer.is_valid(): 
@@ -151,7 +150,6 @@ class BillsDetail(generics.RetrieveUpdateDestroyAPIView):
                 description=f"Payment: {instance.description}", category=instance.category,
                 amount=instance.amount, occur_date=datetime.now()
             )
-            
             # Adjust the account 
             adjust_account_balance(new_transaction.account, new_transaction)
 

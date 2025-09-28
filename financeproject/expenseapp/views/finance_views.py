@@ -18,7 +18,6 @@ class Register(generics.CreateAPIView):
         """
         Override method ```perform_create()``` to create the list of initial portfolio value of the user 
         """
-
         created_user = serializer.save()
         first_date, last_date = get_first_and_last_dates()
         
@@ -38,7 +37,6 @@ class Register(generics.CreateAPIView):
 
 class UserSummaryDetail(APIView): 
     """ Handling the info of the financial summary of the user  """
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None) -> Response:

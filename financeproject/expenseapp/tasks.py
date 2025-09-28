@@ -9,23 +9,22 @@ from .finance import update_stock_data
 @transaction.atomic
 def update_credit_due_date(self) -> None:
     """ Update the due date of the credit account (every month) """
-    
     try:
         # query the list of credit accounts 
+        queried_accounts = Account.objects.filter(
+            account_type="Credit", due_date__lte=date.today()
+        )
         credit_accounts_to_create = []
-        for account in Account.objects.filter(account_type="Credit", due_date__lte=date.today()): 
+        for account in queried_accounts: 
             # increment the due date 
             if account.due_date.month == 12:
                 account.due_date.replace(year=account.due_date.year + 1, month=1)
             else: 
-                account.due_date.replace(month=account.due_date.month + 1)
-
-            # append to the list 
+                account.due_date.replace(month=account.due_date.month + 1) 
             credit_accounts_to_create.append(account)
 
         # credit account to update 
         Account.objects.bulk_update(credit_accounts_to_create, ["due_date"])
-
     except Exception as exc: 
         raise self.retry(exc=exc)
 
@@ -67,10 +66,10 @@ def update_info_and_create_price(self) -> None:
                 
         # bulk-update
         num_updated_stock = Stock.objects.bulk_update(updated_stock_list, updated_field_list)
-        updated_stock_queryset = Stock.objects.all()
         print(f"{num_updated_stock} stocks updated successfully!")
 
         # create the new date price instance for the updated stock
+        updated_stock_queryset = Stock.objects.all()
         created_stock_price_list = []
         for updated_stock in updated_stock_queryset: 
             created_stock_price_list.append(DateStockPrice(
@@ -97,9 +96,15 @@ def create_portfolio_value() -> None:
 
     for user in User.objects.all(): 
         # compute the total value of the user's portfolio 
-        user_portfolio = Stock.objects.filter(user=user).annotate(total_value=F("current_close") * F("shares"))
-        total_value = user_portfolio.aggregate(total=Sum("total_value", default=0))["total_value"]
-        portfolio_value_list.append(PortfolioValue(user=user, date=previous_date, given_date_value=total_value))
+        user_portfolio = Stock.objects.filter(user=user).annotate(
+            total_value=F("current_close") * F("shares")
+        )
+        total_value = user_portfolio.aggregate(
+            total=Sum("total_value", default=0)
+        )["total_value"]
+        portfolio_value_list.append(PortfolioValue(
+            user=user, date=previous_date, given_date_value=total_value
+        ))
 
     created_list = PortfolioValue.objects.bulk_create(portfolio_value_list)
     print(f"{len(created_list)} portfolio values created!")
@@ -166,7 +171,6 @@ def delete_overdue_bills_and_messages(self) -> None:
 
             # delete the queryset of overdue bills 
             overdue_bill_list.delete()
-        
         # delete the overdue bill messages that are one day old, 
         OverdueBillMessage.objects.filter(appear_date__lt=date.today()).delete()
 
