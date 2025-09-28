@@ -47,8 +47,7 @@ def daily_expense(
     if not first_date or not last_date: 
         proc_first_date , proc_last_date = date(
             year=date.today().year, month=date.today().month, day=1
-        ), 
-        date.today()
+        ), date.today()
     else: 
         proc_first_date, proc_last_date = first_date, last_date
     
