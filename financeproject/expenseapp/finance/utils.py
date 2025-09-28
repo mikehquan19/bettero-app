@@ -23,7 +23,7 @@ def get_curr_dates(
             days_between = 7 if period_type == WEEK else 14
             # First and last date of the current interval 
             proc_last_date = date.today() + timedelta(days=(6 - date.today().weekday()))
-            proc_first_date = last_date - timedelta(days=(days_between - 1))
+            proc_first_date = proc_last_date - timedelta(days=(days_between - 1))
         else: 
             # If the type is month, 
             # first date and last date of the current month
