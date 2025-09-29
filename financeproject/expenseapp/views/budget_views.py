@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from expenseapp.models import BudgetPlan, OverdueBillMessage, Transaction, Bill
 from expenseapp.serializers import BudgetPlanSerializer, BillSerializer, OverdueBillMessageSerializer
+from django.db import transaction
 
 from expenseapp.finance import get_budget_response_data, adjust_account_balance
 from datetime import date, datetime
@@ -30,8 +31,10 @@ class UserBudget(APIView):
         return Response(response_data)
     
     def post(self, request, format=None) -> Response: 
-        request_data = request.data
-        request_data["user"] = request.user.id
+        request_data = {
+            **request.data, 
+            "user": request.user.id
+        }
 
         new_plan_serializer = BudgetPlanSerializer(data=request_data)
         if new_plan_serializer.is_valid(): 
@@ -64,9 +67,9 @@ class UserBudgetDetail(APIView):
      
     def put(self, request, interval_type: str, format=None) -> Response: 
         """ PUT method, update the plan of the given interval type """
-
-        request_data = request.data
-        request_data["user"] = request.user.pk
+        request_data = {
+            **request.data, "user": request.user.id
+        }
         
         plan = self.get_budget_plan(request, interval_type)
         updated_plan_serializer = BudgetPlanSerializer(plan, data=request_data)
@@ -105,16 +108,12 @@ class BillList(APIView):
     
     def get(self, request, format=None) -> Response: 
         """ GET method, return list of bills for the user """
-
         response_data = self.get_response_data(request)
         return Response(response_data)
     
     def post(self, request, format=None) -> Response: 
         """ POST method, add new bill to the list of bills  """
-
-        request_data = request.data
-        request_data["user"] = request.user.id
-        
+        request_data = { **request.data, "user": request.user.id }
         new_bill_serializer = BillSerializer(data=request_data)
         if new_bill_serializer.is_valid(): 
             new_bill_serializer.save() 
@@ -134,14 +133,12 @@ class BillsDetail(generics.RetrieveUpdateDestroyAPIView):
 
     def get_object(self):
         """ Override ```get_object(self)``` to get from pk by the endpoint"""
-        try: 
-            return Bill.objects.get(pk=self.kwargs["pk"])
-        except Bill.DoesNotExist: 
-            raise Http404("Bill with the given pk not found.")
+        return get_object_or_404(Bill, id=self.kwargs["pk"])
 
+    @transaction.atomic
     def perform_destroy(self, instance):
         """ Override the destroying behavior """
-
+        
         if instance.pay_account is not None and instance.due_date >= date.today():
             # if there is pay account and the bills isn't overdue yet
             # create transactions indicating that user's paid the bills 

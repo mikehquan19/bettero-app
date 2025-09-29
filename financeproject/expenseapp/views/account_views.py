@@ -13,7 +13,6 @@ from expenseapp.constants import CREDIT, OTHERS, INCOME
 
 class AccountList(APIView):   
     """ View to handle the list of accounts of the specific user  """
-
     permission_classes = [IsAuthenticated]
     
     def get_response_data(self, request):
@@ -26,19 +25,18 @@ class AccountList(APIView):
 
     def get(self, request, format=None) -> Response:
         """ GET method, return the list of accounts of the user """
-
         response_data = self.get_response_data(request)
         return Response(response_data)
 
     def post(self, request, format=None) -> Response:
         """ POST method, create new account to list of accounts and then return them """
-
-        request_data = request.data 
-        request_data["user"] = request.user.id
-        
+        request_data = {
+            **request.data, 
+            "user": request.user.id
+        }
         new_account_serializer = AccountSerializer(data=request_data)
         if new_account_serializer.is_valid(): 
-            new_account_serializer.save() # Call the method create()
+            new_account_serializer.save() # Call the method ```create()``
 
             # Return the new list of accounts
             response_data = self.get_response_data(request)
@@ -49,7 +47,6 @@ class AccountList(APIView):
 
 class AccountDetail(generics.RetrieveUpdateDestroyAPIView): 
     """ View to handle the detail of the account """
-
     permission_classes = [IsAuthenticated]
     serializer_class = AccountSerializer
     queryset = Account.objects.all()
@@ -90,11 +87,11 @@ class AccountSummary(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk, format=None) -> None: 
-        queried_account = get_object_or_404(Account, id=pk)
+        account = get_object_or_404(Account, id=pk)
         
         # Get the change & composition percentage of the account 
-        change_percentage = expense_change_percentage(queried_account)
-        composition_percentage = expense_composition_percentage(queried_account)
+        change_percentage = expense_change_percentage(account)
+        composition_percentage = expense_composition_percentage(account)
         
         response_data = {
             "change_percentage": change_percentage, 

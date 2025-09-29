@@ -9,7 +9,6 @@ from expenseapp.finance import *
 
 class Register(generics.CreateAPIView): 
     """ Handling the the registration, which is allowed for anyone  """
-
     permission_classes = [AllowAny]  
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
@@ -40,20 +39,21 @@ class UserSummaryDetail(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, format=None) -> Response:
+        user = request.user
         first_date, last_date = get_curr_dates("month")
-        total_balance, total_amount_due = total_balance_and_amount_due(request.user)
+        total_balance, total_amount_due = total_balance_and_amount_due(user)
         financial_info = {
             "total_balance": round(total_balance, 2), 
             "total_amount_due": round(total_amount_due, 2), 
-            "total_income": round(total_income(request.user), 2),
-            "total_expense": round(category_expense_dict(request.user, first_date, last_date)["Total"], 2)
+            "total_income": round(total_income(user), 2),
+            "total_expense": round(category_expense_dict(user, first_date, last_date)["Total"], 2)
         }
 
         response_data = { 
             "financial_info": financial_info,
-            "change_percentage": expense_change_percentage(request.user), 
-            "composition_percentage": expense_composition_percentage(request.user), 
-            "daily_expense": daily_expense(request.user), 
+            "change_percentage": expense_change_percentage(user), 
+            "composition_percentage": expense_composition_percentage(user), 
+            "daily_expense": daily_expense(user), 
         }
         return Response(response_data)
     

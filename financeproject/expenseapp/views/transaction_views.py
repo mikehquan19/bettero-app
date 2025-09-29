@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 from rest_framework import status, generics
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -18,13 +19,11 @@ class TransactionView(generics.ListAPIView):
 
 class UserTransactionList(generics.ListCreateAPIView): 
     """ View to handle the list of transactions of a specific user """
-
     permission_classes = [IsAuthenticated]
     pagination_class = PageNumberPagination
 
     def get_transaction_response(self, request) -> Response:
         """ Get custom response with pagination of transactions """
-
         transaction_list = Transaction.objects.filter(user=request.user).order_by("-occur_date")[:50]
         paginator = self.pagination_class()
         transaction_page = paginator.paginate_queryset(transaction_list, request)
@@ -40,11 +39,10 @@ class UserTransactionList(generics.ListCreateAPIView):
 
         new_trans_serializer = TransactionSerializer(data=request.data)
         if new_trans_serializer.is_valid(): 
-            new_transaction = new_trans_serializer.save() # call the create method 
-
-            # adjust balance of the associated account 
-            adjust_account_balance(new_transaction.account, new_transaction)
-
+            with transaction.atomic(): 
+                new_transaction = new_trans_serializer.save() # call the create method 
+                # adjust balance of the associated account 
+                adjust_account_balance(new_transaction.account, new_transaction)
             return self.get_transaction_response(request)
         
         return Response(new_trans_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -61,7 +59,7 @@ class IntervalTransactionList(TransactionView):
         # get the params 
         first_date_str = self.request.query_params.get("first_date")
         last_date_str = self.request.query_params.get("last_date")
-
+        
         # Validate
         if not first_date_str or not last_date_str: 
             raise ValidationError({"message": "First date or last date unspecified"})

@@ -15,9 +15,11 @@ def to_string(date: date) -> str:
 
 def to_date(str: str) -> date: 
     """ Convert a string to a date object """
-    str_arr = str.split("-")
+    splitted_str = str.split("-")
     return date(
-        year=int(str_arr[0]), month=int(str_arr[1]), day=int(str_arr[2])
+        year=int(splitted_str[0]), 
+        month=int(splitted_str[1]), 
+        day=int(splitted_str[2])
     )
 
 
@@ -27,17 +29,18 @@ def load_stock_data(symbol: str) -> Dict:
     along with current data of the stock 
     """
 
-    # get the first and last date of a stock price's duration 
+    # Get the first and last date of a stock price's duration 
     first_date, last_date = get_first_and_last_dates()
-    # Load data of the stock's info 
+    # Load data of the stock's info, returns Panda dataframe 
     recent_data = yf.download([symbol], start=to_string(first_date), end=to_string(last_date))
     # current info of the stock 
     stock_data = {}
     for field in ["current_close", "previous_close", "open", "high", "low", "volume"]: 
-        frame_col = field.split('_')[-1].capitalize()
+        dataframe_col = field.split("_")[-1].capitalize()
         index = -2 if field == "previous_close" else -1
-        value = recent_data[frame_col][symbol].iloc[index]
-        if field == "volume": 
+        value = recent_data[dataframe_col][symbol].iloc[index]
+        if field == "volume":  
+            # Volume of the stock is defined as long
             stock_data[field] = int(value)
         else: 
             stock_data[field] = round(Decimal(value), 2)
@@ -48,11 +51,10 @@ def load_stock_data(symbol: str) -> Dict:
     while current_date < last_date: 
         try: 
             given_date_price = recent_data["Close"][symbol][to_string(current_date)]
-            item_data = {
+            stock_data["price_data"].append({
                 "date": current_date, 
                 "given_date_close": float(round(given_date_price, 2))
-            }
-            stock_data["price_data"].append(item_data)
+            })
         except KeyError: 
             # The key error means that the price of stock on that date doesn't exist
             pass
@@ -75,7 +77,7 @@ def update_stock_data(symbol: str) -> Dict:
 
     custom_data = {}
     for field in ["new_close", "new_open", "new_high", "new_low", "new_volume"]: 
-        frame_col = field.split('_')[-1].capitalize()
+        frame_col = field.split("_")[-1].capitalize()
         value = updated_data[frame_col][symbol].iloc[0]
         if field == "volume": 
             custom_data[field] = int(value)

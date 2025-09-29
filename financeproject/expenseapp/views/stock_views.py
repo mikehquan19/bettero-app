@@ -10,7 +10,6 @@ from expenseapp.finance import load_stock_data
 
 class StockList(APIView): 
     """ View to handle the list of stocks  """
-
     permission_classes = [IsAuthenticated]
 
     def get_response_data(self, request):
@@ -27,9 +26,7 @@ class StockList(APIView):
      
     def post(self, request, format=None) -> Response: 
         """ POST method, add the stock the list of stock of user """
-
-        request_data = request.data 
-        request_data["user"] = request.user.pk
+        request_data = { **request.data, "user": request.user.id }
 
         # load the price data of the stock with the given symbol 
         try: 
@@ -87,15 +84,12 @@ class StockPriceDetail(APIView):
     
     def get(self, request, symbol, format=None) -> Response: 
         """ GET method, return the detail of the stock, including its list of price """
-
         response_data = self.get_response_data(request, symbol)
         return Response(response_data)
     
     def put(self, request, symbol, format=None) -> Response: 
         """ PUT method, update the stock """
-
-        request_data = request.data
-        request_data["user"] = request.user.id
+        request_data = { **request.data, "user": request.user.id }
 
         stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
         updated_stock_serializer = StockSerializer(stock, data=request_data)
@@ -113,15 +107,13 @@ class StockPriceDetail(APIView):
 
         stock = get_object_or_404(Stock, user=request.user, symbol=symbol)
         stock.delete()
-        return Response(
-            { "message": "Stock deleted successfully" }, status=status.HTTP_204_NO_CONTENT)
+        return Response({ "message": "Stock deleted successfully" }, status=status.HTTP_204_NO_CONTENT)
     
 
 class PortfolioValueList(APIView): 
     permission_classes = [IsAuthenticated] 
 
     def get(self, request, format=None) -> Response: 
-        # query the list of portfolios
         portfolio_value_list = PortfolioValue.objects.filter(user=request.user).order_by("date")
         original_data = PortfolioValueSerializer(portfolio_value_list, many=True).data 
 

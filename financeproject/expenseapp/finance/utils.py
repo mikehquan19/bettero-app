@@ -1,7 +1,8 @@
 # THESE ARE THE SUPPLEMENTAL FUNCTIONS THAT WILL SUPPORT OTHER FINANCE FUNCTIONS
 
 from ast import Tuple
-from typing import Dict
+from decimal import Decimal
+from typing import Dict, Union
 from django.db.models import Sum
 from expenseapp.models import User, Account
 from expenseapp.constants import CATEGORY_DICT, EXPENSE, INCOME, MONTH, TOTAL, WEEK
@@ -10,7 +11,7 @@ from calendar import monthrange
 
 def get_curr_dates(
         period_type: str=None, first_date: date=None, last_date: date=None
-    ) -> Tuple: 
+    ) -> Tuple[date, date]: 
     """ 
     Get the first and last dates of the current interval based on the interval type
     """
@@ -37,7 +38,7 @@ def get_curr_dates(
         return proc_first_date, proc_last_date
 
 
-def get_prev_dates(period_type: str, first_date: date, last_date: date) -> Tuple: 
+def get_prev_dates(period_type: str, first_date: date, last_date: date) -> Tuple[date, date]: 
     """ Get the first and last dates of the previous interval to the interval in the arguments """
 
     if period_type != MONTH: 
@@ -60,7 +61,7 @@ def get_prev_dates(period_type: str, first_date: date, last_date: date) -> Tuple
     return prev_first_date, prev_last_date 
 
  
-def get_first_and_last_dates() -> Tuple: 
+def get_first_and_last_dates() -> Tuple[date, date]: 
     """
     Get the first date of last month and today, which is defined in this project 
     as the duration of the stock price 
@@ -76,39 +77,39 @@ def get_first_and_last_dates() -> Tuple:
     return first_date_last_month, current_date
 
 
-def category_expense_dict(arg_obj: User | Account, first_date: date, last_date: date) -> Dict:
+def category_expense_dict(
+        object: Union[User, Account], first_date: date, last_date: date
+    ) -> Dict[str, Decimal]:
     """
     Get the dictionary mapping all the expense category to the amount, 
     associated with either a user or an account, during a given interval 
     """
     
     # Queryset of incomes and expenses between 2 dates 
-    expense_list = arg_obj.transaction_set.filter(
-        occur_date__gte=first_date, 
+    expense_list = object.transaction_set.filter(
+        occur_date__gte=first_date,
         occur_date__lte=last_date).exclude(category=INCOME)
     
-    income_list = arg_obj.transaction_set.filter(
+    income_list = object.transaction_set.filter(
         category=INCOME,
         occur_date__gte=first_date, occur_date__lte=last_date
     )
     
-    # Calculate the total expense and each category's expense using the GROUP_BY, much more efficient 
-    category_expense = { category: 0.0 for category in list(CATEGORY_DICT.keys()) }
+    # Calculate the total expense and each category's expense using the GROUP_BY 
+    category_expense = { category: Decimal(0.0) for category in list(CATEGORY_DICT.keys()) }
     annotated_results = expense_list.values("category").annotate(
         total_amount=Sum("amount", default=0)
     ).order_by()
     
     for result in annotated_results: 
-        category_expense[result["category"]] = float(result["total_amount"])
+        category_expense[result["category"]] = Decimal(result["total_amount"])
 
     # Compute total expense, and incomes 
     category_expense.update({
         EXPENSE: float(expense_list.aggregate(
-            total=Sum("amount", default=0)
-        )["total"]), 
+            total=Sum("amount", default=0))["total"]), 
         INCOME: float(income_list.aggregate(
-            total=Sum("amount", default=0)
-        )["total"])
+            total=Sum("amount", default=0))["total"])
     })
     category_expense[TOTAL] = category_expense[EXPENSE] + category_expense[INCOME]
     
