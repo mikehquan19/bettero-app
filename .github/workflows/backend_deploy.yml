@@ -1,9 +1,11 @@
-name: Deploy Django Backend to Elastic Beanstalk
+name: Deploy Backend to AWS EB
 
 on:
   push:
-    branches:
-      - main
+    branches: [ 'main' ]
+  pull_request:
+    branches: [ 'main' ]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -11,7 +13,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: financeproject
+        working-directory: ./financeproject
 
     steps:
       - name: Checkout repository
