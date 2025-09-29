@@ -11,7 +11,7 @@ from calendar import monthrange
 
 def get_curr_dates(
         period_type: str=None, first_date: date=None, last_date: date=None
-    ) -> Tuple[date, date]: 
+    ) -> Tuple: 
     """ 
     Get the first and last dates of the current interval based on the interval type
     """
@@ -38,7 +38,7 @@ def get_curr_dates(
         return proc_first_date, proc_last_date
 
 
-def get_prev_dates(period_type: str, first_date: date, last_date: date) -> Tuple[date, date]: 
+def get_prev_dates(period_type: str, first_date: date, last_date: date) -> Tuple: 
     """ Get the first and last dates of the previous interval to the interval in the arguments """
 
     if period_type != MONTH: 
@@ -61,7 +61,7 @@ def get_prev_dates(period_type: str, first_date: date, last_date: date) -> Tuple
     return prev_first_date, prev_last_date 
 
  
-def get_first_and_last_dates() -> Tuple[date, date]: 
+def get_first_and_last_dates() -> Tuple: 
     """
     Get the first date of last month and today, which is defined in this project 
     as the duration of the stock price 
