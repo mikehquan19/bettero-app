@@ -106,9 +106,9 @@ def category_expense_dict(
 
     # Compute total expense, and incomes 
     category_expense.update({
-        EXPENSE: float(expense_list.aggregate(
+        EXPENSE: Decimal(expense_list.aggregate(
             total=Sum("amount", default=0))["total"]), 
-        INCOME: float(income_list.aggregate(
+        INCOME: Decimal(income_list.aggregate(
             total=Sum("amount", default=0))["total"])
     })
     category_expense[TOTAL] = category_expense[EXPENSE] + category_expense[INCOME]

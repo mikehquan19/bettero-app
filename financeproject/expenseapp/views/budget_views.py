@@ -23,7 +23,7 @@ class UserBudget(APIView):
             "week": {}
         }
         for type in list(response_data.keys()): 
-            response_data[type] = get_budget_response_data(arg_user=request.user, period_type=type)
+            response_data[type] = get_budget_response_data(user=request.user, period_type=type)
         return response_data
     
     def get(self, request, format=None) -> Response: 
