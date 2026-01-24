@@ -1,6 +1,6 @@
 # Type of accounts
-CREDIT = "Credit"
-DEBIT = "Debit"
+CREDIT = "credit"
+DEBIT = "debit"
 
 # Interval type
 MONTH = "month"
@@ -8,18 +8,18 @@ BI_WEEK = "bi_week"
 WEEK = "week"
 
 # Transaction's category
-TOTAL = "Total"
-EXPENSE = "Expense"
-INCOME = "Income"
-HOUSING = "Housing"
-AUTOMOBILE = "Automobile"
-MEDICAL = "Medical"
-SUBSCRIPTION = "Subscription"
-GROCERY = "Grocery"
-DINING = "Dining"
-SHOPPPING = "Shopping"
-GAS = "Gas"
-OTHERS = "Others"
+TOTAL = "total"
+EXPENSE = "expense"
+INCOME = "income"
+HOUSING = "housing"
+AUTOMOBILE = "automobile"
+MEDICAL = "medical"
+SUBSCRIPTION = "subscription"
+GROCERY = "grocery"
+DINING = "dining"
+SHOPPPING = "shopping"
+GAS = "gas"
+OTHERS = "others"
 
 # Category dictionary for category
 CATEGORY_DICT = {
@@ -34,3 +34,5 @@ CATEGORY_DICT = {
     GAS: "GAS",
     OTHERS: "OTHERS",
 }
+
+BUDGET = "budget"
