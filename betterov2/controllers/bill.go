@@ -4,7 +4,7 @@ import (
 	"betterov2/models"
 	"betterov2/services"
 	"context"
-	"fmt"
+	"errors"
 
 	"net/http"
 	"strconv"
@@ -41,15 +41,10 @@ func PostBill(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
-	dueDate, err := time.Parse("2006-01-02", body.DueDate)
-	if err != nil {
-		respondError(c, http.StatusBadRequest, err)
-		return
-	}
 
-	newBill, err := services.CreateBill(ctx, body, dueDate)
+	newBill, err := services.CreateBill(ctx, body)
 	if err != nil {
-		if err.Error() == fmt.Sprintf("Account %d not found", body.AccountID) {
+		if errors.Is(err, models.ErrForeignKey) {
 			respondError(c, http.StatusNotFound, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)
@@ -78,15 +73,10 @@ func PutBill(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
-	dueDate, err := time.Parse("2006-01-02", body.DueDate)
-	if err != nil {
-		respondError(c, http.StatusBadRequest, err)
-		return
-	}
 
-	updatedBill, err := services.UpdateBill(ctx, int64(id), body, dueDate)
+	updatedBill, err := services.UpdateBill(ctx, int64(id), body)
 	if err != nil {
-		if err.Error() == fmt.Sprintf("Bill %d not found", id) {
+		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)
@@ -125,7 +115,7 @@ func DeleteBill(c *gin.Context) {
 	}
 
 	if err := services.DeleteBill(ctx, int64(id), pay, recurring); err != nil {
-		if err.Error() == fmt.Sprintf("Bill %d not found", id) {
+		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)

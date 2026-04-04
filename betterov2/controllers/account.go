@@ -4,7 +4,7 @@ import (
 	"betterov2/models"
 	"betterov2/services"
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -44,8 +44,8 @@ func GetAccount(c *gin.Context) {
 
 	account, err := services.GetAccount(ctx, int64(id))
 	if err != nil {
-		if err.Error() == fmt.Sprintf("Account %d not found", id) {
-			respondError(c, http.StatusBadRequest, err)
+		if errors.Is(err, models.ErrNotFound) {
+			respondError(c, http.StatusNotFound, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)
 		}
@@ -62,27 +62,19 @@ func PostAccounts(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	var (
-		body    models.AccountBody
-		nextDue *time.Time
-	)
+	var body models.PostAccountBody
+
 	if err := c.ShouldBindJSON(&body); err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
-	if body.NextDue != nil && *body.NextDue != "" {
-		t, err := time.Parse("2006-01-02", *body.NextDue)
-		if err != nil {
-			respondError(c, http.StatusBadRequest, err)
-			return
-		}
-		nextDue = &t
-	}
 
-	newAccount, err := services.CreateAccount(ctx, UserID, body, nextDue)
+	newAccount, err := services.CreateAccount(ctx, UserID, body)
 	if err != nil {
-		if err.Error() == fmt.Sprintf("User %d not found.", UserID) {
+		if errors.Is(err, models.ErrInvalidAccountBody) {
 			respondError(c, http.StatusBadRequest, err)
+		} else if errors.Is(err, models.ErrForeignKey) {
+			respondError(c, http.StatusNotFound, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)
 		}
@@ -105,24 +97,17 @@ func PutAccount(c *gin.Context) {
 		return
 	}
 
-	var body models.AccountBody
-	var nextDue *time.Time
+	var body models.PutAccountBody
 	if err := c.ShouldBindJSON(&body); err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
-	if body.NextDue != nil && *body.NextDue != "" {
-		parsed, err := time.Parse("2006-01-02", *body.NextDue)
-		if err != nil {
-			respondError(c, http.StatusBadRequest, err)
-			return
-		}
-		nextDue = &parsed
-	}
 
-	updatedAccount, err := services.UpdateAccount(ctx, int64(id), body, nextDue)
+	updatedAccount, err := services.UpdateAccount(ctx, int64(id), body)
 	if err != nil {
-		if err.Error() == fmt.Sprintf("Account %d not found", id) {
+		if errors.Is(err, models.ErrInvalidAccountBody) {
+			respondError(c, http.StatusBadRequest, err)
+		} else if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)
@@ -147,7 +132,7 @@ func DeleteAccount(c *gin.Context) {
 	}
 
 	if err = services.DeleteAccount(ctx, int64(id)); err != nil {
-		if err.Error() == fmt.Sprintf("Account %d not found", id) {
+		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)

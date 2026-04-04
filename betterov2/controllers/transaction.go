@@ -4,7 +4,7 @@ import (
 	"betterov2/models"
 	"betterov2/services"
 	"context"
-	"fmt"
+	"errors"
 
 	"net/http"
 	"strconv"
@@ -42,20 +42,15 @@ func PostTransaction(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	var body models.TransactionBody
+	var body models.PostTransactionBody
 	if err := c.ShouldBindJSON(&body); err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
-	createdAt, err := time.Parse("2006-01-02", body.CreatedAt)
-	if err != nil {
-		respondError(c, http.StatusBadRequest, err)
-		return
-	}
 
-	newTransaction, err := services.CreateTransaction(ctx, body, createdAt)
+	newTransaction, err := services.CreateTransaction(ctx, body)
 	if err != nil {
-		if err.Error() == fmt.Sprintf("Account %d not found", body.AccountID) {
+		if errors.Is(err, models.ErrForeignKey) {
 			respondError(c, http.StatusNotFound, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)
@@ -79,20 +74,15 @@ func PutTransaction(c *gin.Context) {
 		return
 	}
 
-	var body models.TransactionBody
+	var body models.PutTransactionBody
 	if err = c.ShouldBindJSON(&body); err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
-	createdAt, err := time.Parse("2006-01-02", body.CreatedAt)
-	if err != nil {
-		respondError(c, http.StatusBadRequest, err)
-		return
-	}
 
-	updatedTran, err := services.UpdateTransaction(ctx, int64(id), body, createdAt)
+	updatedTran, err := services.UpdateTransaction(ctx, int64(id), body)
 	if err != nil {
-		if err.Error() == fmt.Sprintf("Transaction %d not found", id) {
+		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)
@@ -117,7 +107,7 @@ func DeleteTransaction(c *gin.Context) {
 	}
 
 	if err := services.DeleteTransaction(ctx, int64(id)); err != nil {
-		if err.Error() == fmt.Sprintf("Transaction %d not found", id) {
+		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)
