@@ -26,13 +26,18 @@ func GetTransactions(c *gin.Context) {
 		return
 	}
 
-	transactions, err := services.ListTransactions(ctx, UserID, offset)
+	total, transactions, err := services.ListTransactions(ctx, UserID, offset)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	respondSuccess(c, http.StatusOK, transactions)
+	paginatedResponse := models.PaginatedResponse[models.Transaction]{
+		Total:  total,
+		Offset: offset,
+		Data:   transactions,
+	}
+	respondSuccess(c, http.StatusOK, paginatedResponse)
 }
 
 // POST: /transactions/

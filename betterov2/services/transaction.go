@@ -11,8 +11,25 @@ import (
 )
 
 // ListTransactions returns list of transactions of the user from the database
-func ListTransactions(ctx context.Context, userId int64, offset int) ([]models.Transaction, error) {
+func ListTransactions(ctx context.Context, userId int64, offset int) (int, []models.Transaction, error) {
+	var totalCount int
 	var transactions []models.Transaction
+
+	pgTran, err := database.Begin(ctx)
+	if err != nil {
+		return totalCount, nil, err
+	}
+
+	countQuery := `
+	SELECT 
+		COUNT(*)
+	FROM transactions t JOIN accounts a ON t.account_id = a.id
+	WHERE a.user_id = $1;
+	`
+	countRow := pgTran.QueryRow(ctx, countQuery, userId)
+	if err := countRow.Scan(&totalCount); err != nil {
+		return totalCount, nil, err
+	}
 
 	listTranQuery := `
 	SELECT
@@ -29,20 +46,23 @@ func ListTransactions(ctx context.Context, userId int64, offset int) ([]models.T
 	JOIN accounts a ON t.account_id = a.id
 	WHERE a.user_id = $1
 	ORDER BY t.created_at DESC
-	LIMIT 20 
+	LIMIT 20
 	OFFSET $2;
 	`
-	rows, err := database.Query(ctx, listTranQuery, userId, offset)
+	rows, err := pgTran.Query(ctx, listTranQuery, userId, offset)
 	if err != nil {
-		return transactions, err
+		return totalCount, nil, err
 	}
-
 	transactions, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Transaction])
 	if err != nil {
-		return transactions, err
+		return totalCount, nil, err
 	}
 
-	return transactions, nil
+	if err = pgTran.Commit(ctx); err != nil {
+		return totalCount, nil, err
+	}
+
+	return totalCount, transactions, nil
 }
 
 // CreateTransaction inserts transaction into the database, and update the account's balance.

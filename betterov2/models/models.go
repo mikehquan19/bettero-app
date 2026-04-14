@@ -107,6 +107,12 @@ func ScanAccount(accRow pgx.Row, acc *Account) error {
 	return err
 }
 
+type PaginatedResponse[T any] struct {
+	Total  int `json:"total"`
+	Offset int `json:"offset"`
+	Data   []T `json:"data"`
+}
+
 type Transaction struct {
 	ID              int           `json:"id" db:"id"`
 	Account         NestedAccount `json:"account" db:"account"`
