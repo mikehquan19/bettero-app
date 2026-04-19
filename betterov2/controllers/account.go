@@ -161,10 +161,16 @@ func GetAccountTransactions(c *gin.Context) {
 		return
 	}
 
-	transactions, err := services.ListAccountTransactions(ctx, int64(id), int64(offset))
+	total, transactions, err := services.ListAccountTransactions(ctx, int64(id), int64(offset))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
+		return
 	}
 
-	respondSuccess(c, http.StatusOK, transactions)
+	paginatedResponse := models.PaginatedResponse[models.Transaction]{
+		Total:  total,
+		Offset: offset,
+		Data:   transactions,
+	}
+	respondSuccess(c, http.StatusOK, paginatedResponse)
 }

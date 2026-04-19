@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -21,8 +22,7 @@ func ListTransactions(ctx context.Context, userId int64, offset int) (int, []mod
 	}
 
 	countQuery := `
-	SELECT 
-		COUNT(*)
+	SELECT COUNT(*)
 	FROM transactions t JOIN accounts a ON t.account_id = a.id
 	WHERE a.user_id = $1;
 	`
@@ -46,10 +46,70 @@ func ListTransactions(ctx context.Context, userId int64, offset int) (int, []mod
 	JOIN accounts a ON t.account_id = a.id
 	WHERE a.user_id = $1
 	ORDER BY t.created_at DESC
-	LIMIT 20
+	LIMIT 15
 	OFFSET $2;
 	`
 	rows, err := pgTran.Query(ctx, listTranQuery, userId, offset)
+	if err != nil {
+		return totalCount, nil, err
+	}
+	transactions, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Transaction])
+	if err != nil {
+		return totalCount, nil, err
+	}
+
+	if err = pgTran.Commit(ctx); err != nil {
+		return totalCount, nil, err
+	}
+
+	return totalCount, transactions, nil
+}
+
+// FilterTransactions returns list of transactions of category between 2 dates
+func FilterTransactions(
+	ctx context.Context, userId int64, category string, start time.Time, end time.Time, offset int,
+) (int, []models.Transaction, error) {
+	var totalCount int
+	var transactions []models.Transaction
+
+	pgTran, err := database.Begin(ctx)
+	if err != nil {
+		return totalCount, nil, err
+	}
+
+	countQuery := `
+	SELECT COUNT(*)
+	FROM transactions t JOIN accounts a ON t.account_id = a.id
+	WHERE a.user_id = $1 
+		AND t.category = $2
+		AND t.created_at >= $3 AND t.created_at < $4
+	`
+	countRow := pgTran.QueryRow(ctx, countQuery, userId, category, start, end)
+	if err := countRow.Scan(&totalCount); err != nil {
+		return totalCount, nil, err
+	}
+
+	listTranQuery := `
+	SELECT
+		t.id, t.merchant, t.tran_description, t.category, t.amount, 
+		t.created_at, t.updated_at,
+		json_build_object(
+			'id', a.id,
+			'acc_number', a.acc_number,
+			'acc_name', a.acc_name,
+			'institution', a.institution,
+			'type', a.type
+		) AS account
+	FROM transactions t 
+	JOIN accounts a ON t.account_id = a.id
+	WHERE a.user_id = $1 
+		AND t.category = $2
+		AND t.created_at >= $3 AND t.created_at < $4
+	ORDER BY t.created_at DESC
+	LIMIT 15
+	OFFSET $5;
+	`
+	rows, err := pgTran.Query(ctx, listTranQuery, userId, category, start, end, offset)
 	if err != nil {
 		return totalCount, nil, err
 	}

@@ -15,36 +15,38 @@ func GetSummary(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	dates := make(map[string]time.Time)
+	var dates [2]time.Time
 	var err error
-	for _, endType := range [4]string{
-		"prev_start", "prev_end", "curr_start", "curr_end",
-	} {
-		dates[endType], err = time.Parse("2006-01-02", c.Query(endType))
+	for i, end := range [2]string{"start", "end"} {
+		dates[i], err = time.Parse("2006-01-02", c.Query(end))
 		if err != nil {
 			respondError(c, http.StatusBadRequest, err)
 			return
 		}
 	}
 
-	basic, err := services.GetBasicAnalysis(ctx, UserID, dates)
+	basic, err := services.GetBasicAnalysis(ctx, UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
+		return
 	}
 
-	daily, err := services.GetDateToAmount(ctx, UserID, dates)
+	daily, err := services.GetDateToAmount(ctx, UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
+		return
 	}
 
-	composition, err := services.GetCompositionMap(ctx, UserID, dates, basic.TotalExpense)
+	composition, err := services.GetCompositionMap(ctx, UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
+		return
 	}
 
-	change, err := services.GetChangeMap(ctx, UserID, dates)
+	change, err := services.GetChangeMap(ctx, UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
+		return
 	}
 
 	summary := models.FinancialSummary{
