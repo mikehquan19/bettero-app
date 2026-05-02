@@ -233,6 +233,7 @@ func ListAccountTransactions(
 	}
 	defer pgTran.Rollback(ctx)
 
+	// Dynamically build the filter based on values from query params
 	conditions := []string{"a.id = $1"}
 	args := []any{id}
 	index := 2
@@ -257,6 +258,7 @@ func ListAccountTransactions(
 	}
 	filterPart := "WHERE " + strings.Join(conditions, " AND ")
 
+	// Fetch the total number of transactions from this filter
 	countQuery := `
 	SELECT COUNT(*)
 	FROM transactions t JOIN accounts a ON t.account_id = a.id
@@ -266,6 +268,7 @@ func ListAccountTransactions(
 		return totalCount, transactions, err
 	}
 
+	// List the page of transactions from this filter
 	listTranQuery := `
 	SELECT 
 		t.id, t.merchant, t.tran_description, t.category, t.amount, 

@@ -99,7 +99,7 @@ func getPrevInterval(start time.Time, end time.Time) (time.Time, time.Time) {
 }
 
 // GetChangeMap returns the map from category to the expense change percentage
-// previous period -> current period.
+// from previous period to current period.
 // If the previous expense is 0 then it's null.
 func GetChangeMap(
 	ctx context.Context, userId int64, start time.Time, end time.Time,
@@ -135,8 +135,8 @@ func GetDateToAmount(
 ) (map[string]float64, error) {
 	var dateToAmount = make(map[string]float64)
 
-	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-		dateToAmount[d.Format("2006-01-02")] = 0.0
+	for date := start; !date.After(end); date = date.AddDate(0, 0, 1) {
+		dateToAmount[date.Format("2006-01-02")] = 0.0
 	}
 
 	getDateToAmtQuery := `
@@ -176,8 +176,7 @@ func GetCategoryToAmount(
 
 	// Since there are only 10 categories, this operates in constant time
 	for _, category := range []string{
-		"Housing", "Automobile", "Medical", "Subscription",
-		"Grocery", "Dining", "Shopping", "Gas", "Others",
+		"Housing", "Automobile", "Medical", "Subscription", "Grocery", "Dining", "Shopping", "Gas", "Others",
 	} {
 		categoryToAmount[category] = 0.0
 	}

@@ -43,7 +43,6 @@ func ListBills(ctx context.Context, userId int64) ([]models.Bill, error) {
 }
 
 // CreateBill inserts the bill into the database
-// It returns not found error if bill references non-existent account
 func CreateBill(ctx context.Context, body models.BillBody) (models.Bill, error) {
 	var newBill models.Bill
 
@@ -76,14 +75,14 @@ func CreateBill(ctx context.Context, body models.BillBody) (models.Bill, error) 
 	)
 	if err := insertedBillRow.Scan(&insertedBillId); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
-			// Inserts a bill which references non-existent account
-			return newBill, fmt.Errorf("account %d not found, %w", body.AccountID, models.ErrForeignKey)
+			// Inserts a bill that references non-existent account
+			return newBill, models.GetForeignKey[models.Account](int64(body.AccountID))
 		}
 		return newBill, err
 	}
 
 	// Fetch the created bill with nested account for returning
-	newBill, err = getBillWithTx(pgTran, ctx, insertedBillId)
+	newBill, err = getBill(pgTran, ctx, insertedBillId)
 	if err != nil {
 		return newBill, err
 	}
@@ -132,11 +131,11 @@ func UpdateBill(
 		return updatedBill, err
 	}
 	if cmdTag.RowsAffected() == 0 {
-		return updatedBill, fmt.Errorf("bill %d not found, %w", id, models.ErrNotFound)
+		return updatedBill, models.GetNotFound[models.Bill](id)
 	}
 
 	// Fetch the updated bill with nested account (which might change too)
-	updatedBill, err = getBillWithTx(pgTran, ctx, id)
+	updatedBill, err = getBill(pgTran, ctx, id)
 	if err != nil {
 		return updatedBill, err
 	}
@@ -162,7 +161,7 @@ func DeleteBill(ctx context.Context, id int64, pay bool, recurring bool) error {
 	}
 
 	// Store the bill to be deleted, since its details will be used later
-	deletedBill, err := getBillWithTx(pgTran, ctx, id)
+	deletedBill, err := getBill(pgTran, ctx, id)
 	if err != nil {
 		return err
 	}
@@ -197,11 +196,10 @@ func DeleteBill(ctx context.Context, id int64, pay bool, recurring bool) error {
 			return err
 		}
 		if cmdTag.RowsAffected() == 0 {
-			return fmt.Errorf("Error creating payment for bill %d", deletedBill.ID)
+			return fmt.Errorf("error creating payment for bill %d", deletedBill.ID)
 		}
-		// Helper updateAccBalance from transaction repo
 		// Bill payment is considered expense
-		if err = updateAccountBalanceWithTx(
+		if err = updateAccountBalance(
 			pgTran, ctx, deletedBill.Account.Id, deletedBill.Amount); err != nil {
 			return err
 		}
@@ -230,7 +228,7 @@ func DeleteBill(ctx context.Context, id int64, pay bool, recurring bool) error {
 			return err
 		}
 		if cmdTag.RowsAffected() == 0 {
-			return fmt.Errorf("Error creating reccurring bill for %d", deletedBill.ID)
+			return fmt.Errorf("error reccurring bill for %d", deletedBill.ID)
 		}
 	}
 
@@ -241,13 +239,9 @@ func DeleteBill(ctx context.Context, id int64, pay bool, recurring bool) error {
 	return nil
 }
 
-// getBillWithTx returns a bill with nested account data.
-//
-// It uses transaction (not database instance) to execute SQL query because this is used with
-// other queries inside an atromic transaction.
-//
-// If bill doesn't exist, it returns a custom not found error.
-func getBillWithTx(tx pgx.Tx, ctx context.Context, id int64) (models.Bill, error) {
+// getBill returns a bill with nested account data.
+// It uses transaction to execute SQL query, used in an atromic transaction.
+func getBill(tx pgx.Tx, ctx context.Context, id int64) (models.Bill, error) {
 	var bill models.Bill
 
 	getNestedBillQuery := `
@@ -268,7 +262,7 @@ func getBillWithTx(tx pgx.Tx, ctx context.Context, id int64) (models.Bill, error
 	billRow := tx.QueryRow(ctx, getNestedBillQuery, id)
 	if err := models.ScanBill(billRow, &bill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return bill, fmt.Errorf("bill %d not found, %w", id, models.ErrNotFound)
+			return bill, models.GetNotFound[models.Bill](id)
 		}
 		return bill, err
 	}

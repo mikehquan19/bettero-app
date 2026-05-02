@@ -26,6 +26,7 @@ func FilterTransactions(
 	}
 	defer pgTran.Rollback(ctx)
 
+	// Dynamically build the filter based on values from query params
 	conditions := []string{"user_id = $1"}
 	args := []any{userId}
 	index := 2
@@ -50,6 +51,8 @@ func FilterTransactions(
 	}
 	filterPart := "WHERE " + strings.Join(conditions, " AND ")
 
+	// Fetch the total number of transactions from this filter
+	// TODO: Find a way to cache this to avoid re-computation every API call
 	countQuery := `
 	SELECT COUNT(*) 
 	FROM transactions t JOIN accounts a ON t.account_id = a.id
@@ -59,6 +62,7 @@ func FilterTransactions(
 		return totalCount, nil, err
 	}
 
+	// List the page of transactions from this filter
 	listTranQuery := `
 	SELECT
 		t.id, t.merchant, t.tran_description, t.category, t.amount, 
