@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -30,15 +33,15 @@ func ListAccounts(ctx context.Context, userId int64) ([]models.Account, error) {
 	return accounts, err
 }
 
-// GetAccount returns details of account
-// If the account doesn't exist, it returns a custom not found error
+// GetAccount returns details of account.
+// If the account doesn't exist, it returns a custom not found error.
 func GetAccount(ctx context.Context, id int64) (models.Account, error) {
 	var account models.Account
 
 	accountRow := database.QueryRow(ctx, `SELECT * FROM accounts WHERE id = $1;`, id)
 	if err := models.ScanAccount(accountRow, &account); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return account, fmt.Errorf("account %d not found, %w", id, models.ErrNotFound)
+			return account, models.GetNotFound[models.Account](id)
 		}
 		return account, err
 	}
@@ -84,8 +87,7 @@ func CreateAccount(
 	if err := models.ScanAccount(newAccRow, &newAccount); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
 			// Insert account that references non-existent user
-			fkErr := fmt.Errorf("user %d not found, %w", userId, models.ErrForeignKey)
-			return newAccount, fkErr
+			return newAccount, models.GetForeignKey[models.User](userId)
 		}
 		return newAccount, err
 	}
@@ -93,7 +95,7 @@ func CreateAccount(
 	return newAccount, nil
 }
 
-// UpdateAccount modifies the acount's details
+// UpdateAccount modifies the acount's details.
 // If balance changes, it insert a new transaction for this account that reflects the balance change.
 //
 // For credit card,
@@ -116,16 +118,16 @@ func UpdateAccount(ctx context.Context, id int64, body models.PutAccountBody) (m
 	}
 	defer pgTran.Rollback(ctx)
 
-	// Store the type and old balance of the account
+	// Store the type and previous balance of the account
 	var (
 		accType     string
 		prevBalance float64
 	)
-	getPrevAccQuery := `SELECT type, balance from accounts WHERE id = $1;`
+	getPrevAccQuery := "SELECT type, balance from accounts WHERE id = $1;"
 	prevRow := pgTran.QueryRow(ctx, getPrevAccQuery, id)
 	if err = prevRow.Scan(&accType, &prevBalance); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return updatedAccount, fmt.Errorf("account %d not found, %w", id, models.ErrNotFound)
+			return updatedAccount, models.GetNotFound[models.Account](id)
 		}
 		return updatedAccount, err
 	}
@@ -193,7 +195,7 @@ func UpdateAccount(ctx context.Context, id int64, body models.PutAccountBody) (m
 		}
 		if cmdTag.RowsAffected() == 0 {
 			// Account is found but for some reason can't be updated
-			return updatedAccount, fmt.Errorf("Error updating account %d", id)
+			return updatedAccount, fmt.Errorf("error updating account %d", id)
 		}
 	}
 
@@ -207,25 +209,67 @@ func UpdateAccount(ctx context.Context, id int64, body models.PutAccountBody) (m
 // DeleteAccount deletes the account and all of its transactions.
 // It returns a custom not found error if account doesn't exist
 func DeleteAccount(ctx context.Context, id int64) error {
-	cmdTag, err := database.Exec(ctx, `DELETE FROM accounts WHERE id = $1;`, id)
+	cmdTag, err := database.Exec(ctx, "DELETE FROM accounts WHERE id = $1;", id)
 	if err != nil {
 		return err
 	}
 	if cmdTag.RowsAffected() == 0 {
-		return fmt.Errorf("account %d not found, %w", id, models.ErrNotFound)
+		return models.GetNotFound[models.Account](id)
 	}
 
 	return err
 }
 
 // ListAccountTransactions returns the list of transactions of account
-func ListAccountTransactions(ctx context.Context, id int64, offset int64) ([]models.Transaction, error) {
+func ListAccountTransactions(
+	ctx context.Context, id int64, filter models.TransactionFilter, offset int64,
+) (int, []models.Transaction, error) {
+	var totalCount int
 	var transactions []models.Transaction
+
+	pgTran, err := database.Begin(ctx)
+	if err != nil {
+		return totalCount, nil, err
+	}
+	defer pgTran.Rollback(ctx)
+
+	conditions := []string{"a.id = $1"}
+	args := []any{id}
+	index := 2
+
+	v := reflect.ValueOf(filter)
+	for field, value := range v.Fields() {
+		if value.Kind() == reflect.String && value.String() == "" {
+			continue // Empty string
+		}
+		if value.Type() == reflect.TypeFor[*time.Time]() {
+			if timePtr, ok := value.Interface().(*time.Time); !ok || timePtr == nil {
+				continue
+			}
+			value = value.Elem() // Get the actual time value from pointer
+		}
+		conditions = append(
+			conditions,
+			fmt.Sprintf("t.%s %s $%d", field.Tag.Get("db"), field.Tag.Get("operator"), index),
+		)
+		args = append(args, value.Interface())
+		index++
+	}
+	filterPart := "WHERE " + strings.Join(conditions, " AND ")
+
+	countQuery := `
+	SELECT COUNT(*)
+	FROM transactions t JOIN accounts a ON t.account_id = a.id
+	`
+	countRow := pgTran.QueryRow(ctx, countQuery+filterPart, args...)
+	if err := countRow.Scan(&totalCount); err != nil {
+		return totalCount, transactions, err
+	}
 
 	listTranQuery := `
 	SELECT 
 		t.id, t.merchant, t.tran_description, t.category, t.amount, 
-		t.created_at, t.updated_at
+		t.created_at, t.updated_at,
 		json_build_object(
 			'id', a.id,
 			'acc_number', a.acc_number,
@@ -235,32 +279,34 @@ func ListAccountTransactions(ctx context.Context, id int64, offset int64) ([]mod
 		) AS account
 	FROM transactions t
 	JOIN accounts a ON t.account_id = a.id
-	WHERE a.id = $1
-	ORDER BY t.created_at DESC
-	LIMIT 20 
-	OFFSET $2;
 	`
-	rows, err := database.Query(ctx, listTranQuery, id, offset)
+	page := fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", index)
+	args = append(args, offset)
+
+	tranRows, err := pgTran.Query(ctx, listTranQuery+filterPart+page, args...)
 	if err != nil {
-		return transactions, err
+		return totalCount, transactions, err
+	}
+	transactions, err = pgx.CollectRows(tranRows, pgx.RowToStructByName[models.Transaction])
+	if err != nil {
+		return totalCount, transactions, err
 	}
 
-	transactions, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Transaction])
-	if err != nil {
-		return transactions, err
+	if err = pgTran.Commit(ctx); err != nil {
+		return totalCount, nil, err
 	}
 
-	return transactions, err
+	return totalCount, transactions, err
 }
 
-// updateAccountBalanceWithTx updates the balance by the net change
+// updateAccountBalance updates the balance by the net change
 //
 //   - Debit card's balance will decrease
 //   - Credit card's balance will increase
 //
 // It uses transaction to execute SQL with other queries inside transaction.
-func updateAccountBalanceWithTx(tx pgx.Tx, ctx context.Context, id int64, netChange float64) error {
-	updateAccBalQuery := `
+func updateAccountBalance(tx pgx.Tx, ctx context.Context, id int64, netChange float64) error {
+	const updateAccBalQuery = `
 	UPDATE accounts a
 	SET balance = CASE
 			WHEN type = 'Debit' THEN balance - $2
@@ -274,7 +320,7 @@ func updateAccountBalanceWithTx(tx pgx.Tx, ctx context.Context, id int64, netCha
 		return err
 	}
 	if cmdTag.RowsAffected() == 0 {
-		return fmt.Errorf("Error updating account %d", id)
+		return fmt.Errorf("error updating account %d", id)
 	}
 	return err
 }

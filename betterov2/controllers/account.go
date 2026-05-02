@@ -5,6 +5,7 @@ import (
 	"betterov2/services"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -161,7 +162,31 @@ func GetAccountTransactions(c *gin.Context) {
 		return
 	}
 
-	total, transactions, err := services.ListAccountTransactions(ctx, int64(id), int64(offset))
+	if (c.Query("start") != "") != (c.Query("end") != "") {
+		// Enforce both ends of the date parameters
+		respondError(c, http.StatusBadRequest, fmt.Errorf("Both start, & end must be specified"))
+		return
+	}
+	// Either both dates are defined or nil
+	var dates [2]*time.Time
+	for i, end := range [2]string{"start", "end"} {
+		if c.Query(end) != "" {
+			date, err := time.Parse("2006-01-02", c.Query(end))
+			if err != nil {
+				respondError(c, http.StatusBadRequest, err)
+				return
+			}
+			dates[i] = &date
+		}
+	}
+	filter := models.TransactionFilter{
+		Category:        c.Query("category"),
+		TranDescription: c.Query("description"),
+		CreatedAtFrom:   dates[0],
+		CreatedAtTo:     dates[1],
+	}
+
+	total, transactions, err := services.ListAccountTransactions(ctx, int64(id), filter, int64(offset))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return

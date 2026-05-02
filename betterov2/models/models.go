@@ -166,6 +166,13 @@ func ScanTransaction(tranRow pgx.Row, tran *Transaction) error {
 	return err
 }
 
+type TransactionFilter struct {
+	TranDescription string     `db:"tran_description" operator:"="`
+	Category        string     `db:"category" operator:"="`
+	CreatedAtFrom   *time.Time `db:"created_at" operator:">="`
+	CreatedAtTo     *time.Time `db:"created_at" operator:"<"`
+}
+
 type Bill struct {
 	ID          int           `json:"id" db:"id"`
 	Account     NestedAccount `json:"account" db:"account"`

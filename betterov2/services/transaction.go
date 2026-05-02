@@ -5,69 +5,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// ListTransactions returns list of transactions of the user from the database
-func ListTransactions(ctx context.Context, userId int64, offset int) (int, []models.Transaction, error) {
-	var totalCount int
-	var transactions []models.Transaction
-
-	pgTran, err := database.Begin(ctx)
-	if err != nil {
-		return totalCount, nil, err
-	}
-
-	countQuery := `
-	SELECT COUNT(*)
-	FROM transactions t JOIN accounts a ON t.account_id = a.id
-	WHERE a.user_id = $1;
-	`
-	countRow := pgTran.QueryRow(ctx, countQuery, userId)
-	if err := countRow.Scan(&totalCount); err != nil {
-		return totalCount, nil, err
-	}
-
-	listTranQuery := `
-	SELECT
-		t.id, t.merchant, t.tran_description, t.category, t.amount, 
-		t.created_at, t.updated_at,
-		json_build_object(
-			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
-			'institution', a.institution,
-			'type', a.type
-		) AS account
-	FROM transactions t 
-	JOIN accounts a ON t.account_id = a.id
-	WHERE a.user_id = $1
-	ORDER BY t.created_at DESC
-	LIMIT 15
-	OFFSET $2;
-	`
-	rows, err := pgTran.Query(ctx, listTranQuery, userId, offset)
-	if err != nil {
-		return totalCount, nil, err
-	}
-	transactions, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Transaction])
-	if err != nil {
-		return totalCount, nil, err
-	}
-
-	if err = pgTran.Commit(ctx); err != nil {
-		return totalCount, nil, err
-	}
-
-	return totalCount, transactions, nil
-}
-
 // FilterTransactions returns list of transactions of category between 2 dates
 func FilterTransactions(
-	ctx context.Context, userId int64, category string, start time.Time, end time.Time, offset int,
+	ctx context.Context, userId int64, filter models.TransactionFilter, offset int,
 ) (int, []models.Transaction, error) {
 	var totalCount int
 	var transactions []models.Transaction
@@ -76,15 +24,37 @@ func FilterTransactions(
 	if err != nil {
 		return totalCount, nil, err
 	}
+	defer pgTran.Rollback(ctx)
+
+	conditions := []string{"user_id = $1"}
+	args := []any{userId}
+	index := 2
+
+	v := reflect.ValueOf(filter)
+	for field, value := range v.Fields() {
+		if value.Kind() == reflect.String && value.String() == "" {
+			continue // Empty string
+		}
+		if value.Type() == reflect.TypeFor[*time.Time]() {
+			if timePtr, ok := value.Interface().(*time.Time); !ok || timePtr == nil {
+				continue
+			}
+			value = value.Elem() // Get the actual time from pointer
+		}
+		conditions = append(
+			conditions,
+			fmt.Sprintf("t.%s %s $%d", field.Tag.Get("db"), field.Tag.Get("operator"), index),
+		)
+		args = append(args, value.Interface())
+		index++
+	}
+	filterPart := "WHERE " + strings.Join(conditions, " AND ")
 
 	countQuery := `
-	SELECT COUNT(*)
+	SELECT COUNT(*) 
 	FROM transactions t JOIN accounts a ON t.account_id = a.id
-	WHERE a.user_id = $1 
-		AND t.category = $2
-		AND t.created_at >= $3 AND t.created_at < $4
 	`
-	countRow := pgTran.QueryRow(ctx, countQuery, userId, category, start, end)
+	countRow := pgTran.QueryRow(ctx, countQuery+filterPart, args...)
 	if err := countRow.Scan(&totalCount); err != nil {
 		return totalCount, nil, err
 	}
@@ -102,18 +72,15 @@ func FilterTransactions(
 		) AS account
 	FROM transactions t 
 	JOIN accounts a ON t.account_id = a.id
-	WHERE a.user_id = $1 
-		AND t.category = $2
-		AND t.created_at >= $3 AND t.created_at < $4
-	ORDER BY t.created_at DESC
-	LIMIT 15
-	OFFSET $5;
 	`
-	rows, err := pgTran.Query(ctx, listTranQuery, userId, category, start, end, offset)
+	page := fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", index)
+	args = append(args, offset)
+
+	tranRows, err := pgTran.Query(ctx, listTranQuery+filterPart+page, args...)
 	if err != nil {
 		return totalCount, nil, err
 	}
-	transactions, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Transaction])
+	transactions, err = pgx.CollectRows(tranRows, pgx.RowToStructByName[models.Transaction])
 	if err != nil {
 		return totalCount, nil, err
 	}
@@ -168,20 +135,20 @@ func CreateTransaction(ctx context.Context, body models.PostTransactionBody) (mo
 	)
 	if err = newTranRow.Scan(&transactionId); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
-			// Insert a transaction tht references non-existent account
-			return newTransaction, fmt.Errorf("account %d not found, %w", body.AccountID, models.ErrForeignKey)
+			// Insert a transaction for  non-existent account
+			return newTransaction, models.GetForeignKey[models.Account](int64(body.AccountID))
 		}
 		return newTransaction, err
 	}
 
 	// Update the account balance
 	netChange := ternary(body.Category == "Income", -body.Amount, body.Amount)
-	if err = updateAccountBalanceWithTx(pgTran, ctx, int64(body.AccountID), netChange); err != nil {
+	if err = updateAccountBalance(pgTran, ctx, int64(body.AccountID), netChange); err != nil {
 		return newTransaction, err
 	}
 
 	// Get the created transaction with nested account
-	newTransaction, err = getTransactionWithTx(pgTran, ctx, transactionId)
+	newTransaction, err = getTransaction(pgTran, ctx, transactionId)
 	if err != nil {
 		return newTransaction, err
 	}
@@ -223,7 +190,7 @@ func UpdateTransaction(ctx context.Context, id int64, body models.PutTransaction
 	if err = prevRow.Scan(&prevCategory, &prevAmount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Update a non-existent transaction
-			return updatedTransaction, fmt.Errorf("transaction %d not found, %w", id, models.ErrNotFound)
+			return updatedTransaction, models.GetNotFound[models.Transaction](id)
 		}
 		return updatedTransaction, err
 	}
@@ -256,13 +223,13 @@ func UpdateTransaction(ctx context.Context, id int64, body models.PutTransaction
 	// Compute the amount to update the account balance
 	prevChange := ternary(prevCategory == "Income", -prevAmount, prevAmount)
 	currChange := ternary(body.Category == "Income", -body.Amount, body.Amount)
-	err = updateAccountBalanceWithTx(pgTran, ctx, accountId, currChange-prevChange)
+	err = updateAccountBalance(pgTran, ctx, accountId, currChange-prevChange)
 	if err != nil {
 		return updatedTransaction, err
 	}
 
 	// Get the updated transaction with nested account
-	updatedTransaction, err = getTransactionWithTx(pgTran, ctx, id)
+	updatedTransaction, err = getTransaction(pgTran, ctx, id)
 	if err != nil {
 		return updatedTransaction, err
 	}
@@ -304,14 +271,14 @@ func DeleteTransaction(ctx context.Context, id int64) error {
 	deletedTranRow := pgTran.QueryRow(ctx, deleteTranQuery, id)
 	if err = deletedTranRow.Scan(&accountId, &category, &amount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("transaction %d not found, %w", id, models.ErrNotFound)
+			return models.GetNotFound[models.Transaction](id)
 		}
 		return err
 	}
 
 	// Reverse the effect of creating the transaction
 	netChange := ternary(category == "Income", amount, -amount)
-	if err = updateAccountBalanceWithTx(pgTran, ctx, accountId, netChange); err != nil {
+	if err = updateAccountBalance(pgTran, ctx, accountId, netChange); err != nil {
 		return err
 	}
 
@@ -322,11 +289,9 @@ func DeleteTransaction(ctx context.Context, id int64) error {
 	return nil
 }
 
-// getTransactionWithTx returns a transaction with nested account data.
-//
-// It uses transaction (not database) to execute SQL query because this is used with
-// other queries inside an atromic transaction.
-func getTransactionWithTx(tx pgx.Tx, ctx context.Context, id int64) (models.Transaction, error) {
+// getTransaction returns a transaction with nested account data.
+// It uses transaction to execute SQL query with other queries.
+func getTransaction(tx pgx.Tx, ctx context.Context, id int64) (models.Transaction, error) {
 	var transaction models.Transaction
 
 	getTranQuery := `
@@ -348,7 +313,7 @@ func getTransactionWithTx(tx pgx.Tx, ctx context.Context, id int64) (models.Tran
 	tranRow := tx.QueryRow(ctx, getTranQuery, id)
 	if err := models.ScanTransaction(tranRow, &transaction); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return transaction, fmt.Errorf("transaction %d not found, %w", id, models.ErrNotFound)
+			return transaction, models.GetNotFound[models.Transaction](id)
 		}
 		return transaction, err
 	}

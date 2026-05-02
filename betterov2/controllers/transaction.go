@@ -21,42 +21,41 @@ func GetTransactions(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	var total int
-	var transactions []models.Transaction
-
 	offset, err := getOffset(c)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
-	if c.Query("category") != "" && c.Query("start") != "" && c.Query("end") != "" {
-		// Enforce all parameters if user wants to filter transactions
-		category := c.Query("category")
-		var dates [2]time.Time
-		for i, end := range [2]string{"start", "end"} {
-			dates[i], err = time.Parse("2006-01-02", c.Query(end))
+
+	if (c.Query("start") != "") != (c.Query("end") != "") {
+		// Enforce both ends of the date parameters
+		respondError(c, http.StatusBadRequest, fmt.Errorf("Both start, & end must be specified"))
+		return
+	}
+	// Either both dates are defined or nil
+	var dates [2]*time.Time
+	for i, end := range [2]string{"start", "end"} {
+		if c.Query(end) != "" {
+			date, err := time.Parse("2006-01-02", c.Query(end))
 			if err != nil {
 				respondError(c, http.StatusBadRequest, err)
 				return
 			}
+			dates[i] = &date
 		}
-		total, transactions, err = services.FilterTransactions(ctx, UserID, category, dates[0], dates[1], offset)
-		if err != nil {
-			respondError(c, http.StatusInternalServerError, err)
-			return
-		}
-	} else {
-		if c.Query("category") != "" || c.Query("start") != "" || c.Query("end") != "" {
-			err = fmt.Errorf("Filter requires category, start, & end together")
-			respondError(c, http.StatusBadRequest, err)
-			return
-		}
-		// Otherwise, list the latest transaction
-		total, transactions, err = services.ListTransactions(ctx, UserID, offset)
-		if err != nil {
-			respondError(c, http.StatusInternalServerError, err)
-			return
-		}
+	}
+	filter := models.TransactionFilter{
+		Category:        c.Query("category"),
+		TranDescription: c.Query("description"),
+		CreatedAtFrom:   dates[0],
+		CreatedAtTo:     dates[1],
+	}
+
+	// Filter transactions based on category, and dates
+	total, transactions, err := services.FilterTransactions(ctx, UserID, filter, offset)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err)
+		return
 	}
 
 	paginatedResponse := models.PaginatedResponse[models.Transaction]{
