@@ -50,6 +50,7 @@ func CreateBill(ctx context.Context, body models.BillBody) (models.Bill, error) 
 	if err != nil {
 		return newBill, err
 	}
+	defer pgTran.Rollback(ctx)
 
 	// Insert the bill into the database and obtains the bill's Id
 	var insertedBillId int64
@@ -106,6 +107,7 @@ func UpdateBill(
 	if err != nil {
 		return updatedBill, err
 	}
+	defer pgTran.Rollback(ctx)
 
 	// Update the bill
 	updateBillQuery := `
@@ -159,6 +161,7 @@ func DeleteBill(ctx context.Context, id int64, pay bool, recurring bool) error {
 	if err != nil {
 		return err
 	}
+	defer pgTran.Rollback(ctx)
 
 	// Store the bill to be deleted, since its details will be used later
 	deletedBill, err := getBill(pgTran, ctx, id)
