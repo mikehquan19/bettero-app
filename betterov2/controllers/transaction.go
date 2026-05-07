@@ -14,6 +14,26 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GET: /autocomplete?q=
+//
+// Return the list of descriptions suggested from keyword
+func SearchTransactions(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	if c.Query("q") == "" {
+		respondError(c, http.StatusBadRequest, fmt.Errorf("q must be specified"))
+		return
+	}
+
+	suggestions, err := services.ListSuggestions(ctx, UserID, c.Query("q"))
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err)
+		return
+	}
+	respondSuccess(c, http.StatusOK, suggestions)
+}
+
 // GET: /transactions
 //
 // Return the paginated list of latest transactions of the user
@@ -47,6 +67,7 @@ func GetTransactions(c *gin.Context) {
 	filter := models.TransactionFilter{
 		Category:        c.Query("category"),
 		TranDescription: c.Query("description"),
+		Merchant:        c.Query("merchant"),
 		CreatedAtFrom:   dates[0],
 		CreatedAtTo:     dates[1],
 	}

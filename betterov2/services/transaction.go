@@ -13,6 +13,60 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// ListSuggestions returns the list of transaction description
+func ListSuggestions(ctx context.Context, userId int64, q string) ([]models.Suggestion, error) {
+	pgTran, err := database.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer pgTran.Rollback(ctx)
+
+	// Set the threshold per query since this is session-scoped
+	_, err = pgTran.Exec(ctx, "SET pg_trgm.similarity_threshold = 0.2;")
+	if err != nil {
+		return nil, err
+	}
+
+	autocompleteSearchQuery := `
+	SELECT type, name
+	FROM (
+		SELECT DISTINCT
+			'description' AS type,
+			t.tran_description AS name,
+			similarity(t.tran_description, $2) AS score
+		FROM transactions t
+		JOIN accounts a ON t.account_id = a.id
+		WHERE t.tran_description % $2 AND a.user_id = $1
+
+		UNION ALL
+
+		SELECT DISTINCT
+			'merchant' AS type,
+			t.merchant AS name,
+			similarity(t.merchant, $2) AS score
+		FROM transactions t
+		JOIN accounts a ON t.account_id = a.id
+		WHERE t.merchant % $2 AND a.user_id = $1
+	)
+	ORDER BY score DESC
+	LIMIT 10;
+	`
+	rows, err := pgTran.Query(ctx, autocompleteSearchQuery, userId, q)
+	if err != nil {
+		return nil, err
+	}
+	suggestions, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Suggestion])
+	if err != nil {
+		return nil, err
+	}
+
+	if err = pgTran.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return suggestions, nil
+}
+
 // FilterTransactions returns list of transactions of category between 2 dates
 func FilterTransactions(
 	ctx context.Context, userId int64, filter models.TransactionFilter, offset int,
@@ -34,13 +88,13 @@ func FilterTransactions(
 	v := reflect.ValueOf(filter)
 	for field, value := range v.Fields() {
 		if value.Kind() == reflect.String && value.String() == "" {
-			continue // Empty string
+			continue
 		}
 		if value.Type() == reflect.TypeFor[*time.Time]() {
-			if timePtr, ok := value.Interface().(*time.Time); !ok || timePtr == nil {
+			if ptr, ok := value.Interface().(*time.Time); !ok || ptr == nil {
 				continue
 			}
-			value = value.Elem() // Get the actual time from pointer
+			value = value.Elem()
 		}
 		conditions = append(
 			conditions,
@@ -52,7 +106,6 @@ func FilterTransactions(
 	filterPart := "WHERE " + strings.Join(conditions, " AND ")
 
 	// Fetch the total number of transactions from this filter
-	// TODO: Find a way to cache this to avoid re-computation every API call
 	countQuery := `
 	SELECT COUNT(*) 
 	FROM transactions t JOIN accounts a ON t.account_id = a.id
@@ -65,7 +118,8 @@ func FilterTransactions(
 	// List the page of transactions from this filter
 	listTranQuery := `
 	SELECT
-		t.id, t.merchant, t.tran_description, t.category, t.amount, 
+		t.id, 
+		t.merchant, t.tran_description, t.category, t.amount, 
 		t.created_at, t.updated_at,
 		json_build_object(
 			'id', a.id,
@@ -97,7 +151,6 @@ func FilterTransactions(
 }
 
 // CreateTransaction inserts transaction into the database, and update the account's balance.
-// If transaction references a non-existent account, it throws a custom not found error
 //
 // For an income transaction, by transaction amount:
 //   - Debit card's balance will increase (income check, tax refund, allowance, etc)
@@ -139,7 +192,7 @@ func CreateTransaction(ctx context.Context, body models.PostTransactionBody) (mo
 	)
 	if err = newTranRow.Scan(&transactionId); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
-			// Insert a transaction for  non-existent account
+			// Insert a transaction for non-existent account
 			return newTransaction, models.GetForeignKey[models.Account](int64(body.AccountID))
 		}
 		return newTransaction, err
@@ -165,7 +218,6 @@ func CreateTransaction(ctx context.Context, body models.PostTransactionBody) (mo
 }
 
 // UpateTransaction updates the transaction's info and update the account's balance.
-// If transaction doesn't exist, it returns a custom not found error
 //
 // Net change to be updated is computed as follows:
 //
@@ -182,7 +234,7 @@ func UpdateTransaction(ctx context.Context, id int64, body models.PutTransaction
 	}
 	defer pgTran.Rollback(ctx)
 
-	// Store the previous attributes before updating
+	// Store the previous category and amount before updating
 	var (
 		prevCategory string
 		prevAmount   float64
@@ -246,7 +298,6 @@ func UpdateTransaction(ctx context.Context, id int64, body models.PutTransaction
 }
 
 // DeleteTransaction deletes the transaction from database and update balance.
-// If transaction doesn't exist, it returns a custom not found error.
 //
 // For an income transaction,
 //   - Debit card's balance will decrease (income check, tax refund, allowance, etc)

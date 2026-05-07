@@ -244,7 +244,7 @@ func ListAccountTransactions(
 			continue // Empty string
 		}
 		if value.Type() == reflect.TypeFor[*time.Time]() {
-			if timePtr, ok := value.Interface().(*time.Time); !ok || timePtr == nil {
+			if ptr, ok := value.Interface().(*time.Time); !ok || ptr == nil {
 				continue
 			}
 			value = value.Elem() // Get the actual time value from pointer
@@ -271,7 +271,8 @@ func ListAccountTransactions(
 	// List the page of transactions from this filter
 	listTranQuery := `
 	SELECT 
-		t.id, t.merchant, t.tran_description, t.category, t.amount, 
+		t.id, 
+		t.merchant, t.tran_description, t.category, t.amount, 
 		t.created_at, t.updated_at,
 		json_build_object(
 			'id', a.id,

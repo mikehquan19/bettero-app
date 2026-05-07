@@ -13,4 +13,5 @@ func RegisterTransactionRoutes(router *gin.Engine) {
 	tranGroup.POST("", controllers.PostTransaction)
 	tranGroup.PUT("/:id", controllers.PutTransaction)
 	tranGroup.DELETE("/:id", controllers.DeleteTransaction)
+	tranGroup.GET("/autocomplete", controllers.SearchTransactions)
 }

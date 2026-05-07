@@ -167,8 +167,9 @@ func ScanTransaction(tranRow pgx.Row, tran *Transaction) error {
 }
 
 type TransactionFilter struct {
-	TranDescription string     `db:"tran_description" operator:"="`
 	Category        string     `db:"category" operator:"="`
+	Merchant        string     `db:"merchant" operator:"="`
+	TranDescription string     `db:"tran_description" operator:"="`
 	CreatedAtFrom   *time.Time `db:"created_at" operator:">="`
 	CreatedAtTo     *time.Time `db:"created_at" operator:"<"`
 }
@@ -258,4 +259,10 @@ type BudgetPlan struct {
 	CategoryPortion map[string]float64 `json:"category_portion" db:"category_portion"`
 	CreatedAt       time.Time          `json:"created_at"`
 	UpdatedAt       time.Time          `json:"updated_at"`
+}
+
+// The overal result of the autocomplete search
+type Suggestion struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
 }
