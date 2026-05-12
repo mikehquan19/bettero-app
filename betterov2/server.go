@@ -1,6 +1,7 @@
 package main
 
 import (
+	"betterov2/controllers"
 	"betterov2/routes"
 	"betterov2/services"
 	"betterov2/setup"
@@ -17,8 +18,18 @@ func main() {
 
 	router := gin.Default()
 
-	var database *pgxpool.Pool = setup.ConnectDB()
-	accountService := services.NewAccountService(database)
+	var db *pgxpool.Pool = setup.ConnectDB()
+
+	// Dependency injection
+	accountService := services.NewAccountService(db)
+	transactionService := services.NewTransactionService(db)
+	billService := services.NewBillService(db)
+	summaryService := services.NewSummaryService(db)
+
+	accountController := controllers.NewAccountController(accountService)
+	transactionController := controllers.NewTransactionController(transactionService)
+	billController := controllers.NewBillController(billService)
+	summaryController := controllers.NewSummaryController(summaryService)
 
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},
@@ -29,10 +40,10 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	routes.RegisterAccountRoutes(router, accountService)
-	routes.RegisterTransactionRoutes(router)
-	routes.RegisterSummaryRoutes(router)
-	routes.RegisterBillRoutes(router)
+	routes.RegisterAccountRoutes(router, accountController)
+	routes.RegisterTransactionRoutes(router, transactionController)
+	routes.RegisterSummaryRoutes(router, summaryController)
+	routes.RegisterBillRoutes(router, billController)
 
 	router.Run(":8080")
 }

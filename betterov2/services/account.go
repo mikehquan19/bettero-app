@@ -17,13 +17,13 @@ import (
 
 // Account Service
 type AccountService struct {
-	db *pgxpool.Pool
+	database *pgxpool.Pool
 }
 
 // Generate a new account service
-func NewAccountService(db *pgxpool.Pool) *AccountService {
+func NewAccountService(database *pgxpool.Pool) *AccountService {
 	return &AccountService{
-		db: db,
+		database: database,
 	}
 }
 
@@ -31,10 +31,8 @@ func NewAccountService(db *pgxpool.Pool) *AccountService {
 func (s *AccountService) ListAccounts(ctx context.Context, userId int64) ([]models.Account, error) {
 	var accounts []models.Account
 
-	getAccQuery := `
-	SELECT * FROM accounts WHERE user_id = $1 ORDER BY updated_at DESC;
-	`
-	rows, err := s.db.Query(ctx, getAccQuery, userId)
+	getAccQuery := "SELECT * FROM accounts WHERE user_id = $1 ORDER BY updated_at DESC;"
+	rows, err := s.database.Query(ctx, getAccQuery, userId)
 	if err != nil {
 		return accounts, err
 	}
@@ -51,7 +49,7 @@ func (s *AccountService) ListAccounts(ctx context.Context, userId int64) ([]mode
 func (s *AccountService) GetAccount(ctx context.Context, id int64) (models.Account, error) {
 	var account models.Account
 
-	accountRow := s.db.QueryRow(ctx, "SELECT * FROM accounts WHERE id = $1;", id)
+	accountRow := s.database.QueryRow(ctx, "SELECT * FROM accounts WHERE id = $1;", id)
 	if err := models.ScanAccount(accountRow, &account); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return account, models.GetNotFound[models.Account](id)
@@ -87,7 +85,7 @@ func (s *AccountService) CreateAccount(
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	RETURNING *;
 	`
-	newAccRow := s.db.QueryRow(ctx, insertAccQuery,
+	newAccRow := s.database.QueryRow(ctx, insertAccQuery,
 		userId,
 		body.AccNumber,
 		body.AccName,
@@ -127,7 +125,7 @@ func (s *AccountService) UpdateAccount(
 	var updatedAccount models.Account
 
 	// Wrap a transaction around multiple sql queries
-	pgTran, err := s.db.Begin(ctx)
+	pgTran, err := s.database.Begin(ctx)
 	if err != nil {
 		return updatedAccount, err
 	}
@@ -221,7 +219,7 @@ func (s *AccountService) UpdateAccount(
 
 // DeleteAccount deletes the account and all of its transactions.
 func (s *AccountService) DeleteAccount(ctx context.Context, id int64) error {
-	cmdTag, err := s.db.Exec(ctx, "DELETE FROM accounts WHERE id = $1;", id)
+	cmdTag, err := s.database.Exec(ctx, "DELETE FROM accounts WHERE id = $1;", id)
 	if err != nil {
 		return err
 	}
@@ -239,7 +237,7 @@ func (s *AccountService) ListAccountTransactions(
 	var totalCount int
 	var transactions []models.Transaction
 
-	pgTran, err := s.db.Begin(ctx)
+	pgTran, err := s.database.Begin(ctx)
 	if err != nil {
 		return totalCount, nil, err
 	}
@@ -261,11 +259,11 @@ func (s *AccountService) ListAccountTransactions(
 			}
 			value = value.Elem()
 		}
-		db := field.Tag.Get("db")
+		col := field.Tag.Get("db")
 		op := field.Tag.Get("operator")
 		conditions = append(
 			conditions,
-			fmt.Sprintf("t.%s %s $%d", db, op, index),
+			fmt.Sprintf("t.%s %s $%d", col, op, index),
 		)
 		args = append(args, value.Interface())
 		index++
@@ -317,13 +315,13 @@ func (s *AccountService) ListAccountTransactions(
 	return totalCount, transactions, err
 }
 
-// updateAccountBalance updates the balance by the net change
+// Helper function: updateAccountBalance updates the balance by the net change
 //
 //   - Debit card's balance will decrease
 //   - Credit card's balance will increase
 //
 // It uses transaction to execute SQL with other queries inside transaction.
-func updateAccountBalance(tx pgx.Tx, ctx context.Context, id int64, netChange float64) error {
+func updateAccountBalance(ctx context.Context, tx pgx.Tx, id int64, netChange float64) error {
 	const updateAccBalQuery = `
 	UPDATE accounts a
 	SET balance = CASE

@@ -11,11 +11,26 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Transaction Service
+type TransactionService struct {
+	database *pgxpool.Pool
+}
+
+// Generate a new transaction service
+func NewTransactionService(database *pgxpool.Pool) *TransactionService {
+	return &TransactionService{
+		database: database,
+	}
+}
+
 // ListSuggestions returns the list of transaction description
-func ListSuggestions(ctx context.Context, userId int64, q string) ([]models.Suggestion, error) {
-	pgTran, err := database.Begin(ctx)
+func (s *TransactionService) ListSuggestions(ctx context.Context, userId int64, q string) ([]models.Suggestion, error) {
+	var suggestions []models.Suggestion
+
+	pgTran, err := s.database.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +42,7 @@ func ListSuggestions(ctx context.Context, userId int64, q string) ([]models.Sugg
 		return nil, err
 	}
 
-	autocompleteSearchQuery := `
+	autocompleteQuery := `
 	SELECT type, name
 	FROM (
 		SELECT DISTINCT
@@ -51,11 +66,11 @@ func ListSuggestions(ctx context.Context, userId int64, q string) ([]models.Sugg
 	ORDER BY score DESC
 	LIMIT 10;
 	`
-	rows, err := pgTran.Query(ctx, autocompleteSearchQuery, userId, q)
+	rows, err := pgTran.Query(ctx, autocompleteQuery, userId, q)
 	if err != nil {
 		return nil, err
 	}
-	suggestions, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Suggestion])
+	suggestions, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Suggestion])
 	if err != nil {
 		return nil, err
 	}
@@ -68,13 +83,13 @@ func ListSuggestions(ctx context.Context, userId int64, q string) ([]models.Sugg
 }
 
 // FilterTransactions returns list of transactions of category between 2 dates
-func FilterTransactions(
-	ctx context.Context, userId int64, filter models.TransactionFilter, offset int,
+func (s *TransactionService) FilterTransactions(
+	ctx context.Context, userId int64, tranFilter models.TransactionFilter, offset int,
 ) (int, []models.Transaction, error) {
 	var totalCount int
 	var transactions []models.Transaction
 
-	pgTran, err := database.Begin(ctx)
+	pgTran, err := s.database.Begin(ctx)
 	if err != nil {
 		return totalCount, nil, err
 	}
@@ -85,7 +100,7 @@ func FilterTransactions(
 	args := []any{userId}
 	index := 2
 
-	v := reflect.ValueOf(filter)
+	v := reflect.ValueOf(tranFilter)
 	for field, value := range v.Fields() {
 		if value.Kind() == reflect.String && value.String() == "" {
 			continue
@@ -96,21 +111,24 @@ func FilterTransactions(
 			}
 			value = value.Elem()
 		}
+		col := field.Tag.Get("db")
+		op := field.Tag.Get("operator")
 		conditions = append(
 			conditions,
-			fmt.Sprintf("t.%s %s $%d", field.Tag.Get("db"), field.Tag.Get("operator"), index),
+			fmt.Sprintf("t.%s %s $%d", col, op, index),
 		)
 		args = append(args, value.Interface())
 		index++
 	}
-	filterPart := "WHERE " + strings.Join(conditions, " AND ")
+	filter := "WHERE " + strings.Join(conditions, " AND ")
 
 	// Fetch the total number of transactions from this filter
 	countQuery := `
 	SELECT COUNT(*) 
-	FROM transactions t JOIN accounts a ON t.account_id = a.id
+	FROM transactions t 
+	JOIN accounts a ON t.account_id = a.id
 	`
-	countRow := pgTran.QueryRow(ctx, countQuery+filterPart, args...)
+	countRow := pgTran.QueryRow(ctx, countQuery+filter, args...)
 	if err := countRow.Scan(&totalCount); err != nil {
 		return totalCount, nil, err
 	}
@@ -134,7 +152,7 @@ func FilterTransactions(
 	page := fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", index)
 	args = append(args, offset)
 
-	tranRows, err := pgTran.Query(ctx, listTranQuery+filterPart+page, args...)
+	tranRows, err := pgTran.Query(ctx, listTranQuery+filter+page, args...)
 	if err != nil {
 		return totalCount, nil, err
 	}
@@ -159,10 +177,10 @@ func FilterTransactions(
 // For an expense transaction, by transaction amount:
 //   - Debit card's balance will decrease
 //   - Credit card's balance will increase
-func CreateTransaction(ctx context.Context, body models.PostTransactionBody) (models.Transaction, error) {
+func (s *TransactionService) CreateTransaction(ctx context.Context, body models.PostTransactionBody) (models.Transaction, error) {
 	var newTransaction models.Transaction
 
-	pgTran, err := database.Begin(ctx)
+	pgTran, err := s.database.Begin(ctx)
 	if err != nil {
 		return newTransaction, err
 	}
@@ -200,12 +218,13 @@ func CreateTransaction(ctx context.Context, body models.PostTransactionBody) (mo
 
 	// Update the account balance
 	netChange := ternary(body.Category == "Income", -body.Amount, body.Amount)
-	if err = updateAccountBalance(pgTran, ctx, int64(body.AccountID), netChange); err != nil {
+	accId := int64(body.AccountID)
+	if err = updateAccountBalance(ctx, pgTran, accId, netChange); err != nil {
 		return newTransaction, err
 	}
 
 	// Get the created transaction with nested account
-	newTransaction, err = getTransaction(pgTran, ctx, transactionId)
+	newTransaction, err = getTransaction(ctx, pgTran, transactionId)
 	if err != nil {
 		return newTransaction, err
 	}
@@ -225,23 +244,19 @@ func CreateTransaction(ctx context.Context, body models.PostTransactionBody) (mo
 //
 //   - previous effect: amount if the transaction with previous info was deleted
 //   - current effect: amount if the transaction with updated info was inserted
-func UpdateTransaction(ctx context.Context, id int64, body models.PutTransactionBody) (models.Transaction, error) {
+func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, body models.PutTransactionBody) (models.Transaction, error) {
 	var updatedTransaction models.Transaction
 
-	pgTran, err := database.Begin(ctx)
+	pgTran, err := s.database.Begin(ctx)
 	if err != nil {
 		return updatedTransaction, err
 	}
 	defer pgTran.Rollback(ctx)
 
 	// Store the previous category and amount before updating
-	var (
-		prevCategory string
-		prevAmount   float64
-	)
-	getPrevTranQuery := `
-	SELECT category, amount from transactions WHERE id = $1;
-	`
+	var prevCategory string
+	var prevAmount float64
+	getPrevTranQuery := "SELECT category, amount from transactions WHERE id = $1;"
 	prevRow := pgTran.QueryRow(ctx, getPrevTranQuery, id)
 	if err = prevRow.Scan(&prevCategory, &prevAmount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -279,13 +294,13 @@ func UpdateTransaction(ctx context.Context, id int64, body models.PutTransaction
 	// Compute the amount to update the account balance
 	prevChange := ternary(prevCategory == "Income", -prevAmount, prevAmount)
 	currChange := ternary(body.Category == "Income", -body.Amount, body.Amount)
-	err = updateAccountBalance(pgTran, ctx, accountId, currChange-prevChange)
+	err = updateAccountBalance(ctx, pgTran, accountId, currChange-prevChange)
 	if err != nil {
 		return updatedTransaction, err
 	}
 
 	// Get the updated transaction with nested account
-	updatedTransaction, err = getTransaction(pgTran, ctx, id)
+	updatedTransaction, err = getTransaction(ctx, pgTran, id)
 	if err != nil {
 		return updatedTransaction, err
 	}
@@ -306,19 +321,18 @@ func UpdateTransaction(ctx context.Context, id int64, body models.PutTransaction
 // For an expense transaction,
 //   - Debit card's balance will increase
 //   - Credit card's balance will decrease
-func DeleteTransaction(ctx context.Context, id int64) error {
-	pgTran, err := database.Begin(ctx)
+func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) error {
+	pgTran, err := s.database.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer pgTran.Rollback(ctx)
 
 	// Delete the transaction with a given Id
-	var (
-		accountId int64
-		category  string
-		amount    float64
-	)
+	// Return account's info, category, and amount to update the acount
+	var accountId int64
+	var category string
+	var amount float64
 	deleteTranQuery := `
 	DELETE FROM transactions WHERE id = $1 
 	RETURNING account_id, category, amount;
@@ -333,7 +347,7 @@ func DeleteTransaction(ctx context.Context, id int64) error {
 
 	// Reverse the effect of creating the transaction
 	netChange := ternary(category == "Income", amount, -amount)
-	if err = updateAccountBalance(pgTran, ctx, accountId, netChange); err != nil {
+	if err = updateAccountBalance(ctx, pgTran, accountId, netChange); err != nil {
 		return err
 	}
 
@@ -344,11 +358,10 @@ func DeleteTransaction(ctx context.Context, id int64) error {
 	return nil
 }
 
-// getTransaction returns a transaction with nested account data.
+// Helper function: getTransaction returns a transaction with nested account data.
 // It uses transaction to execute SQL query with other queries.
-func getTransaction(tx pgx.Tx, ctx context.Context, id int64) (models.Transaction, error) {
+func getTransaction(ctx context.Context, tx pgx.Tx, id int64) (models.Transaction, error) {
 	var transaction models.Transaction
-
 	getTranQuery := `
 	SELECT
 		t.id,

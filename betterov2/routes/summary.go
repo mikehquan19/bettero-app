@@ -6,8 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterSummaryRoutes(router *gin.Engine) {
+func RegisterSummaryRoutes(router *gin.Engine, s *controllers.SummaryController) {
 	summaryGroup := router.Group("/summary")
 
-	summaryGroup.GET("", controllers.GetSummary)
+	summaryGroup.GET("", s.GetSummary)
 }

@@ -13,14 +13,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type BillController struct {
+	service *services.BillService
+}
+
+func NewBillController(s *services.BillService) *BillController {
+	return &BillController{
+		service: s,
+	}
+}
+
 // GET: /bills
 //
 // Return the list of bills of the user
-func GetBills(c *gin.Context) {
+func (t *BillController) GetBills(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	bills, err := services.ListBills(ctx, UserID)
+	bills, err := t.service.ListBills(ctx, UserID)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -32,7 +42,7 @@ func GetBills(c *gin.Context) {
 // POST: /bills
 //
 // Create the new bill of the account
-func PostBill(c *gin.Context) {
+func (t *BillController) PostBill(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
@@ -42,7 +52,7 @@ func PostBill(c *gin.Context) {
 		return
 	}
 
-	newBill, err := services.CreateBill(ctx, body)
+	newBill, err := t.service.CreateBill(ctx, body)
 	if err != nil {
 		if errors.Is(err, models.ErrForeignKey) {
 			respondError(c, http.StatusNotFound, err)
@@ -58,7 +68,7 @@ func PostBill(c *gin.Context) {
 // PUT: /bills/:id
 //
 // Update the bill's details with the given Id
-func PutBill(c *gin.Context) {
+func (t *BillController) PutBill(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
@@ -74,7 +84,7 @@ func PutBill(c *gin.Context) {
 		return
 	}
 
-	updatedBill, err := services.UpdateBill(ctx, int64(id), body)
+	updatedBill, err := t.service.UpdateBill(ctx, int64(id), body)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
@@ -90,7 +100,7 @@ func PutBill(c *gin.Context) {
 // DELETE: /bill/:id
 //
 // Delete the bill with given ID
-func DeleteBill(c *gin.Context) {
+func (t *BillController) DeleteBill(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
@@ -101,12 +111,14 @@ func DeleteBill(c *gin.Context) {
 	}
 
 	var pay, recurring bool
+	// Specify if the user pays the bill or just deletes
 	if c.Query("pay") != "" {
 		recurring, err = strconv.ParseBool(c.Query("recurring"))
 		if err != nil {
 			respondError(c, http.StatusBadRequest, err)
 		}
 	}
+	// Specify if the user want the bill to recur
 	if c.Query("recurring") != "" {
 		recurring, err = strconv.ParseBool(c.Query("recurring"))
 		if err != nil {
@@ -114,7 +126,7 @@ func DeleteBill(c *gin.Context) {
 		}
 	}
 
-	if err := services.DeleteBill(ctx, int64(id), pay, recurring); err != nil {
+	if err := t.service.DeleteBill(ctx, int64(id), pay, recurring); err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 		} else {

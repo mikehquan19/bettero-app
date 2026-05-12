@@ -10,9 +10,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type SummaryController struct {
+	service *services.SummaryService
+}
+
+func NewSummaryController(s *services.SummaryService) *SummaryController {
+	return &SummaryController{
+		service: s,
+	}
+}
+
 // GET: /summary
-func GetSummary(c *gin.Context) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+func (s *SummaryController) GetSummary(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
 
 	var dates [2]time.Time
@@ -25,25 +35,25 @@ func GetSummary(c *gin.Context) {
 		}
 	}
 
-	basic, err := services.GetBasicAnalysis(ctx, UserID, dates[0], dates[1])
+	basic, err := s.service.GetBasicAnalysis(ctx, UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	daily, err := services.GetDateToAmount(ctx, UserID, dates[0], dates[1])
+	daily, err := s.service.GetDateToAmount(ctx, UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	composition, err := services.GetCompositionMap(ctx, UserID, dates[0], dates[1])
+	composition, err := s.service.GetCompositionMap(ctx, UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	change, err := services.GetChangeMap(ctx, UserID, dates[0], dates[1])
+	change, err := s.service.GetChangeMap(ctx, UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return

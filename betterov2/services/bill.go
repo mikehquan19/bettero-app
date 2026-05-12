@@ -8,10 +8,23 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Bill Service
+type BillService struct {
+	database *pgxpool.Pool
+}
+
+// Generate a new bill service
+func NewBillService(database *pgxpool.Pool) *BillService {
+	return &BillService{
+		database: database,
+	}
+}
+
 // ListBills gets the list of bills orded by its due date
-func ListBills(ctx context.Context, userId int64) ([]models.Bill, error) {
+func (s *BillService) ListBills(ctx context.Context, userId int64) ([]models.Bill, error) {
 	var bills []models.Bill
 
 	listBillQuery := `
@@ -29,7 +42,7 @@ func ListBills(ctx context.Context, userId int64) ([]models.Bill, error) {
 	WHERE a.user_id = $1
 	ORDER BY b.due_date ASC;
 	`
-	billRows, err := database.Query(ctx, listBillQuery, userId)
+	billRows, err := s.database.Query(ctx, listBillQuery, userId)
 	if err != nil {
 		return bills, err
 	}
@@ -43,10 +56,10 @@ func ListBills(ctx context.Context, userId int64) ([]models.Bill, error) {
 }
 
 // CreateBill inserts the bill into the database
-func CreateBill(ctx context.Context, body models.BillBody) (models.Bill, error) {
+func (s *BillService) CreateBill(ctx context.Context, body models.BillBody) (models.Bill, error) {
 	var newBill models.Bill
 
-	pgTran, err := database.Begin(ctx)
+	pgTran, err := s.database.Begin(ctx)
 	if err != nil {
 		return newBill, err
 	}
@@ -77,13 +90,14 @@ func CreateBill(ctx context.Context, body models.BillBody) (models.Bill, error) 
 	if err := insertedBillRow.Scan(&insertedBillId); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
 			// Inserts a bill that references non-existent account
-			return newBill, models.GetForeignKey[models.Account](int64(body.AccountID))
+			accId := int64(body.AccountID)
+			return newBill, models.GetForeignKey[models.Account](accId)
 		}
 		return newBill, err
 	}
 
 	// Fetch the created bill with nested account for returning
-	newBill, err = getBill(pgTran, ctx, insertedBillId)
+	newBill, err = getBill(ctx, pgTran, insertedBillId)
 	if err != nil {
 		return newBill, err
 	}
@@ -98,12 +112,12 @@ func CreateBill(ctx context.Context, body models.BillBody) (models.Bill, error) 
 // UpdateBill modifies the bill info.
 // Change of account's Id mean that a different account will be responsible for paying for bill
 // when it's due and is deleted from the database.
-func UpdateBill(
+func (s *BillService) UpdateBill(
 	ctx context.Context, id int64, body models.BillBody,
 ) (models.Bill, error) {
 	var updatedBill models.Bill
 
-	pgTran, err := database.Begin(ctx)
+	pgTran, err := s.database.Begin(ctx)
 	if err != nil {
 		return updatedBill, err
 	}
@@ -137,7 +151,7 @@ func UpdateBill(
 	}
 
 	// Fetch the updated bill with nested account (which might change too)
-	updatedBill, err = getBill(pgTran, ctx, id)
+	updatedBill, err = getBill(ctx, pgTran, id)
 	if err != nil {
 		return updatedBill, err
 	}
@@ -156,19 +170,19 @@ func UpdateBill(
 //
 // The created transaction has the same account's Id, category, and amount as the bill.
 // The paying account's balance also updates to reflect the transaction.
-func DeleteBill(ctx context.Context, id int64, pay bool, recurring bool) error {
-	pgTran, err := database.Begin(ctx)
+func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurring bool) error {
+	pgTran, err := s.database.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer pgTran.Rollback(ctx)
 
-	// Store the bill to be deleted, since its details will be used later
-	deletedBill, err := getBill(pgTran, ctx, id)
+	// Store the bill to be deleted, info will be used later
+	deletedBill, err := getBill(ctx, pgTran, id)
 	if err != nil {
 		return err
 	}
-	cmdTag, err := pgTran.Exec(ctx, `DELETE FROM bills WHERE id = $1;`, id)
+	cmdTag, err := pgTran.Exec(ctx, "DELETE FROM bills WHERE id = $1;", id)
 	if err != nil {
 		return err
 	}
@@ -202,12 +216,14 @@ func DeleteBill(ctx context.Context, id int64, pay bool, recurring bool) error {
 			return fmt.Errorf("error creating payment for bill %d", deletedBill.ID)
 		}
 		// Bill payment is considered expense
-		if err = updateAccountBalance(
-			pgTran, ctx, deletedBill.Account.Id, deletedBill.Amount); err != nil {
+		err = updateAccountBalance(
+			ctx, pgTran, deletedBill.Account.Id, deletedBill.Amount)
+		if err != nil {
 			return err
 		}
 	}
 	if recurring {
+		// Insert the recurring bill that is due next month
 		insertRecurringBillQuery := `
 		INSERT INTO bills (
 			account_id, 
@@ -242,9 +258,9 @@ func DeleteBill(ctx context.Context, id int64, pay bool, recurring bool) error {
 	return nil
 }
 
-// getBill returns a bill with nested account data.
+// Helper function: getBill returns a bill with nested account data.
 // It uses transaction to execute SQL query, used in an atromic transaction.
-func getBill(tx pgx.Tx, ctx context.Context, id int64) (models.Bill, error) {
+func getBill(ctx context.Context, tx pgx.Tx, id int64) (models.Bill, error) {
 	var bill models.Bill
 
 	getNestedBillQuery := `

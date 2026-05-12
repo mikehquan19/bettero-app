@@ -14,10 +14,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type TransactionController struct {
+	service *services.TransactionService
+}
+
+func NewTransactionController(s *services.TransactionService) *TransactionController {
+	return &TransactionController{
+		service: s,
+	}
+}
+
 // GET: /autocomplete?q=
 //
 // Return the list of descriptions suggested from keyword
-func SearchTransactions(c *gin.Context) {
+func (t *TransactionController) SearchTransactions(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
@@ -26,7 +36,7 @@ func SearchTransactions(c *gin.Context) {
 		return
 	}
 
-	suggestions, err := services.ListSuggestions(ctx, UserID, c.Query("q"))
+	suggestions, err := t.service.ListSuggestions(ctx, UserID, c.Query("q"))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -37,7 +47,7 @@ func SearchTransactions(c *gin.Context) {
 // GET: /transactions
 //
 // Return the paginated list of latest transactions of the user
-func GetTransactions(c *gin.Context) {
+func (t *TransactionController) GetTransactions(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
@@ -73,7 +83,7 @@ func GetTransactions(c *gin.Context) {
 	}
 
 	// Filter transactions based on category, and dates
-	total, transactions, err := services.FilterTransactions(ctx, UserID, filter, offset)
+	total, transactions, err := t.service.FilterTransactions(ctx, UserID, filter, offset)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -90,7 +100,7 @@ func GetTransactions(c *gin.Context) {
 // POST: /transactions/
 //
 // Create the new transaction of the account
-func PostTransaction(c *gin.Context) {
+func (t *TransactionController) PostTransaction(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
@@ -100,7 +110,7 @@ func PostTransaction(c *gin.Context) {
 		return
 	}
 
-	newTransaction, err := services.CreateTransaction(ctx, body)
+	newTransaction, err := t.service.CreateTransaction(ctx, body)
 	if err != nil {
 		if errors.Is(err, models.ErrForeignKey) {
 			respondError(c, http.StatusNotFound, err)
@@ -116,7 +126,7 @@ func PostTransaction(c *gin.Context) {
 // PUT: /transactions/:id
 //
 // Update the info of the transaction with the given id
-func PutTransaction(c *gin.Context) {
+func (t *TransactionController) PutTransaction(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
@@ -132,7 +142,7 @@ func PutTransaction(c *gin.Context) {
 		return
 	}
 
-	updatedTran, err := services.UpdateTransaction(ctx, int64(id), body)
+	updatedTran, err := t.service.UpdateTransaction(ctx, int64(id), body)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
@@ -148,7 +158,7 @@ func PutTransaction(c *gin.Context) {
 // DELETE: /transactions/:id
 //
 // Delete the transaction with given ID
-func DeleteTransaction(c *gin.Context) {
+func (t *TransactionController) DeleteTransaction(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
@@ -158,7 +168,7 @@ func DeleteTransaction(c *gin.Context) {
 		return
 	}
 
-	if err := services.DeleteTransaction(ctx, int64(id)); err != nil {
+	if err := t.service.DeleteTransaction(ctx, int64(id)); err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 		} else {

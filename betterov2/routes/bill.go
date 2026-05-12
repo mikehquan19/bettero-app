@@ -6,11 +6,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterBillRoutes(router *gin.Engine) {
+func RegisterBillRoutes(router *gin.Engine, c *controllers.BillController) {
 	billGroup := router.Group("/bills")
 
-	billGroup.GET("", controllers.GetBills)
-	billGroup.POST("", controllers.PostBill)
-	billGroup.PUT("/:id", controllers.PutBill)
-	billGroup.DELETE("/:id", controllers.DeleteBill)
+	billGroup.GET("", c.GetBills)
+	billGroup.POST("", c.PostBill)
+	billGroup.PUT("/:id", c.PutBill)
+	billGroup.DELETE("/:id", c.DeleteBill)
 }

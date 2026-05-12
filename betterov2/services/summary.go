@@ -6,10 +6,23 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// SummaryService
+type SummaryService struct {
+	database *pgxpool.Pool
+}
+
+// Generate a new summary service
+func NewSummaryService(database *pgxpool.Pool) *SummaryService {
+	return &SummaryService{
+		database: database,
+	}
+}
+
 // GetBasicAnalysis returns the basic aggregation of the user's account between 2 dates
-func GetBasicAnalysis(
+func (s *SummaryService) GetBasicAnalysis(
 	ctx context.Context, userId int64, start time.Time, end time.Time,
 ) (models.BasicAnalysis, error) {
 	var analysis models.BasicAnalysis
@@ -50,7 +63,7 @@ func GetBasicAnalysis(
 		e.total_expense
 	FROM total_balance b, total_amount_due a, total_income i, total_expense e
 	`
-	analysisRow := database.QueryRow(ctx, getAnalysisQuery, userId, start, end)
+	analysisRow := s.database.QueryRow(ctx, getAnalysisQuery, userId, start, end)
 	if err := models.ScanAnalysis(analysisRow, &analysis); err != nil {
 		return analysis, err
 	}
@@ -61,12 +74,12 @@ func GetBasicAnalysis(
 // GetCompositionMap returns the map from category of expense to its percentage vs total expense.
 // If the total expense is 0, then each category takes up 0% of the total expense.
 // It uses the total expense computed by GetBasicAnalysis for efficiency.
-func GetCompositionMap(
+func (s *SummaryService) GetCompositionMap(
 	ctx context.Context, userId int64, start time.Time, end time.Time,
 ) (map[string]float64, error) {
 	var compositionMap = make(map[string]float64)
 
-	categoryToAmount, err := GetCategoryToAmount(ctx, userId, start, end)
+	categoryToAmount, err := getCategoryToAmount(ctx, s.database, userId, start, end)
 	if err != nil {
 		return compositionMap, err
 	}
@@ -89,30 +102,21 @@ func GetCompositionMap(
 	return compositionMap, err
 }
 
-// getPrevInterval gets the previous period of the 2 dates
-func getPrevInterval(start time.Time, end time.Time) (time.Time, time.Time) {
-	if start.Day() == 1 && start.AddDate(0, 1, 0).Equal(end) {
-		return start.AddDate(0, -1, 0), end.AddDate(0, -1, 0)
-	}
-	d := end.Sub(start)
-	return start.Add(-d), end.Add(-d)
-}
-
 // GetChangeMap returns the map from category to the expense change percentage
 // from previous period to current period.
 // If the previous expense is 0 then it's null.
-func GetChangeMap(
+func (s *SummaryService) GetChangeMap(
 	ctx context.Context, userId int64, start time.Time, end time.Time,
 ) (map[string]*float64, error) {
 	var changeMap = make(map[string]*float64)
 
-	current, err := GetCategoryToAmount(ctx, userId, start, end)
+	current, err := getCategoryToAmount(ctx, s.database, userId, start, end)
 	if err != nil {
 		return changeMap, err
 	}
 
 	prevStart, prevEnd := getPrevInterval(start, end)
-	previous, err := GetCategoryToAmount(ctx, userId, prevStart, prevEnd)
+	previous, err := getCategoryToAmount(ctx, s.database, userId, prevStart, prevEnd)
 	if err != nil {
 		return changeMap, err
 	}
@@ -130,7 +134,7 @@ func GetChangeMap(
 }
 
 // GetDateToAmount returns the map from date to total expense
-func GetDateToAmount(
+func (s *SummaryService) GetDateToAmount(
 	ctx context.Context, userId int64, start time.Time, end time.Time,
 ) (map[string]float64, error) {
 	var dateToAmount = make(map[string]float64)
@@ -151,26 +155,37 @@ func GetDateToAmount(
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY date;
 	`
-	groupByDateRows, err := database.Query(ctx, getDateToAmtQuery, userId, start, end)
+	groupByDateRows, err := s.database.Query(ctx, getDateToAmtQuery, userId, start, end)
 	if err != nil {
 		return dateToAmount, err
 	}
 
-	var (
-		date   time.Time
-		amount float64
+	var date time.Time
+	var amount float64
+	pgx.ForEachRow(
+		groupByDateRows,
+		[]any{&date, &amount},
+		func() error {
+			dateToAmount[date.Format("2006-01-02")] = amount
+			return nil
+		},
 	)
-	pgx.ForEachRow(groupByDateRows, []any{&date, &amount}, func() error {
-		dateToAmount[date.Format("2006-01-02")] = amount
-		return nil
-	})
 
 	return dateToAmount, err
 }
 
-// GetCategoryToAmount returns the map from categoryto total expense
-func GetCategoryToAmount(
-	ctx context.Context, userId int64, start time.Time, end time.Time,
+// getPrevInterval gets the previous period of the 2 dates
+func getPrevInterval(start time.Time, end time.Time) (time.Time, time.Time) {
+	if start.Day() == 1 && start.AddDate(0, 1, 0).Equal(end) {
+		return start.AddDate(0, -1, 0), end.AddDate(0, -1, 0)
+	}
+	dur := end.Sub(start)
+	return start.Add(-dur), end.Add(-dur)
+}
+
+// Helper function: getCategoryToAmount returns the map from categoryto total expense
+func getCategoryToAmount(
+	ctx context.Context, db *pgxpool.Pool, userId int64, start time.Time, end time.Time,
 ) (map[string]float64, error) {
 	var categoryToAmount = make(map[string]float64)
 
@@ -193,19 +208,21 @@ func GetCategoryToAmount(
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY t.category;
 	`
-	groupByCategoryRows, err := database.Query(ctx, getCatToAmtQuery, userId, start, end)
+	groupByCategoryRows, err := db.Query(ctx, getCatToAmtQuery, userId, start, end)
 	if err != nil {
 		return categoryToAmount, err
 	}
 
-	var (
-		category string
-		amount   float64
+	var category string
+	var amount float64
+	pgx.ForEachRow(
+		groupByCategoryRows,
+		[]any{&category, &amount},
+		func() error {
+			categoryToAmount[category] = amount
+			return nil
+		},
 	)
-	pgx.ForEachRow(groupByCategoryRows, []any{&category, &amount}, func() error {
-		categoryToAmount[category] = amount
-		return nil
-	})
 
 	return categoryToAmount, err
 }
