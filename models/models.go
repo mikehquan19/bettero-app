@@ -266,3 +266,6 @@ type Suggestion struct {
 	Type string `json:"type"`
 	Name string `json:"name"`
 }
+
+type APIKey struct {
+}

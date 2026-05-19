@@ -29,3 +29,22 @@ export DATABASE_URL=<your database uri>
 goose -dir migrations postgres "$DATABASE_URL" up 
 ```
 
+# Run Docker
+To build the image for the application:
+```
+docker build --tag bettero-app .
+docker images # To see the list of images
+```
+
+To create the container fo the image:
+```
+docker run \               
+    -d \
+    -p 8080:8080 \
+    -e "DATABASE_URL=<database_uri>" \
+    --name <container's name> \
+    bettero-app
+
+docker stop <containder's name> # Stop the container
+docker start <container's name> # Start the container
+```

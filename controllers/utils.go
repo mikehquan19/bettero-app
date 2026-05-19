@@ -14,6 +14,7 @@ func respondSuccess(c *gin.Context, successCode int, data any) {
 	c.JSON(successCode, models.Response{Data: data})
 }
 
+// respondError sends response to API request that is not succesfully executed
 func respondError(c *gin.Context, errorCode int, err error) {
 	log.Println(err)
 	c.JSON(errorCode, models.Response{Err: err.Error()})
