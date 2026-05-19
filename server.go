@@ -5,6 +5,7 @@ import (
 	"betterov2/routes"
 	"betterov2/services"
 	"betterov2/setup"
+	"net/http"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -39,6 +40,13 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+
+	// Health check endpoint
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+		})
+	})
 
 	routes.RegisterAccountRoutes(router, accountController)
 	routes.RegisterTransactionRoutes(router, transactionController)
