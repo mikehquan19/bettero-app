@@ -34,7 +34,11 @@ func (s *TransactionService) ListSuggestions(ctx context.Context, userId int64, 
 	if err != nil {
 		return nil, err
 	}
-	defer pgTran.Rollback(ctx)
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Set the threshold per query since this is session-scoped
 	_, err = pgTran.Exec(ctx, "SET pg_trgm.similarity_threshold = 0.2;")
@@ -93,7 +97,11 @@ func (s *TransactionService) FilterTransactions(
 	if err != nil {
 		return totalCount, nil, err
 	}
-	defer pgTran.Rollback(ctx)
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Dynamically build the filter based on values from query params
 	conditions := []string{"user_id = $1"}
@@ -184,7 +192,11 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 	if err != nil {
 		return newTransaction, err
 	}
-	defer pgTran.Rollback(ctx)
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Insert the new transaction, get its id, category, and amount
 	var transactionId int64
@@ -251,7 +263,11 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 	if err != nil {
 		return updatedTransaction, err
 	}
-	defer pgTran.Rollback(ctx)
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Store the previous category and amount before updating
 	var prevCategory string
@@ -326,7 +342,11 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 	if err != nil {
 		return err
 	}
-	defer pgTran.Rollback(ctx)
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Delete the transaction with a given Id
 	// Return account's info, category, and amount to update the acount

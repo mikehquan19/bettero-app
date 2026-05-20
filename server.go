@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -19,7 +18,7 @@ func main() {
 
 	router := gin.Default()
 
-	var db *pgxpool.Pool = setup.ConnectDB()
+	var db = setup.ConnectDB()
 
 	// Dependency injection
 	accountService := services.NewAccountService(db)
@@ -53,5 +52,7 @@ func main() {
 	routes.RegisterSummaryRoutes(router, summaryController)
 	routes.RegisterBillRoutes(router, billController)
 
-	router.Run(":8080")
+	if err := router.Run(":8080"); err != nil {
+		panic(err)
+	}
 }

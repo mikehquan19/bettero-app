@@ -63,7 +63,11 @@ func (s *BillService) CreateBill(ctx context.Context, body models.BillBody) (mod
 	if err != nil {
 		return newBill, err
 	}
-	defer pgTran.Rollback(ctx)
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Insert the bill into the database and obtains the bill's Id
 	var insertedBillId int64
@@ -121,7 +125,11 @@ func (s *BillService) UpdateBill(
 	if err != nil {
 		return updatedBill, err
 	}
-	defer pgTran.Rollback(ctx)
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Update the bill
 	updateBillQuery := `
@@ -175,7 +183,11 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 	if err != nil {
 		return err
 	}
-	defer pgTran.Rollback(ctx)
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Store the bill to be deleted, info will be used later
 	deletedBill, err := getBill(ctx, pgTran, id)
@@ -187,7 +199,7 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 		return err
 	}
 	if cmdTag.RowsAffected() == 0 {
-		return fmt.Errorf("Error updating bill %d", id)
+		return fmt.Errorf("error updating bill %d", id)
 	}
 
 	if pay {

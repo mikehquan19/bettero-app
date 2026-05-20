@@ -85,7 +85,7 @@ func (s *SummaryService) GetCompositionMap(
 	}
 
 	// Constant time since the number of categories is fixed
-	var totalExpense float64 = 0.0
+	var totalExpense = 0.0
 	for _, amount := range categoryToAmount {
 		totalExpense += amount
 	}
@@ -162,7 +162,7 @@ func (s *SummaryService) GetDateToAmount(
 
 	var date time.Time
 	var amount float64
-	pgx.ForEachRow(
+	_, err = pgx.ForEachRow(
 		groupByDateRows,
 		[]any{&date, &amount},
 		func() error {
@@ -215,7 +215,7 @@ func getCategoryToAmount(
 
 	var category string
 	var amount float64
-	pgx.ForEachRow(
+	_, err = pgx.ForEachRow(
 		groupByCategoryRows,
 		[]any{&category, &amount},
 		func() error {

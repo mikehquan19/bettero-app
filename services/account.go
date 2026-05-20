@@ -129,7 +129,11 @@ func (s *AccountService) UpdateAccount(
 	if err != nil {
 		return updatedAccount, err
 	}
-	defer pgTran.Rollback(ctx)
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Store the type and previous balance of the account
 	var accountType string
@@ -241,7 +245,11 @@ func (s *AccountService) ListAccountTransactions(
 	if err != nil {
 		return totalCount, nil, err
 	}
-	defer pgTran.Rollback(ctx)
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Dynamically build the filter based on values from query params
 	conditions := []string{"a.id = $1"}

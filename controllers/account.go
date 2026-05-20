@@ -174,7 +174,7 @@ func (a *AccountController) GetAccountTransactions(c *gin.Context) {
 
 	if (c.Query("start") != "") != (c.Query("end") != "") {
 		// Enforce both ends of the date parameters
-		respondError(c, http.StatusBadRequest, fmt.Errorf("Both start, & end must be specified"))
+		respondError(c, http.StatusBadRequest, fmt.Errorf("both start, & end must be specified"))
 		return
 	}
 	// Either both dates are defined or nil

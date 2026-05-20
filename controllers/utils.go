@@ -3,7 +3,6 @@ package controllers
 import (
 	"betterov2/models"
 	"log"
-	"math"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -22,7 +21,7 @@ func respondError(c *gin.Context, errorCode int, err error) {
 
 // getOffset fetches the offset from query params and convert to int
 func getOffset(c *gin.Context) (int, error) {
-	var offset int = 0
+	var offset = 0
 	var err error
 
 	if c.Query("offset") != "" {
@@ -32,9 +31,4 @@ func getOffset(c *gin.Context) (int, error) {
 		}
 	}
 	return offset, nil
-}
-
-// round rounds a float64 to 2 decimal places
-func round(x float64) float64 {
-	return math.Round(x*100) / 100
 }
