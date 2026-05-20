@@ -89,7 +89,7 @@ pipeline:
         description: Try running the application by the container from the image saved to the registry
         type: CI
         spec:
-          cloneCodebase: false
+          cloneCodebase: true
           caching:
             enabled: true
             override: true
@@ -133,4 +133,3 @@ pipeline:
                       fi
                     envVariables:
                       DATABASE_URL: <+secrets.getValue("database_url")>
-  allowStageExecutions: true
