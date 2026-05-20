@@ -83,3 +83,54 @@ pipeline:
                     caching: true
                     envVariables:
                       DATABASE_URL: <+secrets.getValue("database_url")>
+    - stage:
+        name: Integration Test
+        identifier: Integration_Test
+        description: Try running the application by the container from the image saved to the registry
+        type: CI
+        spec:
+          cloneCodebase: false
+          caching:
+            enabled: true
+            override: true
+            paths: []
+          buildIntelligence:
+            enabled: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Test run the application
+                  identifier: Test_run_the_application
+                  spec:
+                    connectorRef: Docker_Go
+                    image: golang:1.26-alpine
+                    shell: Sh
+                    command: |-
+                      # Exit if one of the commands fail
+                      set -e
+                      apk add --no-cache curl
+
+                      echo "Test running the server"
+                      go build -o bettero-app server.go
+                      ./bettero-app &
+                      # Pause for 5 seconds
+                      sleep 5
+                      # Call the health check endpoint and see what the error is
+                      URL="http://localhost:8080/health"
+                      STATUS=$(curl -s -o /dev/null -w "%{http_code}" $URL)
+                      if [ "$STATUS" -eq 200 ]; then
+                        echo "SUCCESS DEPLOYED API"
+                      else
+                        echo "ERROR DEPLOYED API"
+                        exit 1
+                      fi
+                    envVariables:
+                      DATABASE_URL: <+secrets.getValue("database_url")>
+  allowStageExecutions: true
