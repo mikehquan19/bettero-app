@@ -1,0 +1,85 @@
+pipeline:
+  name: bettero-go-api
+  identifier: betterogoapi
+  projectIdentifier: betteroapp
+  orgIdentifier: default
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: betterogoapi
+        build: <+input>
+  stages:
+    - stage:
+        name: Build And Push Image to Registry
+        identifier: build_and_push_image_to_registry
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: true
+            paths: []
+          buildIntelligence:
+            enabled: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Lint and Format
+                  identifier: Lint_and_format
+                  spec:
+                    connectorRef: Docker_Go
+                    image: docker/golangci-lint:2.11.4-go1.26.1
+                    shell: Sh
+                    command: |-
+                      # Verify the version of installed one
+                      golangci-lint --version
+                      # Lint and format
+                      go vet ./...
+                      golangci-lint fmt
+                      golangci-lint run
+              - step:
+                  type: Run
+                  name: Test
+                  identifier: Test
+                  spec:
+                    connectorRef: Docker_Go
+                    image: golang:1.26-alpine
+                    shell: Sh
+                    command: |-
+                      # If one of the tests failed don't even bother building
+                      echo "Testing (no resulst cache)..."
+                      go test ./... -count=1
+              - step:
+                  type: Run
+                  name: Build
+                  identifier: Build
+                  spec:
+                    connectorRef: Docker_Go
+                    image: golang:1.26-alpine
+                    shell: Sh
+                    command: |-
+                      echo "Compiling the server..."
+                      go build -o bettero-app server.go
+                    envVariables:
+                      DATABASE_URL: <+secrets.getValue("database_url")>
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Push image to Registry
+                  identifier: Push_image_to_Registry
+                  spec:
+                    connectorRef: Docker_Go
+                    repo: mikequan19/bettero-app
+                    tags:
+                      - latest
+                    caching: true
+                    envVariables:
+                      DATABASE_URL: <+secrets.getValue("database_url")>
