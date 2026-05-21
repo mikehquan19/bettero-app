@@ -60,6 +60,95 @@ func (s *AccountService) GetAccount(ctx context.Context, id int64) (models.Accou
 	return account, nil
 }
 
+// ListAccountTransactions returns the list of transactions of account
+func (s *AccountService) ListAccountTransactions(
+	ctx context.Context, id int64, tranFilter models.TransactionFilter, offset int64,
+) (int, []models.Transaction, error) {
+	var totalCount int
+	var transactions []models.Transaction
+
+	pgTran, err := s.database.Begin(ctx)
+	if err != nil {
+		return totalCount, nil, err
+	}
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
+
+	// Dynamically build the filter based on values from query params
+	conditions := []string{"a.id = $1"}
+	args := []any{id}
+	index := 2
+
+	v := reflect.ValueOf(tranFilter)
+	for field, value := range v.Fields() {
+		if value.Kind() == reflect.String && value.String() == "" {
+			continue
+		}
+		if value.Type() == reflect.TypeFor[*time.Time]() {
+			if ptr, ok := value.Interface().(*time.Time); !ok || ptr == nil {
+				continue
+			}
+			value = value.Elem()
+		}
+		column := field.Tag.Get("db")
+		operator := field.Tag.Get("operator")
+		conditions = append(
+			conditions,
+			fmt.Sprintf("t.%s %s $%d", column, operator, index),
+		)
+		args = append(args, value.Interface())
+		index++
+	}
+	filter := "WHERE " + strings.Join(conditions, " AND ")
+
+	// Fetch the total number of transactions
+	countQuery := `
+	SELECT COUNT(*)
+	FROM transactions t 
+	JOIN accounts a ON t.account_id = a.id
+	`
+	countRow := pgTran.QueryRow(ctx, countQuery+filter, args...)
+	if err := countRow.Scan(&totalCount); err != nil {
+		return totalCount, transactions, err
+	}
+
+	// List the page of transactions from this filter
+	listTranQuery := `
+	SELECT 
+		t.id, 
+		t.merchant, t.tran_description, t.category, t.amount, t.created_at, t.updated_at,
+		json_build_object(
+			'id', a.id,
+			'acc_number', a.acc_number,
+			'acc_name', a.acc_name,
+			'institution', a.institution,
+			'type', a.type
+		) AS account
+	FROM transactions t
+	JOIN accounts a ON t.account_id = a.id
+	`
+	page := fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", index)
+	args = append(args, offset)
+
+	tranRows, err := pgTran.Query(ctx, listTranQuery+filter+page, args...)
+	if err != nil {
+		return totalCount, transactions, err
+	}
+	transactions, err = pgx.CollectRows(tranRows, pgx.RowToStructByName[models.Transaction])
+	if err != nil {
+		return totalCount, transactions, err
+	}
+
+	if err = pgTran.Commit(ctx); err != nil {
+		return totalCount, nil, err
+	}
+
+	return totalCount, transactions, err
+}
+
 // CreateAccount inserts new account.
 // If the account references a non-existent user, it returns a custom not found error.
 func (s *AccountService) CreateAccount(
@@ -234,96 +323,9 @@ func (s *AccountService) DeleteAccount(ctx context.Context, id int64) error {
 	return err
 }
 
-// ListAccountTransactions returns the list of transactions of account
-func (s *AccountService) ListAccountTransactions(
-	ctx context.Context, id int64, tranFilter models.TransactionFilter, offset int64,
-) (int, []models.Transaction, error) {
-	var totalCount int
-	var transactions []models.Transaction
-
-	pgTran, err := s.database.Begin(ctx)
-	if err != nil {
-		return totalCount, nil, err
-	}
-	defer func() {
-		if err := pgTran.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
-
-	// Dynamically build the filter based on values from query params
-	conditions := []string{"a.id = $1"}
-	args := []any{id}
-	index := 2
-
-	v := reflect.ValueOf(tranFilter)
-	for field, value := range v.Fields() {
-		if value.Kind() == reflect.String && value.String() == "" {
-			continue
-		}
-		if value.Type() == reflect.TypeFor[*time.Time]() {
-			if ptr, ok := value.Interface().(*time.Time); !ok || ptr == nil {
-				continue
-			}
-			value = value.Elem()
-		}
-		col := field.Tag.Get("db")
-		op := field.Tag.Get("operator")
-		conditions = append(
-			conditions,
-			fmt.Sprintf("t.%s %s $%d", col, op, index),
-		)
-		args = append(args, value.Interface())
-		index++
-	}
-	filter := "WHERE " + strings.Join(conditions, " AND ")
-
-	// Fetch the total number of transactions
-	countQuery := `
-	SELECT COUNT(*)
-	FROM transactions t 
-	JOIN accounts a ON t.account_id = a.id
-	`
-	countRow := pgTran.QueryRow(ctx, countQuery+filter, args...)
-	if err := countRow.Scan(&totalCount); err != nil {
-		return totalCount, transactions, err
-	}
-
-	// List the page of transactions from this filter
-	listTranQuery := `
-	SELECT 
-		t.id, 
-		t.merchant, t.tran_description, t.category, t.amount, t.created_at, t.updated_at,
-		json_build_object(
-			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
-			'institution', a.institution,
-			'type', a.type
-		) AS account
-	FROM transactions t
-	JOIN accounts a ON t.account_id = a.id
-	`
-	page := fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", index)
-	args = append(args, offset)
-
-	tranRows, err := pgTran.Query(ctx, listTranQuery+filter+page, args...)
-	if err != nil {
-		return totalCount, transactions, err
-	}
-	transactions, err = pgx.CollectRows(tranRows, pgx.RowToStructByName[models.Transaction])
-	if err != nil {
-		return totalCount, transactions, err
-	}
-
-	if err = pgTran.Commit(ctx); err != nil {
-		return totalCount, nil, err
-	}
-
-	return totalCount, transactions, err
-}
-
-// Helper function: updateAccountBalance updates the balance by the net change
+// # Helper function:
+//
+// updateAccountBalance updates the balance by the net change
 //
 //   - Debit card's balance will decrease
 //   - Credit card's balance will increase

@@ -26,66 +26,6 @@ func NewTransactionService(database *pgxpool.Pool) *TransactionService {
 	}
 }
 
-// ListSuggestions returns the list of transaction description
-func (s *TransactionService) ListSuggestions(ctx context.Context, userId int64, q string) ([]models.Suggestion, error) {
-	var suggestions []models.Suggestion
-
-	pgTran, err := s.database.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := pgTran.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
-
-	// Set the threshold per query since this is session-scoped
-	_, err = pgTran.Exec(ctx, "SET pg_trgm.similarity_threshold = 0.2;")
-	if err != nil {
-		return nil, err
-	}
-
-	autocompleteQuery := `
-	SELECT type, name
-	FROM (
-		SELECT DISTINCT
-			'description' AS type,
-			t.tran_description AS name,
-			similarity(t.tran_description, $2) AS score
-		FROM transactions t
-		JOIN accounts a ON t.account_id = a.id
-		WHERE t.tran_description % $2 AND a.user_id = $1
-
-		UNION ALL
-
-		SELECT DISTINCT
-			'merchant' AS type,
-			t.merchant AS name,
-			similarity(t.merchant, $2) AS score
-		FROM transactions t
-		JOIN accounts a ON t.account_id = a.id
-		WHERE t.merchant % $2 AND a.user_id = $1
-	)
-	ORDER BY score DESC
-	LIMIT 10;
-	`
-	rows, err := pgTran.Query(ctx, autocompleteQuery, userId, q)
-	if err != nil {
-		return nil, err
-	}
-	suggestions, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Suggestion])
-	if err != nil {
-		return nil, err
-	}
-
-	if err = pgTran.Commit(ctx); err != nil {
-		return nil, err
-	}
-
-	return suggestions, nil
-}
-
 // FilterTransactions returns list of transactions of category between 2 dates
 func (s *TransactionService) FilterTransactions(
 	ctx context.Context, userId int64, tranFilter models.TransactionFilter, offset int,
@@ -174,6 +114,66 @@ func (s *TransactionService) FilterTransactions(
 	}
 
 	return totalCount, transactions, nil
+}
+
+// ListSuggestions returns the list of transaction description
+func (s *TransactionService) ListSuggestions(ctx context.Context, userId int64, q string) ([]models.Suggestion, error) {
+	var suggestions []models.Suggestion
+
+	pgTran, err := s.database.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := pgTran.Rollback(ctx); err != nil {
+			panic(err)
+		}
+	}()
+
+	// Set the threshold per query since this is session-scoped
+	_, err = pgTran.Exec(ctx, "SET pg_trgm.similarity_threshold = 0.2;")
+	if err != nil {
+		return nil, err
+	}
+
+	autocompleteQuery := `
+	SELECT type, name
+	FROM (
+		SELECT DISTINCT
+			'description' AS type,
+			t.tran_description AS name,
+			similarity(t.tran_description, $2) AS score
+		FROM transactions t
+		JOIN accounts a ON t.account_id = a.id
+		WHERE t.tran_description % $2 AND a.user_id = $1
+
+		UNION ALL
+
+		SELECT DISTINCT
+			'merchant' AS type,
+			t.merchant AS name,
+			similarity(t.merchant, $2) AS score
+		FROM transactions t
+		JOIN accounts a ON t.account_id = a.id
+		WHERE t.merchant % $2 AND a.user_id = $1
+	)
+	ORDER BY score DESC
+	LIMIT 10;
+	`
+	rows, err := pgTran.Query(ctx, autocompleteQuery, userId, q)
+	if err != nil {
+		return nil, err
+	}
+	suggestions, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Suggestion])
+	if err != nil {
+		return nil, err
+	}
+
+	if err = pgTran.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return suggestions, nil
 }
 
 // CreateTransaction inserts transaction into the database, and update the account's balance.
@@ -378,7 +378,9 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 	return nil
 }
 
-// Helper function: getTransaction returns a transaction with nested account data.
+// # HELPER FUNCTION
+//
+// getTransaction returns a transaction with nested account data.
 // It uses transaction to execute SQL query with other queries.
 func getTransaction(ctx context.Context, tx pgx.Tx, id int64) (models.Transaction, error) {
 	var transaction models.Transaction
