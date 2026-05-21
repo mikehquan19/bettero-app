@@ -151,11 +151,9 @@ func (s *BillService) UpdateBill(
 		body.DueDate,
 		id,
 	)
-	if err != nil {
-		return updatedBill, err
-	}
-	if cmdTag.RowsAffected() == 0 {
-		return updatedBill, models.GetNotFound[models.Bill](id)
+	if err != nil || cmdTag.RowsAffected() == 0 {
+		updateErr := ternary(err != nil, err, models.GetNotFound[models.Bill](id))
+		return updatedBill, updateErr
 	}
 
 	// Fetch the updated bill with nested account (which might change too)
@@ -195,11 +193,8 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 		return err
 	}
 	cmdTag, err := pgTran.Exec(ctx, "DELETE FROM bills WHERE id = $1;", id)
-	if err != nil {
-		return err
-	}
-	if cmdTag.RowsAffected() == 0 {
-		return fmt.Errorf("error updating bill %d", id)
+	if err != nil || cmdTag.RowsAffected() == 0 {
+		return ternary(err != nil, err, fmt.Errorf("error updating bill %d", id))
 	}
 
 	if pay {
@@ -221,13 +216,15 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 			deletedBill.Category,
 			deletedBill.Amount,
 		)
-		if err != nil {
-			return err
+		if err != nil || cmdTag.RowsAffected() == 0 {
+			// Err not nil is always prioritized over the no row err
+			return ternary(err != nil,
+				err,
+				// Can't create the payment, for some reason
+				fmt.Errorf("error creating payment for bill %d", deletedBill.ID),
+			)
 		}
-		if cmdTag.RowsAffected() == 0 {
-			return fmt.Errorf("error creating payment for bill %d", deletedBill.ID)
-		}
-		// Bill payment is considered expense
+		// Bill payment is considered expense, so auto-update the balance
 		err = updateAccountBalance(
 			ctx, pgTran, deletedBill.Account.Id, deletedBill.Amount)
 		if err != nil {
@@ -255,11 +252,12 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 			deletedBill.Amount,
 			deletedBill.DueDate.AddDate(0, 1, 0),
 		)
-		if err != nil {
-			return err
-		}
-		if cmdTag.RowsAffected() == 0 {
-			return fmt.Errorf("error reccurring bill for %d", deletedBill.ID)
+		if err != nil || cmdTag.RowsAffected() == 0 {
+			return ternary(err != nil,
+				err,
+				// Can't insert the bil with same data for next deadline
+				fmt.Errorf("error reccurring bill for %d", deletedBill.ID),
+			)
 		}
 	}
 
@@ -270,7 +268,9 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 	return nil
 }
 
-// Helper function: getBill returns a bill with nested account data.
+// # Helper function
+//
+// getBill returns a bill with nested account data.
 // It uses transaction to execute SQL query, used in an atromic transaction.
 func getBill(ctx context.Context, tx pgx.Tx, id int64) (models.Bill, error) {
 	var bill models.Bill

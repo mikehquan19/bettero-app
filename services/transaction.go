@@ -104,9 +104,14 @@ func (s *TransactionService) ListSuggestions(ctx context.Context, userId int64, 
 	}()
 
 	// Set the threshold per query since this is session-scoped
-	_, err = pgTran.Exec(ctx, "SET pg_trgm.similarity_threshold = 0.2;")
-	if err != nil {
-		return nil, err
+	// NOTE: Keep low enough so it can be diverse, or high enough
+	cmdTag, err := pgTran.Exec(ctx, "SET pg_trgm.similarity_threshold = 0.2;")
+	if err != nil || cmdTag.RowsAffected() == 0 {
+		setErr := ternary(err != nil,
+			err,
+			fmt.Errorf("error setting the similarity threshold"),
+		)
+		return nil, setErr
 	}
 
 	autocompleteQuery := `
@@ -151,7 +156,7 @@ func (s *TransactionService) ListSuggestions(ctx context.Context, userId int64, 
 
 // CreateTransaction inserts transaction into the database, and update the account's balance.
 //
-// For an income transaction, by transaction amount:
+// For an income transaction, by transaction amount (positive by default):
 //   - Debit card's balance will increase (income check, tax refund, allowance, etc)
 //   - Credit card's balance will decrease (monthly payment, refund, etc.)
 //
@@ -280,12 +285,14 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 		return updatedTransaction, err
 	}
 
-	// Compute the amount to update the account balance
-	prevChange := ternary(prevCategory == "Income", -prevAmount, prevAmount)
-	currChange := ternary(body.Category == "Income", -body.Amount, body.Amount)
-	err = updateAccountBalance(ctx, pgTran, accountId, currChange-prevChange)
-	if err != nil {
-		return updatedTransaction, err
+	// Compute the amount to update the account balance (if balance change)
+	if prevAmount != body.Amount {
+		prevChange := ternary(prevCategory == "Income", -prevAmount, prevAmount)
+		currChange := ternary(body.Category == "Income", -body.Amount, body.Amount)
+		err = updateAccountBalance(ctx, pgTran, accountId, currChange-prevChange)
+		if err != nil {
+			return updatedTransaction, err
+		}
 	}
 
 	// Get the updated transaction with nested account
@@ -353,7 +360,7 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 
 // # HELPER FUNCTION
 //
-// getTransaction returns a transaction with nested account data.
+// getTransaction returns a transaction of given ID with nested account data.
 // It uses transaction to execute SQL query with other queries.
 func getTransaction(ctx context.Context, tx pgx.Tx, id int64) (models.Transaction, error) {
 	var transaction models.Transaction

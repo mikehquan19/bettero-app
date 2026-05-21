@@ -229,7 +229,7 @@ func getCategoryToAmount(
 		},
 	)
 	if cmdTag.RowsAffected() == 0 {
-		// There is something wrong with the aggregation
+		// There is something wrong with the aggregation (dangerous)
 		return categoryToAmount, fmt.Errorf("error fetching category to amount")
 	}
 

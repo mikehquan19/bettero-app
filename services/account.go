@@ -28,7 +28,11 @@ func NewAccountService(database *pgxpool.Pool) *AccountService {
 func (s *AccountService) ListAccounts(ctx context.Context, userId int64) ([]models.Account, error) {
 	var accounts []models.Account
 
-	getAccQuery := "SELECT * FROM accounts WHERE user_id = $1 ORDER BY updated_at DESC;"
+	getAccQuery := `
+	SELECT * FROM accounts 
+	WHERE user_id = $1 
+	ORDER BY updated_at DESC;
+	`
 	rows, err := s.database.Query(ctx, getAccQuery, userId)
 	if err != nil {
 		return accounts, err
@@ -69,6 +73,7 @@ func (s *AccountService) ListAccountTransactions(
 		return totalCount, nil, err
 	}
 	defer func() {
+		// Extra layer to in case rollback doesn't work internally
 		if err := pgTran.Rollback(ctx); err != nil {
 			panic(err)
 		}
@@ -239,6 +244,7 @@ func (s *AccountService) UpdateAccount(
 	}
 
 	// Create the transaction reflecting the balance change, if any
+	// aka reconile transaction
 	change := updatedAccount.Balance - prevBalance
 	if change != 0 {
 		var description, category string
@@ -267,12 +273,11 @@ func (s *AccountService) UpdateAccount(
 			category,
 			math.Abs(change),
 		)
-		if err != nil {
-			return updatedAccount, err
-		}
-		if cmdTag.RowsAffected() == 0 {
-			// Account is found but for some reason can't be updated
-			return updatedAccount, fmt.Errorf("error updating account %d", id)
+		if err != nil || cmdTag.RowsAffected() == 0 {
+			// Actual error or
+			// account for some reason can't be updated (more dangerous)
+			updateErr := ternary(err != nil, err, fmt.Errorf("error updating account %d", id))
+			return updatedAccount, updateErr
 		}
 	}
 
@@ -286,19 +291,15 @@ func (s *AccountService) UpdateAccount(
 // DeleteAccount deletes the account and all of its transactions.
 func (s *AccountService) DeleteAccount(ctx context.Context, id int64) error {
 	cmdTag, err := s.database.Exec(ctx, "DELETE FROM accounts WHERE id = $1;", id)
-	if err != nil {
-		return err
+	if err != nil || cmdTag.RowsAffected() == 0 {
+		return ternary(err != nil, err, models.GetNotFound[models.Account](id))
 	}
-	if cmdTag.RowsAffected() == 0 {
-		return models.GetNotFound[models.Account](id)
-	}
-
 	return err
 }
 
 // # Helper function:
 //
-// updateAccountBalance updates the balance by the net change
+// updateAccountBalance updates the balance of the account by the net change
 //
 //   - Debit card's balance will decrease
 //   - Credit card's balance will increase
@@ -315,11 +316,11 @@ func updateAccountBalance(ctx context.Context, tx pgx.Tx, id int64, netChange fl
 	WHERE id = $1;
 	`
 	cmdTag, err := tx.Exec(ctx, updateAccBalQuery, id, netChange)
-	if err != nil {
-		return err
-	}
-	if cmdTag.RowsAffected() == 0 {
-		return fmt.Errorf("error updating account %d", id)
+	if err != nil || cmdTag.RowsAffected() == 0 {
+		return ternary(err != nil,
+			err,
+			fmt.Errorf("error updating balance of account %d", id),
+		)
 	}
 	return err
 }
