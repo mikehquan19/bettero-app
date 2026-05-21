@@ -7,8 +7,10 @@ import (
 	"strings"
 )
 
-var ErrNotFound = errors.New("resource not found")
-var ErrForeignKey = errors.New("references a non-existent resource")
+var (
+	ErrNotFound   = errors.New("resource not found")
+	ErrForeignKey = errors.New("references a non-existent resource")
+)
 
 func GetNotFound[T any](id int64) error {
 	resourceType := strings.ToLower(reflect.TypeFor[T]().String())

@@ -110,6 +110,8 @@ func (t *TransactionController) PostTransaction(c *gin.Context) {
 		return
 	}
 
+	// TODO: Validate if the transaction is too far back
+
 	newTransaction, err := t.service.CreateTransaction(ctx, body)
 	if err != nil {
 		if errors.Is(err, models.ErrForeignKey) {
@@ -142,6 +144,8 @@ func (t *TransactionController) PutTransaction(c *gin.Context) {
 		return
 	}
 
+	// TODO: Validate if the transaction is too far back
+
 	updatedTran, err := t.service.UpdateTransaction(ctx, int64(id), body)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
@@ -167,6 +171,8 @@ func (t *TransactionController) DeleteTransaction(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
+
+	// TODO: Validate if the transaction is too far back
 
 	if err := t.service.DeleteTransaction(ctx, int64(id)); err != nil {
 		if errors.Is(err, models.ErrNotFound) {

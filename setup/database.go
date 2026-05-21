@@ -11,8 +11,10 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 )
 
-var postgresPool *pgxpool.Pool
-var postgresPoolOnce sync.Once
+var (
+	postgresPool     *pgxpool.Pool
+	postgresPoolOnce sync.Once
+)
 
 func ConnectDB() *pgxpool.Pool {
 	postgresPoolOnce.Do(func() {
