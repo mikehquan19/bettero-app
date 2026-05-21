@@ -19,7 +19,7 @@ var (
 func ConnectDB() *pgxpool.Pool {
 	postgresPoolOnce.Do(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		cancel()
+		defer cancel()
 
 		var err error
 
