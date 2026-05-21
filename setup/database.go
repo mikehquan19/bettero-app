@@ -24,7 +24,6 @@ func ConnectDB() *pgxpool.Pool {
 		var err error
 
 		databaseURL := os.Getenv("DATABASE_URL")
-		log.Println(databaseURL)
 		postgresPool, err = pgxpool.New(ctx, databaseURL)
 		if err != nil {
 			log.Fatal("Unable to connect with the database\n", err)
@@ -34,7 +33,7 @@ func ConnectDB() *pgxpool.Pool {
 			log.Fatal("Unable to ping the database\n", err)
 		}
 
-		log.Println("Connected to database!")
+		log.Printf("Connected to database! URL: %s\n", databaseURL)
 	})
 
 	return postgresPool
