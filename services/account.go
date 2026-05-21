@@ -6,9 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"reflect"
-	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -78,31 +75,7 @@ func (s *AccountService) ListAccountTransactions(
 	}()
 
 	// Dynamically build the filter based on values from query params
-	conditions := []string{"a.id = $1"}
-	args := []any{id}
-	index := 2
-
-	v := reflect.ValueOf(tranFilter)
-	for field, value := range v.Fields() {
-		if value.Kind() == reflect.String && value.String() == "" {
-			continue
-		}
-		if value.Type() == reflect.TypeFor[*time.Time]() {
-			if ptr, ok := value.Interface().(*time.Time); !ok || ptr == nil {
-				continue
-			}
-			value = value.Elem()
-		}
-		column := field.Tag.Get("db")
-		operator := field.Tag.Get("operator")
-		conditions = append(
-			conditions,
-			fmt.Sprintf("t.%s %s $%d", column, operator, index),
-		)
-		args = append(args, value.Interface())
-		index++
-	}
-	filter := "WHERE " + strings.Join(conditions, " AND ")
+	filter, args := buildFilterSQL("a.id = $1", id, tranFilter)
 
 	// Fetch the total number of transactions
 	countQuery := `
@@ -130,7 +103,7 @@ func (s *AccountService) ListAccountTransactions(
 	FROM transactions t
 	JOIN accounts a ON t.account_id = a.id
 	`
-	page := fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", index)
+	page := fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", len(args)+1)
 	args = append(args, offset)
 
 	tranRows, err := pgTran.Query(ctx, listTranQuery+filter+page, args...)

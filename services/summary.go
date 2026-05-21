@@ -3,6 +3,7 @@ package services
 import (
 	"betterov2/models"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -162,7 +163,7 @@ func (s *SummaryService) GetDateToAmount(
 
 	var date time.Time
 	var amount float64
-	_, err = pgx.ForEachRow(
+	cmdTag, err := pgx.ForEachRow(
 		groupByDateRows,
 		[]any{&date, &amount},
 		func() error {
@@ -170,6 +171,10 @@ func (s *SummaryService) GetDateToAmount(
 			return nil
 		},
 	)
+	if cmdTag.RowsAffected() == 0 {
+		// There is something wrong with the aggregation
+		return dateToAmount, fmt.Errorf("error fetching date to amount")
+	}
 
 	return dateToAmount, err
 }
@@ -215,7 +220,7 @@ func getCategoryToAmount(
 
 	var category string
 	var amount float64
-	_, err = pgx.ForEachRow(
+	cmdTag, err := pgx.ForEachRow(
 		groupByCategoryRows,
 		[]any{&category, &amount},
 		func() error {
@@ -223,6 +228,10 @@ func getCategoryToAmount(
 			return nil
 		},
 	)
+	if cmdTag.RowsAffected() == 0 {
+		// There is something wrong with the aggregation
+		return categoryToAmount, fmt.Errorf("error fetching category to amount")
+	}
 
 	return categoryToAmount, err
 }
