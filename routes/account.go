@@ -12,9 +12,7 @@ func RegisterAccountRoutes(router *gin.Engine, c *controllers.AccountController)
 	accGroup.GET("", c.GetAccounts)
 	accGroup.GET("/:id", c.GetAccount)
 	accGroup.POST("", c.PostAccounts)
-	/*
-		accGroup.PUT("/:id", c.PutAccount)
-		accGroup.DELETE("/:id", c.DeleteAccount)
-	*/
+	accGroup.PUT("/:id", c.PutAccount)
+	accGroup.DELETE("/:id", c.DeleteAccount)
 	accGroup.GET("/:id/transactions", c.GetAccountTransactions)
 }

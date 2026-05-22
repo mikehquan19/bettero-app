@@ -2,6 +2,7 @@ package main
 
 import (
 	"betterov2/controllers"
+	"betterov2/repositories"
 	"betterov2/routes"
 	"betterov2/services"
 	"betterov2/setup"
@@ -20,10 +21,15 @@ func main() {
 
 	var db = setup.ConnectDB()
 
+	// Initialize repositories
+	accountRepo := repositories.NewAccountRepo()
+	transactionRepo := repositories.NewTransactionRepo()
+	billRepo := repositories.NewBillRepo()
+
 	// Dependency injection
-	accountService := services.NewAccountService(db)
-	transactionService := services.NewTransactionService(db)
-	billService := services.NewBillService(db)
+	accountService := services.NewAccountService(db, accountRepo, transactionRepo)
+	transactionService := services.NewTransactionService(db, transactionRepo, accountRepo)
+	billService := services.NewBillService(db, billRepo, accountRepo, transactionRepo)
 	summaryService := services.NewSummaryService(db)
 
 	accountController := controllers.NewAccountController(accountService)

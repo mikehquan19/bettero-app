@@ -81,8 +81,6 @@ pipeline:
                     tags:
                       - latest
                     caching: true
-                    envVariables:
-                      DATABASE_URL: <+secrets.getValue("database_url")>
     - stage:
         name: Integration Test
         identifier: Integration_Test
