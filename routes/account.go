@@ -15,4 +15,5 @@ func RegisterAccountRoutes(router *gin.Engine, c *controllers.AccountController)
 	accGroup.PUT("/:id", c.PutAccount)
 	accGroup.DELETE("/:id", c.DeleteAccount)
 	accGroup.GET("/:id/transactions", c.GetAccountTransactions)
+	accGroup.GET("/:id/summary", c.GetAccountSummary)
 }

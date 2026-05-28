@@ -34,17 +34,19 @@ type User struct {
 //   - Balance is allowed to exceed credit limit, but there will be a message notifying in app
 //   - Next due date will be updated monthly if today is past the current due date.
 type Account struct {
-	ID          int64      `json:"id" db:"id"`
-	UserID      int64      `json:"user_id" db:"user_id"`
-	AccNumber   int64      `json:"acc_number" db:"acc_number"`
-	AccName     string     `json:"acc_name" db:"acc_name"`
-	Institution string     `json:"institution" db:"institution"`
-	Type        string     `json:"type" db:"type"`
-	Balance     float64    `json:"balance" db:"balance"`
-	CreditLimit *float64   `json:"credit_limit,omitempty" db:"credit_limit"`
-	NextDue     *time.Time `json:"next_due,omitempty" db:"next_due"`
-	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
+	ID                 int64      `json:"id" db:"id"`
+	UserID             int64      `json:"user_id" db:"user_id"`
+	AccNumber          int64      `json:"acc_number" db:"acc_number"`
+	AccName            string     `json:"acc_name" db:"acc_name"`
+	Institution        string     `json:"institution" db:"institution"`
+	Type               string     `json:"type" db:"type"`
+	Balance            float64    `json:"balance" db:"balance"`
+	CreditLimit        *float64   `json:"credit_limit,omitempty" db:"credit_limit"`
+	NextDue            *time.Time `json:"next_due,omitempty" db:"next_due"`
+	CreatedAt          time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at" db:"updated_at"`
+	DiscrepancyFlagged bool       `json:"discrepancy_flagged" db:"discrepancy_flagged"`
+	DiscrepancyAmount  float64    `json:"discrepancy_amount" db:"discrepancy_amount"`
 }
 
 type PostAccountBody struct {
@@ -103,6 +105,32 @@ func ScanAccount(accRow pgx.Row, acc *Account) error {
 		&acc.NextDue,
 		&acc.CreatedAt,
 		&acc.UpdatedAt,
+		&acc.DiscrepancyFlagged,
+		&acc.DiscrepancyAmount,
+	)
+	return err
+}
+
+type AccountHistory struct {
+	ID         int64     `json:"id" db:"id"`
+	AccountId  int64     `json:"account_id" db:"account_id"`
+	LoggedTime time.Time `json:"logged_time" db:"logged_time"`
+	Balance    float64   `json:"balance" db:"balance"`
+}
+
+type PostAccHistBody struct {
+	AccountId  int64     `json:"account_id" db:"account_id"`
+	LoggedTime time.Time `json:"logged_time" db:"logged_time"`
+	Balance    float64   `json:"balance" db:"balance"`
+}
+
+// ScanAccHistory parses the returned db row into account history struct and destinations
+func ScanAccHistory(accHistRow pgx.Row, accHist *AccountHistory) error {
+	err := accHistRow.Scan(
+		&accHist.ID,
+		&accHist.AccountId,
+		&accHist.LoggedTime,
+		&accHist.Balance,
 	)
 	return err
 }
@@ -114,7 +142,7 @@ type PaginatedResponse[T any] struct {
 }
 
 type Transaction struct {
-	ID              int           `json:"id" db:"id"`
+	ID              int64         `json:"id" db:"id"`
 	Account         NestedAccount `json:"account" db:"account"`
 	Merchant        string        `json:"merchant" db:"merchant"`
 	TranDescription string        `json:"tran_description" db:"tran_description"`
@@ -125,8 +153,8 @@ type Transaction struct {
 }
 
 type NonNestedTransaction struct {
-	ID              int       `json:"id" db:"id"`
-	AccountId       int       `json:"account_id" db:"account_id"`
+	ID              int64     `json:"id" db:"id"`
+	AccountId       int64     `json:"account_id" db:"account_id"`
 	Merchant        string    `json:"merchant" db:"merchant"`
 	TranDescription string    `json:"tran_description" db:"tran_description"`
 	Category        string    `json:"category" db:"category"`
@@ -145,7 +173,7 @@ type NestedAccount struct {
 }
 
 type PostTransactionBody struct {
-	AccountID       int       `json:"account_id"`
+	AccountID       int64     `json:"account_id"`
 	Merchant        string    `json:"merchant"`
 	TranDescription string    `json:"tran_description"`
 	Category        string    `json:"category"`
@@ -201,7 +229,7 @@ type TransactionFilter struct {
 }
 
 type Bill struct {
-	ID          int           `json:"id" db:"id"`
+	ID          int64         `json:"id" db:"id"`
 	Account     NestedAccount `json:"account" db:"account"`
 	Merchant    string        `json:"merchant" db:"merchant"`
 	Description string        `json:"description" db:"description"`
@@ -211,7 +239,7 @@ type Bill struct {
 }
 
 type BillBody struct {
-	AccountID   int       `json:"account_id"`
+	AccountID   int64     `json:"account_id"`
 	Merchant    string    `json:"merchant"`
 	Description string    `json:"description"`
 	Category    string    `json:"category"`
@@ -220,8 +248,8 @@ type BillBody struct {
 }
 
 type NonNestedBill struct {
-	ID          int       `json:"id" db:"id"`
-	AccountId   int       `json:"account_id" db:"account_id"`
+	ID          int64     `json:"id" db:"id"`
+	AccountId   int64     `json:"account_id" db:"account_id"`
 	Merchant    string    `json:"merchant" db:"merchant"`
 	Description string    `json:"description" db:"description"`
 	Category    string    `json:"category" db:"category"`
@@ -281,6 +309,13 @@ type FinancialSummary struct {
 	Composition map[string]float64  `json:"composition"`
 }
 
+// Account financial summary doesn't need the basic info
+type AccountFinancialSummary struct {
+	Daily       map[string]float64  `json:"daily"`
+	Change      map[string]*float64 `json:"change"`
+	Composition map[string]float64  `json:"composition"`
+}
+
 type CategoryProgress struct {
 	Budget     float64 `json:"budget"`
 	Current    float64 `json:"current"`
@@ -293,7 +328,7 @@ type BudgetComposition struct {
 }
 
 type BudgetResponse struct {
-	ID                int                         `json:"id"`
+	ID                int64                       `json:"id"`
 	RecurringIncome   float64                     `json:"recurring_income"`
 	ExpensePortion    float64                     `json:"expense_portion"`
 	BudgetComposition BudgetComposition           `json:"budget_composition"`
@@ -301,8 +336,8 @@ type BudgetResponse struct {
 }
 
 type BudgetPlan struct {
-	ID              int                `json:"id" db:"id"`
-	UserID          int                `json:"user_id" db:"user_id"`
+	ID              int64              `json:"id" db:"id"`
+	UserID          int64              `json:"user_id" db:"user_id"`
 	IntervalType    string             `json:"interval_type" db:"interval_type"`
 	RecurringIncome float64            `json:"recurring_income" db:"recurring_income"`
 	ExpensePortion  float64            `json:"expense_portion" db:"expense_portion"`

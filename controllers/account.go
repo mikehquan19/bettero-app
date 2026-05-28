@@ -16,12 +16,14 @@ import (
 var UserID int64 = 1
 
 type AccountController struct {
-	service *services.AccountService
+	accService     *services.AccountService
+	summaryService *services.SummaryService
 }
 
-func NewAccountController(s *services.AccountService) *AccountController {
+func NewAccountController(a *services.AccountService, s *services.SummaryService) *AccountController {
 	return &AccountController{
-		service: s,
+		accService:     a,
+		summaryService: s,
 	}
 }
 
@@ -32,7 +34,7 @@ func (a *AccountController) GetAccounts(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	accounts, err := a.service.ListAccounts(ctx, UserID)
+	accounts, err := a.accService.ListAccounts(ctx, UserID)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 	}
@@ -53,7 +55,7 @@ func (a *AccountController) GetAccount(c *gin.Context) {
 		return
 	}
 
-	account, err := a.service.GetAccount(ctx, int64(id))
+	account, err := a.accService.GetAccount(ctx, int64(id))
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
@@ -80,7 +82,7 @@ func (a *AccountController) PostAccounts(c *gin.Context) {
 		return
 	}
 
-	newAccount, err := a.service.CreateAccount(ctx, UserID, body)
+	newAccount, err := a.accService.CreateAccount(ctx, UserID, body)
 	if err != nil {
 		if errors.Is(err, models.ErrInvalidAccountBody) {
 			respondError(c, http.StatusBadRequest, err)
@@ -114,7 +116,7 @@ func (a *AccountController) PutAccount(c *gin.Context) {
 		return
 	}
 
-	updatedAccount, err := a.service.UpdateAccount(ctx, int64(id), body)
+	updatedAccount, err := a.accService.UpdateAccount(ctx, int64(id), body)
 	if err != nil {
 		if errors.Is(err, models.ErrInvalidAccountBody) {
 			respondError(c, http.StatusBadRequest, err)
@@ -142,7 +144,7 @@ func (a *AccountController) DeleteAccount(c *gin.Context) {
 		return
 	}
 
-	if err = a.service.DeleteAccount(ctx, int64(id)); err != nil {
+	if err = a.accService.DeleteAccount(ctx, int64(id)); err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 		} else {
@@ -196,7 +198,7 @@ func (a *AccountController) GetAccountTransactions(c *gin.Context) {
 		CreatedAtTo:     dates[1],
 	}
 
-	total, transactions, err := a.service.ListAccountTransactions(ctx, int64(id), filter, int64(offset))
+	total, transactions, err := a.accService.ListAccountTransactions(ctx, int64(id), filter, int64(offset))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -208,4 +210,53 @@ func (a *AccountController) GetAccountTransactions(c *gin.Context) {
 		Data:   transactions,
 	}
 	respondSuccess(c, http.StatusOK, paginatedResponse)
+}
+
+// GET: /accounts/:id/summary?start=&end=
+
+// Get the spending summary of the account
+func (a *AccountController) GetAccountSummary(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+	defer cancel()
+
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err)
+		return
+	}
+
+	var dates [2]time.Time
+	for i, end := range [2]string{"start", "end"} {
+		dates[i], err = time.Parse("2006-01-02", c.Query(end))
+		if err != nil {
+			respondError(c, http.StatusBadRequest, err)
+			return
+		}
+	}
+
+	daily, err := a.summaryService.GetDateToAmount(ctx, "account", int64(id), dates[0], dates[1])
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	composition, err := a.summaryService.GetCompositionMap(ctx, "account", int64(id), dates[0], dates[1])
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	change, err := a.summaryService.GetChangeMap(ctx, "account", int64(id), dates[0], dates[1])
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	summary := models.AccountFinancialSummary{
+		Daily:       daily,
+		Change:      change,
+		Composition: composition,
+	}
+
+	respondSuccess(c, http.StatusOK, summary)
 }
