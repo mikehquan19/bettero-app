@@ -212,8 +212,8 @@ func (a *AccountController) GetAccountTransactions(c *gin.Context) {
 	respondSuccess(c, http.StatusOK, paginatedResponse)
 }
 
-// GET: /accounts/:id/summary?start=&end=
-
+// GET: /accounts/:id
+//
 // Get the spending summary of the account
 func (a *AccountController) GetAccountSummary(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)

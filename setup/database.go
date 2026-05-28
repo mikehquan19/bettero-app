@@ -32,10 +32,6 @@ func ConnectDB() *pgxpool.Pool {
 		if err = postgresPool.Ping(context.Background()); err != nil {
 			log.Fatal("Unable to ping the database\n", err)
 		}
-
-		log.Printf("DATABASE_URL: %q\n", databaseURL)
-		log.Printf("DATABASE_URL length: %d\n", len(databaseURL))
-		log.Printf("Connected to database!\n")
 	})
 
 	return postgresPool

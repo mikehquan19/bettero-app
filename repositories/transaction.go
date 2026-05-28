@@ -122,18 +122,13 @@ func (r *TransactionRepo) ListSuggestions(
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Set the threshold per query since this is session-scoped
 	// NOTE: Keep low enough so it can be diverse, or high enough
-	cmdTag, err := tx.Exec(ctx, "SET pg_trgm.similarity_threshold = 0.2;")
+	_, err = tx.Exec(ctx, "SET pg_trgm.similarity_threshold = 0.2;")
 	if err != nil {
 		return nil, err
-	}
-	if cmdTag.RowsAffected() == 0 {
-		return nil, fmt.Errorf("error setting the similarity threshold")
 	}
 
 	autocompleteQuery := `
