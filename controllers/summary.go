@@ -11,12 +11,12 @@ import (
 )
 
 type SummaryController struct {
-	service *services.SummaryService
+	summaryService *services.SummaryService
 }
 
 func NewSummaryController(s *services.SummaryService) *SummaryController {
 	return &SummaryController{
-		service: s,
+		summaryService: s,
 	}
 }
 
@@ -35,25 +35,25 @@ func (s *SummaryController) GetSummary(c *gin.Context) {
 		}
 	}
 
-	basic, err := s.service.GetBasicAnalysis(ctx, UserID, dates[0], dates[1])
+	basic, err := s.summaryService.GetBasicAnalysis(ctx, UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	daily, err := s.service.GetDateToAmount(ctx, "user", UserID, dates[0], dates[1])
+	daily, err := s.summaryService.GetDateToAmount(ctx, "user", UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	composition, err := s.service.GetCompositionMap(ctx, "user", UserID, dates[0], dates[1])
+	composition, err := s.summaryService.GetCompositionMap(ctx, "user", UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	change, err := s.service.GetChangeMap(ctx, "user", UserID, dates[0], dates[1])
+	change, err := s.summaryService.GetChangeMap(ctx, "user", UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return

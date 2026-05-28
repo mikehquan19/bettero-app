@@ -15,12 +15,12 @@ import (
 )
 
 type TransactionController struct {
-	service *services.TransactionService
+	tranService *services.TransactionService
 }
 
 func NewTransactionController(s *services.TransactionService) *TransactionController {
 	return &TransactionController{
-		service: s,
+		tranService: s,
 	}
 }
 
@@ -36,7 +36,7 @@ func (t *TransactionController) SearchTransactions(c *gin.Context) {
 		return
 	}
 
-	suggestions, err := t.service.ListSuggestions(ctx, UserID, c.Query("q"))
+	suggestions, err := t.tranService.ListSuggestions(ctx, UserID, c.Query("q"))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -83,7 +83,7 @@ func (t *TransactionController) GetTransactions(c *gin.Context) {
 	}
 
 	// Filter transactions based on category, and dates
-	total, transactions, err := t.service.FilterTransactions(ctx, UserID, filter, offset)
+	total, transactions, err := t.tranService.FilterTransactions(ctx, UserID, filter, offset)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -112,7 +112,7 @@ func (t *TransactionController) PostTransaction(c *gin.Context) {
 
 	// TODO: Validate if the transaction is too far back
 
-	newTransaction, err := t.service.CreateTransaction(ctx, body)
+	newTransaction, err := t.tranService.CreateTransaction(ctx, body)
 	if err != nil {
 		if errors.Is(err, models.ErrForeignKey) {
 			respondError(c, http.StatusNotFound, err)
@@ -146,7 +146,7 @@ func (t *TransactionController) PutTransaction(c *gin.Context) {
 
 	// TODO: Validate if the transaction is too far back
 
-	updatedTran, err := t.service.UpdateTransaction(ctx, int64(id), body)
+	updatedTran, err := t.tranService.UpdateTransaction(ctx, int64(id), body)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
@@ -174,7 +174,7 @@ func (t *TransactionController) DeleteTransaction(c *gin.Context) {
 
 	// TODO: Validate if the transaction is too far back
 
-	if err := t.service.DeleteTransaction(ctx, int64(id)); err != nil {
+	if err := t.tranService.DeleteTransaction(ctx, int64(id)); err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 		} else {

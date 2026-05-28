@@ -14,12 +14,12 @@ import (
 )
 
 type BillController struct {
-	service *services.BillService
+	billService *services.BillService
 }
 
 func NewBillController(s *services.BillService) *BillController {
 	return &BillController{
-		service: s,
+		billService: s,
 	}
 }
 
@@ -30,7 +30,7 @@ func (t *BillController) GetBills(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	bills, err := t.service.ListBills(ctx, UserID)
+	bills, err := t.billService.ListBills(ctx, UserID)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -52,7 +52,7 @@ func (t *BillController) PostBill(c *gin.Context) {
 		return
 	}
 
-	newBill, err := t.service.CreateBill(ctx, body)
+	newBill, err := t.billService.CreateBill(ctx, body)
 	if err != nil {
 		if errors.Is(err, models.ErrForeignKey) {
 			respondError(c, http.StatusNotFound, err)
@@ -84,7 +84,7 @@ func (t *BillController) PutBill(c *gin.Context) {
 		return
 	}
 
-	updatedBill, err := t.service.UpdateBill(ctx, int64(id), body)
+	updatedBill, err := t.billService.UpdateBill(ctx, int64(id), body)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
@@ -126,7 +126,7 @@ func (t *BillController) DeleteBill(c *gin.Context) {
 		}
 	}
 
-	if err := t.service.DeleteBill(ctx, int64(id), pay, recurring); err != nil {
+	if err := t.billService.DeleteBill(ctx, int64(id), pay, recurring); err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 		} else {
