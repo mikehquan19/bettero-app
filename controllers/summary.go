@@ -41,19 +41,19 @@ func (s *SummaryController) GetSummary(c *gin.Context) {
 		return
 	}
 
-	daily, err := s.service.GetDateToAmount(ctx, UserID, dates[0], dates[1])
+	daily, err := s.service.GetDateToAmount(ctx, "user", UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	composition, err := s.service.GetCompositionMap(ctx, UserID, dates[0], dates[1])
+	composition, err := s.service.GetCompositionMap(ctx, "user", UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	change, err := s.service.GetChangeMap(ctx, UserID, dates[0], dates[1])
+	change, err := s.service.GetChangeMap(ctx, "user", UserID, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
