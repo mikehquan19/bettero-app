@@ -6,23 +6,23 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestTernary_True(t *testing.T) {
-	result := ternary(true, "yes", "no")
+func TestIf_True(t *testing.T) {
+	result := If(true, "yes", "no")
 	assert.Equal(t, "yes", result)
 }
 
-func TestTernary_False(t *testing.T) {
-	result := ternary(false, "yes", "no")
+func TestIf_False(t *testing.T) {
+	result := If(false, "yes", "no")
 	assert.Equal(t, "no", result)
 }
 
-func TestTernary_WithNumbers(t *testing.T) {
-	result := ternary(5 > 3, 100, 0)
+func TestIf_WithNumbers(t *testing.T) {
+	result := If(5 > 3, 100, 0)
 	assert.Equal(t, 100, result)
 }
 
-func TestTernary_WithNumbers_False(t *testing.T) {
-	result := ternary(5 < 3, 100, 0)
+func TestIf_WithNumbers_False(t *testing.T) {
+	result := If(5 < 3, 100, 0)
 	assert.Equal(t, 0, result)
 }
 

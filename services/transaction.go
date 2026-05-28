@@ -4,6 +4,8 @@ import (
 	"betterov2/models"
 	"betterov2/repositories"
 	"context"
+	"fmt"
+	"log"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -38,9 +40,7 @@ func (s *TransactionService) FilterTransactions(
 }
 
 // ListSuggestions returns the list of transaction description
-func (s *TransactionService) ListSuggestions(
-	ctx context.Context, userId int64, q string,
-) ([]models.Suggestion, error) {
+func (s *TransactionService) ListSuggestions(ctx context.Context, userId int64, q string) ([]models.Suggestion, error) {
 	suggestions, err := s.tranRepo.ListSuggestions(ctx, s.db, userId, q)
 	if err != nil {
 		return suggestions, nil
@@ -64,11 +64,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 	if err != nil {
 		return newTransaction, err
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Insert the new transaction data
 	inserted, err := s.tranRepo.InsertTransaction(ctx, tx, body)
@@ -77,14 +73,15 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 	}
 
 	// Update the account balance data
-	netChange := ternary(body.Category == "Income", -body.Amount, body.Amount)
-	accountId := int64(body.AccountID)
-	if err = s.accRepo.UpdateAccountBalance(ctx, tx, accountId, netChange); err != nil {
+	netChange := If(inserted.Category == "Income", -inserted.Amount, inserted.Amount)
+	balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, inserted.AccountId, netChange)
+	if err != nil {
 		return newTransaction, err
 	}
+	log.Printf("Balance changes to: %f", balance)
 
 	// Get the created transaction with nested account
-	newTransaction, err = s.tranRepo.GetTransaction(ctx, tx, int64(inserted.ID))
+	newTransaction, err = s.tranRepo.GetTransaction(ctx, tx, inserted.ID)
 	if err != nil {
 		return newTransaction, err
 	}
@@ -111,14 +108,10 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 	if err != nil {
 		return updatedTransaction, err
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Get previous account before updating
-	prev, err := s.tranRepo.GetTransaction(ctx, tx, id)
+	previous, err := s.tranRepo.GetTransaction(ctx, tx, id)
 	if err != nil {
 		return updatedTransaction, err
 	}
@@ -130,14 +123,15 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 	}
 
 	// Compute the amount to update the account balance (if balance change)
-	if prev.Amount != updated.Amount {
-		prevChange := ternary(prev.Category == "Income", -prev.Amount, prev.Amount)
-		currChange := ternary(updated.Category == "Income", -updated.Amount, updated.Amount)
-		accountId := int64(updated.AccountId)
-		err = s.accRepo.UpdateAccountBalance(ctx, tx, accountId, currChange-prevChange)
+	if previous.Amount != updated.Amount {
+		prevChange := If(previous.Category == "Income", -previous.Amount, previous.Amount)
+		currChange := If(updated.Category == "Income", -updated.Amount, updated.Amount)
+		netChange := currChange - prevChange
+		balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, updated.AccountId, netChange)
 		if err != nil {
 			return updatedTransaction, err
 		}
+		log.Printf("Balance changes to: %f", balance)
 	}
 
 	// Get the updated transaction with nested account
@@ -167,23 +161,23 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	deleted, err := s.tranRepo.DeleteTransaction(ctx, tx, id)
 	if err != nil {
 		return err
 	}
+	if deleted.ID != id {
+		return fmt.Errorf("expected to delete transaction %d, deleted %d", id, deleted.ID)
+	}
 
 	// Reverse the effect of creating the transaction
-	netChange := ternary(deleted.Category == "Income", deleted.Amount, -deleted.Amount)
-	accountId := int64(deleted.AccountId)
-	if err = s.accRepo.UpdateAccountBalance(ctx, tx, accountId, netChange); err != nil {
+	netChange := If(deleted.Category == "Income", deleted.Amount, -deleted.Amount)
+	balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, deleted.AccountId, netChange)
+	if err != nil {
 		return err
 	}
+	log.Printf("Balance changes to: %f", balance)
 
 	if err = tx.Commit(ctx); err != nil {
 		return err

@@ -5,7 +5,7 @@ import (
 )
 
 // ternary operator since it's not built-in in Go
-func ternary[T any](condition bool, trueVal, falseVal T) T {
+func If[T any](condition bool, trueVal, falseVal T) T {
 	if condition {
 		return trueVal
 	}

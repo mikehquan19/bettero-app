@@ -5,6 +5,7 @@ import (
 	"betterov2/repositories"
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,63 +42,53 @@ func (s *BillService) ListBills(ctx context.Context, userId int64) ([]models.Bil
 
 // CreateBill inserts the bill into the database and returns the nested bill
 func (s *BillService) CreateBill(ctx context.Context, body models.BillBody) (models.Bill, error) {
-	var newBill models.Bill
+	var createdBill models.Bill
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return newBill, err
+		return createdBill, err
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Insert the bill into the database
+	// Insert the bill into the database, and get the non-nested one
 	inserted, err := s.billRepo.InsertBill(ctx, tx, body)
 	if err != nil {
-		return newBill, err
+		return createdBill, err
 	}
 
 	// Get the created bill with nested account
-	newBill, err = s.billRepo.GetBill(ctx, tx, int64(inserted.ID))
+	createdBill, err = s.billRepo.GetBill(ctx, tx, inserted.ID)
 	if err != nil {
-		return newBill, err
+		return createdBill, err
 	}
 
 	if err = tx.Commit(ctx); err != nil {
-		return newBill, err
+		return createdBill, err
 	}
 
-	return newBill, nil
+	return createdBill, nil
 }
 
 // UpdateBill modifies the bill info.
-// Change of account's Id means that a different account will be responsible for paying the bill
-// when it's due.
-func (s *BillService) UpdateBill(
-	ctx context.Context, id int64, body models.BillBody,
-) (models.Bill, error) {
+// Change of account's Id means that a different account will be responsible for
+// paying the bill when it's due.
+func (s *BillService) UpdateBill(ctx context.Context, id int64, body models.BillBody) (models.Bill, error) {
 	var updatedBill models.Bill
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return updatedBill, err
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Update the bill
-	_, err = s.billRepo.UpdateBill(ctx, tx, id, body)
+	// Update the bill, get the non-nested
+	updated, err := s.billRepo.UpdateBill(ctx, tx, id, body)
 	if err != nil {
 		return updatedBill, err
 	}
 
 	// Fetch the updated bill with nested account
-	updatedBill, err = s.billRepo.GetBill(ctx, tx, id)
+	updatedBill, err = s.billRepo.GetBill(ctx, tx, updated.ID)
 	if err != nil {
 		return updatedBill, err
 	}
@@ -121,60 +112,55 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Store the bill to be deleted, info will be used later
-	deletedBill, err := s.billRepo.GetBill(ctx, tx, id)
+	// Delete the bill, get the non-nested deleted bill
+	deleted, err := s.billRepo.DeleteBill(ctx, tx, id)
 	if err != nil {
 		return err
 	}
-
-	// Delete the bill
-	_, err = s.billRepo.DeleteBill(ctx, tx, id)
-	if err != nil {
-		return err
+	if deleted.ID != id {
+		return fmt.Errorf("expected to delete bill %d, deleted %d", id, deleted.ID)
 	}
 
 	if pay {
-		// Create the transaction in the database representing bill payment
+		// Create the transaction representing bill payment
 		paymentBody := models.PostTransactionBody{
-			AccountID:       int(deletedBill.Account.Id),
-			Merchant:        deletedBill.Merchant,
-			TranDescription: fmt.Sprintf("Payment to %s", deletedBill.Description),
-			Category:        deletedBill.Category,
-			Amount:          deletedBill.Amount,
+			AccountID:       deleted.AccountId,
+			Merchant:        deleted.Merchant,
+			TranDescription: fmt.Sprintf("Payment to %s", deleted.Description),
+			Category:        deleted.Category,
+			Amount:          deleted.Amount,
 			CreatedAt:       time.Now(),
 		}
-		_, err := s.tranRepo.InsertTransaction(ctx, tx, paymentBody)
+		inserted, err := s.tranRepo.InsertTransaction(ctx, tx, paymentBody)
 		if err != nil {
 			return err
 		}
-		// Bill payment is considered expense, so auto-update the balance
-		err = s.accRepo.UpdateAccountBalance(
-			ctx, tx, deletedBill.Account.Id, deletedBill.Amount)
-		if err != nil {
-			return err
-		}
-	}
+		log.Printf("Transaction %s has been inserted\n", inserted.TranDescription)
 
+		// Bill payment is considered expense, so auto-update the balance
+		balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, deleted.AccountId, deleted.Amount)
+		if err != nil {
+			return err
+		}
+		log.Printf("Balance changes to: %f", balance)
+	}
 	if recurring {
 		// Insert the recurring bill that is due next month
 		recurringBody := models.BillBody{
-			AccountID:   int(deletedBill.Account.Id),
-			Merchant:    deletedBill.Merchant,
-			Description: deletedBill.Description,
-			Category:    deletedBill.Category,
-			Amount:      deletedBill.Amount,
-			DueDate:     deletedBill.DueDate.AddDate(0, 1, 0),
+			AccountID:   deleted.AccountId,
+			Merchant:    deleted.Merchant,
+			Description: deleted.Description,
+			Category:    deleted.Category,
+			Amount:      deleted.Amount,
+			DueDate:     deleted.DueDate.AddDate(0, 1, 0),
 		}
-		_, err := s.billRepo.InsertBill(ctx, tx, recurringBody)
+		recurred, err := s.billRepo.InsertBill(ctx, tx, recurringBody)
 		if err != nil {
 			return err
 		}
+		log.Printf("Bill %s has been recurred\n", recurred.Description)
 	}
 
 	if err = tx.Commit(ctx); err != nil {

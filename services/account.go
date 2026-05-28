@@ -5,6 +5,7 @@ import (
 	"betterov2/repositories"
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"time"
 
@@ -13,9 +14,10 @@ import (
 
 // Account Service
 type AccountService struct {
-	db       *pgxpool.Pool
-	accRepo  *repositories.AccountRepo
-	tranRepo *repositories.TransactionRepo
+	db         *pgxpool.Pool
+	accRepo    *repositories.AccountRepo
+	accHisRepo *repositories.AccountHistoryRepo
+	tranRepo   *repositories.TransactionRepo
 }
 
 // Generate a new account service
@@ -47,11 +49,7 @@ func (s *AccountService) GetAccount(ctx context.Context, id int64) (models.Accou
 	if err != nil {
 		return account, err
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	account, err = s.accRepo.GetAccount(ctx, tx, id)
 	if err != nil {
@@ -87,13 +85,22 @@ func (s *AccountService) CreateAccount(
 	if err != nil {
 		return newAccount, err
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	newAccount, err = s.accRepo.InsertAccount(ctx, tx, userId, body)
+	if err != nil {
+		return newAccount, err
+	}
+
+	// Insert the account balance history at the time of creation
+	// We are guaranteed only after account is created will we be able to take actions on transactions.
+	// No hypothetical race conditions between acc and tran creation.
+	accHistBody := models.PostAccHistBody{
+		AccountId:  newAccount.ID,
+		LoggedTime: newAccount.CreatedAt,
+		Balance:    newAccount.Balance,
+	}
+	_, err = s.accHisRepo.InsertHistory(ctx, tx, accHistBody)
 	if err != nil {
 		return newAccount, err
 	}
@@ -125,18 +132,15 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 	if err != nil {
 		return updatedAcc, err
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Get the previous account data
-	prevAccData, err := s.accRepo.GetAccount(ctx, tx, id)
+	// Get the current account data, which be used later
+	previousAcc, err := s.accRepo.GetAccount(ctx, tx, id)
 	if err != nil {
 		return updatedAcc, err
 	}
-	if err = body.Validate(prevAccData.Type); err != nil {
+	// Validate the PUT body based on the current account data
+	if err = body.Validate(previousAcc.Type); err != nil {
 		return updatedAcc, err
 	}
 
@@ -146,30 +150,31 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 		return updatedAcc, err
 	}
 
-	// Create the transaction reflecting the balance change, aka reconile transaction
-	change := updatedAcc.Balance - prevAccData.Balance
+	// Create the transaction reflecting the balance change (reconcile transaction)
+	change := updatedAcc.Balance - previousAcc.Balance
 	if change != 0 {
 		var description, category string
 		if change > 0 {
 			description = fmt.Sprintf("Balance increases %f", round(math.Abs(change)))
-			category = ternary(updatedAcc.Type == "Credit", "Others", "Income")
+			category = If(updatedAcc.Type == "Credit", "Others", "Income")
 		} else {
 			description = fmt.Sprintf("Balance descreases %f", round(math.Abs(change)))
-			category = ternary(updatedAcc.Type == "Credit", "Income", "Others")
+			category = If(updatedAcc.Type == "Credit", "Income", "Others")
 		}
 
-		body := models.PostTransactionBody{
-			AccountID:       int(id),
+		tranBody := models.PostTransactionBody{
+			AccountID:       id,
 			Merchant:        updatedAcc.Institution,
 			TranDescription: description,
 			Category:        category,
 			Amount:          math.Abs(change),
 			CreatedAt:       time.Now(),
 		}
-		_, err = s.tranRepo.InsertTransaction(ctx, tx, body)
+		tran, err := s.tranRepo.InsertTransaction(ctx, tx, tranBody)
 		if err != nil {
 			return updatedAcc, err
 		}
+		log.Printf("Transaction %s has been inserted\n", tran.TranDescription)
 	}
 
 	if err = tx.Commit(ctx); err != nil {
@@ -185,15 +190,14 @@ func (s *AccountService) DeleteAccount(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
-	_, err = s.accRepo.DeleteAccount(ctx, tx, id)
+	deleted, err := s.accRepo.DeleteAccount(ctx, tx, id)
 	if err != nil {
 		return err
+	}
+	if deleted.ID != id {
+		return fmt.Errorf("expected to delete acccount %d, deleted %d", id, deleted.ID)
 	}
 
 	if err = tx.Commit(ctx); err != nil {
@@ -201,4 +205,47 @@ func (s *AccountService) DeleteAccount(ctx context.Context, id int64) error {
 	}
 
 	return nil
+}
+
+// Return the list of account histories
+func (s *AccountService) ListHistories(ctx context.Context, id int64) ([]models.AccountHistory, error) {
+	histories, err := s.accHisRepo.ListHistories(ctx, s.db, id)
+	if err != nil {
+		return nil, err
+	}
+	return histories, nil
+}
+
+// Validate if there's any discrepany between account's balance and list of transactions.
+func (s *AccountService) Validate(ctx context.Context, account models.Account) (float64, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return -1, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Get the latest account history
+	latestHist, err := s.accHisRepo.GetLatestHistory(ctx, tx, account.ID)
+	if err != nil {
+		return -1, err
+	}
+
+	// Get the sum of transactions
+	total, err := s.tranRepo.GetTransactionSum(ctx, tx, account.ID, latestHist.LoggedTime)
+	if err != nil {
+		return -1, err
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return -1, err
+	}
+
+	// Latest logged balance along with all the transactions ever since
+	// should be equal to the current balance.
+	discrepancyAmount := If(
+		account.Type == "Debit",
+		account.Balance-(latestHist.Balance-total),
+		account.Balance-(latestHist.Balance+total),
+	)
+	return discrepancyAmount, nil
 }
