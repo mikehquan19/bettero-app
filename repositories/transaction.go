@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -29,21 +30,17 @@ func (r *TransactionRepo) FilterTransactions(
 	if err != nil {
 		return -1, nil, err
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
-	}()
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Dynamically build the filter based on values from query params
 	sql, args := buildDynamicFilter("user_id = $1", userId, filter)
 
 	// Fetch the total number of transactions
 	const baseCountQuery = `
-	SELECT COUNT(*)
-	FROM transactions t 
-	JOIN accounts a ON t.account_id = a.id
-	`
+SELECT COUNT(*)
+FROM transactions t 
+JOIN accounts a ON t.account_id = a.id
+`
 	row := tx.QueryRow(ctx, baseCountQuery+sql, args...)
 	if err := row.Scan(&count); err != nil {
 		return -1, nil, err
@@ -51,20 +48,20 @@ func (r *TransactionRepo) FilterTransactions(
 
 	// List the page of transactions from this filter
 	const baseListQuery = `
-	SELECT 
-		t.id, 
-		t.merchant, t.tran_description, t.category, t.amount, 
-		t.created_at, t.updated_at,
-		json_build_object(
-			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
-			'institution', a.institution,
-			'type', a.type
-		) AS account
-	FROM transactions t
-	JOIN accounts a ON t.account_id = a.id
-	`
+SELECT 
+	t.id, 
+	t.merchant, t.tran_description, t.category, t.amount, 
+	t.created_at, t.updated_at,
+	json_build_object(
+		'id', a.id,
+		'acc_number', a.acc_number,
+		'acc_name', a.acc_name,
+		'institution', a.institution,
+		'type', a.type
+	) AS account
+FROM transactions t
+JOIN accounts a ON t.account_id = a.id
+`
 	page := fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", len(args)+1)
 	args = append(args, offset)
 
@@ -89,21 +86,21 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, tx pgx.Tx, id int6
 	var transaction models.Transaction
 
 	const getTransactionQuery = `
-	SELECT
-		t.id,
-		json_build_object(
-			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
-			'institution', a.institution,
-			'type', a.type
-		) AS account,
-		t.merchant, t.tran_description, t.category, t.amount, 
-		t.created_at, t.updated_at
-	FROM transactions t
-	JOIN accounts a ON t.account_id = a.id
-	WHERE t.id = $1;
-	`
+SELECT
+	t.id,
+	json_build_object(
+		'id', a.id,
+		'acc_number', a.acc_number,
+		'acc_name', a.acc_name,
+		'institution', a.institution,
+		'type', a.type
+	) AS account,
+	t.merchant, t.tran_description, t.category, t.amount, 
+	t.created_at, t.updated_at
+FROM transactions t
+JOIN accounts a ON t.account_id = a.id
+WHERE t.id = $1;
+`
 	row := tx.QueryRow(ctx, getTransactionQuery, id)
 	if err := models.ScanTransaction(row, &transaction); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -117,7 +114,7 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, tx pgx.Tx, id int6
 
 // Returns the list of results for autocompletes to search for transactions
 func (r *TransactionRepo) ListSuggestions(
-	ctx context.Context, db *pgxpool.Pool, userId int64, q string,
+	ctx context.Context, db *pgxpool.Pool, userId int64, keyword string,
 ) ([]models.Suggestion, error) {
 	var suggestions []models.Suggestion
 
@@ -126,9 +123,7 @@ func (r *TransactionRepo) ListSuggestions(
 		return nil, err
 	}
 	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			panic(err)
-		}
+		_ = tx.Rollback(ctx)
 	}()
 
 	// Set the threshold per query since this is session-scoped
@@ -142,30 +137,30 @@ func (r *TransactionRepo) ListSuggestions(
 	}
 
 	autocompleteQuery := `
-	SELECT type, name
-	FROM (
-		SELECT DISTINCT
-			'description' AS type,
-			t.tran_description AS name,
-			similarity(t.tran_description, $2) AS score
-		FROM transactions t
-		JOIN accounts a ON t.account_id = a.id
-		WHERE t.tran_description % $2 AND a.user_id = $1
+SELECT type, name
+FROM (
+	SELECT DISTINCT
+		'description' AS type,
+		t.tran_description AS name,
+		similarity(t.tran_description, $2) AS score
+	FROM transactions t
+	JOIN accounts a ON t.account_id = a.id
+	WHERE t.tran_description % $2 AND a.user_id = $1
 
-		UNION ALL
+	UNION ALL
 
-		SELECT DISTINCT
-			'merchant' AS type,
-			t.merchant AS name,
-			similarity(t.merchant, $2) AS score
-		FROM transactions t
-		JOIN accounts a ON t.account_id = a.id
-		WHERE t.merchant % $2 AND a.user_id = $1
-	)
-	ORDER BY score DESC
-	LIMIT 10;
-	`
-	rows, err := tx.Query(ctx, autocompleteQuery, userId, q)
+	SELECT DISTINCT
+		'merchant' AS type,
+		t.merchant AS name,
+		similarity(t.merchant, $2) AS score
+	FROM transactions t
+	JOIN accounts a ON t.account_id = a.id
+	WHERE t.merchant % $2 AND a.user_id = $1
+)
+ORDER BY score DESC
+LIMIT 10;
+`
+	rows, err := tx.Query(ctx, autocompleteQuery, userId, keyword)
 	if err != nil {
 		return nil, err
 	}
@@ -190,17 +185,17 @@ func (r *TransactionRepo) InsertTransaction(
 
 	// Insert the new transaction, get its id, category, and amount
 	const insertTransactionQuery = `
-	INSERT INTO transactions (
-		account_id, 
-		merchant, 
-		tran_description, 
-		category, 
-		amount, 
-		created_at
-	)
-	VALUES ($1, $2, $3, $4, $5, $6)
-	RETURNING *;
-	`
+INSERT INTO transactions (
+	account_id, 
+	merchant, 
+	tran_description, 
+	category, 
+	amount, 
+	created_at
+)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING *;
+`
 	row := tx.QueryRow(ctx, insertTransactionQuery,
 		body.AccountID,
 		body.Merchant,
@@ -212,7 +207,7 @@ func (r *TransactionRepo) InsertTransaction(
 	if err := models.ScanNonNestedTran(row, &newTran); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
 			// Insert a transaction for non-existent account
-			return newTran, models.GetForeignKey[models.Account](int64(body.AccountID))
+			return newTran, models.GetForeignKey[models.Account](body.AccountID)
 		}
 		return newTran, err
 	}
@@ -229,16 +224,16 @@ func (r *TransactionRepo) UpdateTransaction(
 
 	// Store the previous category and amount before updating
 	const updateTranQuery = `
-	UPDATE transactions
-	SET merchant = $2, 
-		tran_description = $3, 
-		category = $4, 
-		amount = $5, 
-		created_at = $6, 
-		updated_at = NOW()
-	WHERE id = $1
-	RETURNING *;
-	`
+UPDATE transactions
+SET merchant = $2, 
+	tran_description = $3, 
+	category = $4, 
+	amount = $5, 
+	created_at = $6, 
+	updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+`
 	row := tx.QueryRow(ctx, updateTranQuery,
 		id,
 		body.Merchant,
@@ -264,8 +259,8 @@ func (r *TransactionRepo) DeleteTransaction(ctx context.Context, tx pgx.Tx, id i
 	var deletedTran models.NonNestedTransaction
 
 	const deleteTranQuery = `
-	DELETE FROM transactions WHERE id = $1 RETURNING *;
-	`
+DELETE FROM transactions WHERE id = $1 RETURNING *;
+`
 	row := tx.QueryRow(ctx, deleteTranQuery, id)
 	if err := models.ScanNonNestedTran(row, &deletedTran); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -275,4 +270,25 @@ func (r *TransactionRepo) DeleteTransaction(ctx context.Context, tx pgx.Tx, id i
 	}
 
 	return deletedTran, nil
+}
+
+// Return the total sum of all transactions of an account from a given date
+func (r *TransactionRepo) GetTransactionSum(ctx context.Context, tx pgx.Tx, accountId int64, from time.Time) (float64, error) {
+	var transactionSum float64
+
+	const totalSumQuery = `
+SELECT
+	SUM(t.amount * CASE 
+		WHEN t.category = 'Income' THEN -1 
+		ELSE 1 
+	END)
+FROM transactions t
+WHERE t.account_id = $1 AND t.created_at > $2
+`
+	row := tx.QueryRow(ctx, totalSumQuery, accountId, from)
+	if err := row.Scan(&transactionSum); err != nil {
+		return -1, err
+	}
+
+	return transactionSum, nil
 }

@@ -22,22 +22,22 @@ func (r *BillRepo) ListBills(ctx context.Context, db *pgxpool.Pool, userId int64
 	var bills []models.Bill
 
 	const listBillQuery = `
-	SELECT
-		b.id, 
-		json_build_object(
-			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
-			'institution', a.institution,
-			'type', a.type
-		) AS account,
-		b.merchant, b.description, b.category, b.amount, 
-		b.due_date
-	FROM bills b 
-	JOIN accounts a ON b.account_id = a.id
-	WHERE a.user_id = $1
-	ORDER BY b.due_date ASC;
-	`
+SELECT
+	b.id, 
+	json_build_object(
+		'id', a.id,
+		'acc_number', a.acc_number,
+		'acc_name', a.acc_name,
+		'institution', a.institution,
+		'type', a.type
+	) AS account,
+	b.merchant, b.description, b.category, b.amount, 
+	b.due_date
+FROM bills b 
+JOIN accounts a ON b.account_id = a.id
+WHERE a.user_id = $1
+ORDER BY b.due_date ASC;
+`
 	rows, err := db.Query(ctx, listBillQuery, userId)
 	if err != nil {
 		return bills, err
@@ -56,20 +56,20 @@ func (r *BillRepo) GetBill(ctx context.Context, tx pgx.Tx, id int64) (models.Bil
 	var bill models.Bill
 
 	const getNestedBillQuery = `
-	SELECT
-		b.id,
-		json_build_object(
-			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
-			'institution', a.institution,
-			'type', a.type
-		) AS account,
-		b.merchant, b.description, b.category, b.amount, b.due_date
-	FROM bills b
-	JOIN accounts a ON b.account_id = a.id
-	WHERE b.id = $1;
-	`
+SELECT
+	b.id,
+	json_build_object(
+		'id', a.id,
+		'acc_number', a.acc_number,
+		'acc_name', a.acc_name,
+		'institution', a.institution,
+		'type', a.type
+	) AS account,
+	b.merchant, b.description, b.category, b.amount, b.due_date
+FROM bills b
+JOIN accounts a ON b.account_id = a.id
+WHERE b.id = $1;
+`
 	billRow := tx.QueryRow(ctx, getNestedBillQuery, id)
 	if err := models.ScanBill(billRow, &bill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -88,17 +88,17 @@ func (r *BillRepo) InsertBill(
 	var newBill models.NonNestedBill
 
 	const insertBillQuery = `
-	INSERT INTO bills (
-		account_id, 
-		merchant, 
-		description, 
-		category, 
-		amount, 
-		due_date
-	)
-	VALUES ($1, $2, $3, $4, $5, $6)
-	RETURNING *;
-	`
+INSERT INTO bills (
+	account_id, 
+	merchant, 
+	description, 
+	category, 
+	amount, 
+	due_date
+)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING *;
+`
 	row := tx.QueryRow(ctx, insertBillQuery,
 		body.AccountID,
 		body.Merchant,
@@ -110,7 +110,7 @@ func (r *BillRepo) InsertBill(
 	if err := models.ScanNonNestedBill(row, &newBill); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
 			// Insert a bill for non-existent account
-			return newBill, models.GetForeignKey[models.Account](int64(body.AccountID))
+			return newBill, models.GetForeignKey[models.Account](body.AccountID)
 		}
 		return newBill, err
 	}
@@ -125,16 +125,16 @@ func (r *BillRepo) UpdateBill(
 	var updatedBill models.NonNestedBill
 
 	const updateBillQuery = `
-	UPDATE bills
-	SET account_id = $2, 
-		merchant = $3, 
-		description = $4, 
-		category = $5, 
-		amount = $6, 
-		due_date = $7
-	WHERE id = $1
-	RETURNING *;
-	`
+UPDATE bills
+SET account_id = $2, 
+	merchant = $3, 
+	description = $4, 
+	category = $5, 
+	amount = $6, 
+	due_date = $7
+WHERE id = $1
+RETURNING *;
+`
 	row := tx.QueryRow(ctx, updateBillQuery,
 		id,
 		body.AccountID,
@@ -158,9 +158,7 @@ func (r *BillRepo) UpdateBill(
 func (r *BillRepo) DeleteBill(ctx context.Context, tx pgx.Tx, id int64) (models.NonNestedBill, error) {
 	var deletedBill models.NonNestedBill
 
-	const deleteBillQuery = `
-	DELETE FROM bills WHERE id = $1 RETURNING *;
-	`
+	const deleteBillQuery = "DELETE FROM bills WHERE id = $1 RETURNING *;"
 	row := tx.QueryRow(ctx, deleteBillQuery, id)
 	if err := models.ScanNonNestedBill(row, &deletedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -8,14 +8,6 @@ import (
 	"time"
 )
 
-// ternary operator since it's not built-in in Go
-func ternary[T any](condition bool, trueVal, falseVal T) T {
-	if condition {
-		return trueVal
-	}
-	return falseVal
-}
-
 // buildFilterSQL gets the SQL query to filter transaction from the TransactionFilter.
 // For this to work, model TransactionFilter needs to have tags: "db" and "operator". Keep that
 // in mind whenever we modify the model.
