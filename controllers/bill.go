@@ -113,7 +113,7 @@ func (t *BillController) DeleteBill(c *gin.Context) {
 	var pay, recurring bool
 	// Specify if the user pays the bill or just deletes
 	if c.Query("pay") != "" {
-		recurring, err = strconv.ParseBool(c.Query("recurring"))
+		recurring, err = strconv.ParseBool(c.Query("pay"))
 		if err != nil {
 			respondError(c, http.StatusBadRequest, err)
 		}
