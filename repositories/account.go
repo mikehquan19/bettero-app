@@ -24,13 +24,44 @@ func (r *AccountRepo) ListAccounts(ctx context.Context, db *pgxpool.Pool, userId
 	var accounts []models.Account
 
 	const listAccountQuery = `
-SELECT * FROM accounts 
-WHERE user_id = $1 ORDER BY updated_at DESC;
-`
+	SELECT * FROM accounts WHERE user_id = $1 ORDER BY updated_at DESC;
+	`
 	rows, err := db.Query(ctx, listAccountQuery, userId)
 	if err != nil {
 		return nil, err
 	}
+	accounts, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Account])
+	if err != nil {
+		return nil, err
+	}
+
+	return accounts, nil
+}
+
+// ListAllAccounts returns the list of accounts based on filters.
+// User can specify if the accounts are past due or unflagged (not both).
+// This method primarily is used by cron jobs.
+func (r *AccountRepo) ListAllAccounts(
+	ctx context.Context, db *pgxpool.Pool, pastDue bool, unFlagged bool,
+) ([]models.Account, error) {
+	var accounts []models.Account
+
+	if pastDue && unFlagged {
+		return nil, fmt.Errorf("Querying by both pastDue & unFlagged is not supported for now")
+	}
+
+	var filter string
+	if pastDue {
+		filter = "WHERE next_due < CURRENT_DATE"
+	} else if unFlagged {
+		filter = "WHERE discrepancy_flagged = FALSE"
+	}
+	listAccountQuery := fmt.Sprintf("SELECT * FROM accounts %s", filter)
+	rows, err := db.Query(ctx, listAccountQuery)
+	if err != nil {
+		return nil, err
+	}
+
 	accounts, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Account])
 	if err != nil {
 		return nil, err
@@ -54,7 +85,9 @@ func (r *AccountRepo) GetAccount(ctx context.Context, tx pgx.Tx, id int64) (mode
 	return account, nil
 }
 
-func (r *AccountRepo) ListTransactions(
+// ListTransactions returns the paginated list of transactions of the acount with
+// given ID
+func (r *AccountRepo) ListAccountTransactions(
 	ctx context.Context, db *pgxpool.Pool, id int64, filter models.TransactionFilter, offset int64,
 ) (int, []models.Transaction, error) {
 	var count int
@@ -71,10 +104,10 @@ func (r *AccountRepo) ListTransactions(
 
 	// Fetch the total number of transactions
 	const baseCountQuery = `
-SELECT COUNT(*)
-FROM transactions t 
-JOIN accounts a ON t.account_id = a.id
-`
+	SELECT COUNT(*)
+	FROM transactions t 
+	JOIN accounts a ON t.account_id = a.id
+	`
 	row := tx.QueryRow(ctx, baseCountQuery+sql, args...)
 	if err := row.Scan(&count); err != nil {
 		return -1, nil, err
@@ -82,20 +115,20 @@ JOIN accounts a ON t.account_id = a.id
 
 	// List the page of transactions from this filter
 	const baseListQuery = `
-SELECT 
-	t.id, 
-	t.merchant, t.tran_description, t.category, t.amount, 
-	t.created_at, t.updated_at,
-	json_build_object(
-		'id', a.id,
-		'acc_number', a.acc_number,
-		'acc_name', a.acc_name,
-		'institution', a.institution,
-		'type', a.type
-	) AS account
-FROM transactions t
-JOIN accounts a ON t.account_id = a.id
-`
+	SELECT 
+		t.id, 
+		t.merchant, t.tran_description, t.category, t.amount, 
+		t.created_at, t.updated_at,
+		json_build_object(
+			'id', a.id,
+			'acc_number', a.acc_number,
+			'acc_name', a.acc_name,
+			'institution', a.institution,
+			'type', a.type
+		) AS account
+	FROM transactions t
+	JOIN accounts a ON t.account_id = a.id
+	`
 	page := fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", len(args)+1)
 	args = append(args, offset)
 
@@ -126,19 +159,19 @@ func (r *AccountRepo) InsertAccount(
 	}
 
 	const insertAccountQuery = `
-INSERT INTO accounts (
-	user_id, 
-	acc_number, 
-	acc_name, 
-	institution, 
-	type, 
-	balance, 
-	credit_limit, 
-	next_due
-)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING *;
-`
+	INSERT INTO accounts (
+		user_id, 
+		acc_number, 
+		acc_name, 
+		institution, 
+		type, 
+		balance, 
+		credit_limit, 
+		next_due
+	)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	RETURNING *;
+	`
 	row := tx.QueryRow(ctx, insertAccountQuery,
 		userId,
 		body.AccNumber,
@@ -167,17 +200,17 @@ func (r *AccountRepo) UpdateAccount(
 	var updatedAccount models.Account
 
 	updateAccountQuery := `
-UPDATE accounts
-SET acc_number = $2, 
-	acc_name = $3, 
-	institution = $4, 
-	balance = $5, 
-	credit_limit = $6, 
-	next_due = $7, 
-	updated_at = NOW()
-WHERE id = $1
-RETURNING *;
-`
+	UPDATE accounts
+	SET acc_number = $2, 
+		acc_name = $3, 
+		institution = $4, 
+		balance = $5, 
+		credit_limit = $6, 
+		next_due = $7, 
+		updated_at = NOW()
+	WHERE id = $1
+	RETURNING *;
+	`
 	row := tx.QueryRow(ctx, updateAccountQuery,
 		id,
 		body.AccNumber,
@@ -205,15 +238,15 @@ func (r *AccountRepo) UpdateAccountBalance(ctx context.Context, tx pgx.Tx, id in
 	var newBalance float64
 
 	const updateBalanceQuery = `
-UPDATE accounts a
-SET balance = CASE
-		WHEN type = 'Debit' THEN balance - $2
-		ELSE balance + $2
-	END,
-	updated_at = NOW()
-WHERE id = $1
-RETURNING balance;
-`
+	UPDATE accounts a
+	SET balance = CASE
+			WHEN type = 'Debit' THEN balance - $2
+			ELSE balance + $2
+		END,
+		updated_at = NOW()
+	WHERE id = $1
+	RETURNING balance;
+	`
 	row := tx.QueryRow(ctx, updateBalanceQuery, id, netChange)
 	if err := row.Scan(&newBalance); err != nil {
 		return newBalance, err
@@ -222,12 +255,58 @@ RETURNING balance;
 	return newBalance, nil
 }
 
+// MoveDueDateNextMonth bulk updates next due of the list of accounts to next month.
+// Returns the number of successfully updated accounts.
+// This method is primarily used by cron jobs
+func (r *AccountRepo) MoveAccountsDueDate(ctx context.Context, db *pgxpool.Pool, ids []int64) (int, error) {
+	const updateDueDateQuery = `
+	UPDATE accounts a
+	SET next_due = next_due + INTERVAL '1 month'
+	WHERE id = ANY($1)
+	RETURNING id;
+	`
+	rows, err := db.Query(ctx, updateDueDateQuery, ids)
+	if err != nil {
+		return 0, err
+	}
+	updatedIDs, err := pgx.CollectRows(rows, pgx.RowToStructByName[int64])
+	if err != nil {
+		return 0, err
+	}
+
+	return len(updatedIDs), nil
+}
+
+// FlagAccount will flag the account with the given discrepany amount.
+func (r *AccountRepo) FlagAccount(
+	ctx context.Context, tx pgx.Tx, id int64, discrepancyAmount float64,
+) (models.Account, error) {
+	var flaggedAccount models.Account
+
+	const flagAccountQuery = `
+	UPDATE accounts
+	SET discrepancy_flagged = TRUE, 
+		discrepancy_amount = $2
+	WHERE id = $1
+	RETURNING *;
+	`
+	row := tx.QueryRow(ctx, flagAccountQuery, id, discrepancyAmount)
+	if err := models.ScanAccount(row, &flaggedAccount); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return flaggedAccount, models.GetNotFound[models.Account](id)
+		}
+		return flaggedAccount, err
+	}
+
+	return flaggedAccount, nil
+}
+
 // Update the account's data and returns the deleted account
 func (r *AccountRepo) DeleteAccount(ctx context.Context, tx pgx.Tx, id int64) (models.Account, error) {
 	var deletedAccount models.Account
 
 	const deleteAccountQuery = `
-DELETE FROM accounts WHERE id = $1 RETURNING *;
+	DELETE FROM accounts WHERE id = $1 RETURNING *;
 	`
 	row := tx.QueryRow(ctx, deleteAccountQuery, id)
 	if err := models.ScanAccount(row, &deletedAccount); err != nil {

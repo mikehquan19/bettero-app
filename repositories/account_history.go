@@ -10,10 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-/*
-Account History Repository
-*/
-
 type AccountHistoryRepo struct{}
 
 func NewAccountHistoryRepo() *AccountHistoryRepo {
@@ -25,8 +21,8 @@ func (r *AccountHistoryRepo) ListHistories(ctx context.Context, db *pgxpool.Pool
 	var histories []models.AccountHistory
 
 	const listHistoryQuery = `
-SELECT * FROM account_histories
-WHERE account_id = $1 ORDER BY logged_time ASC;
+	SELECT * FROM account_histories
+	WHERE account_id = $1 ORDER BY logged_time ASC;
 	`
 	rows, err := db.Query(ctx, listHistoryQuery, accountId)
 	if err != nil {
@@ -44,15 +40,15 @@ WHERE account_id = $1 ORDER BY logged_time ASC;
 func (r *AccountHistoryRepo) GetLatestHistory(ctx context.Context, tx pgx.Tx, accountId int64) (models.AccountHistory, error) {
 	var latestHistory models.AccountHistory
 
-	const getLatestQuery = `
-SELECT * FROM account_histories
-WHERE account_id = $1 
-ORDER BY logged_time DESC LIMIT 1;
+	const getLatestHistoryQuery = `
+	SELECT * FROM account_histories
+	WHERE account_id = $1
+	ORDER BY logged_time DESC LIMIT 1;
 	`
-	row := tx.QueryRow(ctx, getLatestQuery, accountId)
+	row := tx.QueryRow(ctx, getLatestHistoryQuery, accountId)
 	if err := models.ScanAccHistory(row, &latestHistory); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Tell the system that there is no account
+			// No history found for the account
 			return latestHistory, models.GetNotFound[models.Account](accountId)
 		}
 		return latestHistory, err
@@ -61,20 +57,20 @@ ORDER BY logged_time DESC LIMIT 1;
 	return latestHistory, nil
 }
 
-// InsertAccountHistory the account history to database
+// InsertHistory inserts the account history to database
 func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, tx pgx.Tx, body models.PostAccHistBody) (models.AccountHistory, error) {
 	var newAccHistory models.AccountHistory
 
 	// Don't need to include time because it's auto now
 	const insertHistoryQuery = `
-INSERT INTO account_histories (
-	account_id, 
-	logged_time, 
-	balance
-)
-VALUES ($1, $2, $3)
-RETURNING *;
-`
+	INSERT INTO account_histories (
+		account_id,
+		logged_time,
+		balance
+	)
+	VALUES ($1, $2, $3)
+	RETURNING *;
+	`
 	row := tx.QueryRow(ctx, insertHistoryQuery,
 		body.AccountId,
 		body.LoggedTime,
@@ -83,8 +79,7 @@ RETURNING *;
 	if err := models.ScanAccHistory(row, &newAccHistory); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
 			// Insert history that references non-existent account
-			accountId := body.AccountId
-			return newAccHistory, models.GetForeignKey[models.Account](accountId)
+			return newAccHistory, models.GetForeignKey[models.Account](body.AccountId)
 		}
 		return newAccHistory, err
 	}
@@ -92,20 +87,24 @@ RETURNING *;
 	return newAccHistory, nil
 }
 
-// Delete the account history from database
-func (r *AccountHistoryRepo) DeleteHistory(ctx context.Context, tx pgx.Tx, id int64) (models.AccountHistory, error) {
-	var deletedHist models.AccountHistory
-
+// DeleteOutdatedHistories deletes the outdated account history of account with given ID from database.
+// Returns the number of successfully deleted history
+func (r *AccountHistoryRepo) DeleteOutdatedHistories(ctx context.Context, tx pgx.Tx, accountId int64) (int, error) {
 	const deleteHistQuery = `
-DELETE FROM account_histories WHERE id = $1 RETURNING *;
+	DELETE FROM account_histories 
+	WHERE
+		logged_time < CURRENT_DATE - INTERVAL '6 months'
+		AND account_id = $1
+	RETURNING ids;
 	`
-	row := tx.QueryRow(ctx, deleteHistQuery, id)
-	if err := models.ScanAccHistory(row, &deletedHist); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return deletedHist, models.GetNotFound[models.AccountHistory](id)
-		}
-		return deletedHist, err
+	rows, err := tx.Query(ctx, deleteHistQuery, accountId)
+	if err != nil {
+		return -1, err
+	}
+	deleted, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[int64])
+	if err != nil {
+		return -1, err
 	}
 
-	return deletedHist, nil
+	return len(deleted), nil
 }
