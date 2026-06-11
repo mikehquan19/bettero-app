@@ -29,41 +29,41 @@ func (s *SummaryService) GetBasicAnalysis(
 	var analysis models.BasicAnalysis
 
 	getAnalysisQuery := `
-WITH total_balance AS (
-	SELECT SUM(a.balance) AS total_balance 
-	FROM accounts a 
-	WHERE a.user_id = $1 and a.type = 'Debit'
-),
-total_amount_due AS (
-	SELECT SUM(a.balance) AS total_amount_due 
-	FROM accounts a 
-	WHERE a.user_id = $1 and a.type = 'Credit'
-),
-total_income AS (
-	SELECT SUM(t.amount) AS total_income 
-	FROM transactions t
-	JOIN accounts a ON t.account_id = a.id
-	WHERE
-		a.user_id = $1 AND
-		t.category = 'Income' AND 
-		t.created_at >= $2 AND t.created_at < $3
-),
-total_expense AS (
-	SELECT SUM(t.amount) AS total_expense
-	FROM transactions t
-	JOIN accounts a ON t.account_id = a.id
-	WHERE
-		a.user_id = $1 AND
-		t.category <> 'Income' AND 
-		t.created_at >= $2 AND t.created_at < $3
-)
-SELECT 
-	b.total_balance, 
-	a.total_amount_due, 
-	i.total_income, 
-	e.total_expense
-FROM total_balance b, total_amount_due a, total_income i, total_expense e
-`
+	WITH total_balance AS (
+		SELECT SUM(a.balance) AS total_balance 
+		FROM accounts a 
+		WHERE a.user_id = $1 and a.type = 'Debit'
+	),
+	total_amount_due AS (
+		SELECT SUM(a.balance) AS total_amount_due 
+		FROM accounts a 
+		WHERE a.user_id = $1 and a.type = 'Credit'
+	),
+	total_income AS (
+		SELECT SUM(t.amount) AS total_income 
+		FROM transactions t
+		JOIN accounts a ON t.account_id = a.id
+		WHERE
+			a.user_id = $1 AND
+			t.category = 'Income' AND 
+			t.created_at >= $2 AND t.created_at < $3
+	),
+	total_expense AS (
+		SELECT SUM(t.amount) AS total_expense
+		FROM transactions t
+		JOIN accounts a ON t.account_id = a.id
+		WHERE
+			a.user_id = $1 AND
+			t.category <> 'Income' AND 
+			t.created_at >= $2 AND t.created_at < $3
+	)
+	SELECT 
+		b.total_balance, 
+		a.total_amount_due, 
+		i.total_income, 
+		e.total_expense
+	FROM total_balance b, total_amount_due a, total_income i, total_expense e
+	`
 	analysisRow := s.database.QueryRow(ctx, getAnalysisQuery, userId, start, end)
 	if err := models.ScanAnalysis(analysisRow, &analysis); err != nil {
 		return analysis, err
@@ -85,7 +85,6 @@ func (s *SummaryService) GetCompositionMap(
 		return compositionMap, err
 	}
 
-	// Constant time since the number of categories is fixed
 	var totalExpense = 0.0
 	for _, amount := range categoryToAmount {
 		totalExpense += amount
@@ -151,6 +150,7 @@ func (s *SummaryService) GetDateToAmount(
 		objectTable = "transactions t JOIN accounts a ON t.account_id = a.id"
 		objectFilter = "a.user_id = $1"
 	case "account":
+		// Otherwise, account's ID is already in the transactions table
 		objectTable = "transactions t"
 		objectFilter = "t.account_id = $1"
 	default:
@@ -158,16 +158,16 @@ func (s *SummaryService) GetDateToAmount(
 	}
 
 	getDateToAmtQuery := fmt.Sprintf(`
-SELECT
-	t.created_at::date AS date, 
-	SUM(t.amount) AS amount
-FROM %s
-WHERE
-	%s AND
-	t.category <> 'Income' AND 
-	t.created_at >= $2 AND t.created_at < $3
-GROUP BY date;
-`, objectTable, objectFilter)
+	SELECT
+		t.created_at::date AS date, 
+		SUM(t.amount) AS amount
+	FROM %s
+	WHERE
+		%s AND
+		t.category <> 'Income' AND 
+		t.created_at >= $2 AND t.created_at < $3
+	GROUP BY date;
+	`, objectTable, objectFilter)
 	groupByDateRows, err := s.database.Query(ctx, getDateToAmtQuery, id, start, end)
 	if err != nil {
 		return dateToAmount, err
@@ -175,7 +175,7 @@ GROUP BY date;
 
 	var date time.Time
 	var amount float64
-	cmdTag, err := pgx.ForEachRow(
+	_, err = pgx.ForEachRow(
 		groupByDateRows,
 		[]any{&date, &amount},
 		func() error {
@@ -183,10 +183,6 @@ GROUP BY date;
 			return nil
 		},
 	)
-	if cmdTag.RowsAffected() == 0 {
-		// There is something wrong with the aggregation
-		return dateToAmount, fmt.Errorf("error fetching date to amount")
-	}
 
 	return dateToAmount, err
 }
@@ -206,7 +202,7 @@ func getCategoryToAmount(
 ) (map[string]float64, error) {
 	var categoryToAmount = make(map[string]float64)
 
-	// Since there are only 10 categories, this operates in constant time
+	// There are 10 categories
 	for _, category := range []string{
 		"Housing", "Automobile", "Medical", "Subscription", "Grocery", "Dining", "Shopping", "Gas", "Others",
 	} {
@@ -227,16 +223,16 @@ func getCategoryToAmount(
 	}
 
 	getCatToAmtQuery := fmt.Sprintf(`
-SELECT
-	t.category, 
-	SUM(t.amount) AS amount
-FROM %s
-WHERE
-	%s AND
-	t.category <> 'Income' AND 
-	t.created_at >= $2 AND t.created_at < $3
-GROUP BY t.category;
-`, objectTable, objectFilter)
+	SELECT
+		t.category, 
+		SUM(t.amount) AS amount
+	FROM %s
+	WHERE
+		%s AND
+		t.category <> 'Income' AND 
+		t.created_at >= $2 AND t.created_at < $3
+	GROUP BY t.category;
+	`, objectTable, objectFilter)
 	groupByCategoryRows, err := db.Query(ctx, getCatToAmtQuery, id, start, end)
 	if err != nil {
 		return categoryToAmount, err
@@ -244,7 +240,7 @@ GROUP BY t.category;
 
 	var category string
 	var amount float64
-	cmdTag, err := pgx.ForEachRow(
+	_, err = pgx.ForEachRow(
 		groupByCategoryRows,
 		[]any{&category, &amount},
 		func() error {
@@ -252,10 +248,6 @@ GROUP BY t.category;
 			return nil
 		},
 	)
-	if cmdTag.RowsAffected() == 0 {
-		// There is something wrong with the aggregation (dangerous)
-		return categoryToAmount, fmt.Errorf("error fetching category to amount")
-	}
 
 	return categoryToAmount, err
 }
