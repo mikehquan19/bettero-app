@@ -23,6 +23,7 @@ func main() {
 
 	// Initialize repositories
 	accountRepo := repositories.NewAccountRepo()
+	accountHistoryRepo := repositories.NewAccountHistoryRepo()
 	transactionRepo := repositories.NewTransactionRepo()
 	billRepo := repositories.NewBillRepo()
 
@@ -30,6 +31,7 @@ func main() {
 	accountService := services.NewAccountService(
 		db,
 		accountRepo,
+		accountHistoryRepo,
 		transactionRepo,
 	)
 	transactionService := services.NewTransactionService(

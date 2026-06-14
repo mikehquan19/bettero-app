@@ -8,8 +8,9 @@ import (
 )
 
 var (
-	ErrNotFound   = errors.New("resource not found")
-	ErrForeignKey = errors.New("references a non-existent resource")
+	ErrNotFound          = errors.New("resource not found")
+	ErrForeignKey        = errors.New("references a non-existent resource")
+	ErrTransactionTooOld = errors.New("transaction too old to be taken actions on")
 )
 
 func GetNotFound[T any](id int64) error {

@@ -212,6 +212,28 @@ func (a *AccountController) GetAccountTransactions(c *gin.Context) {
 	respondSuccess(c, http.StatusOK, paginatedResponse)
 }
 
+// GET: /accounts/:id/histories
+//
+// Returns the list of balance histories of the account
+func (a *AccountController) GetAccountHistories(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+	defer cancel()
+
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err)
+		return
+	}
+
+	histories, err := a.accService.ListHistories(ctx, int64(id))
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondSuccess(c, http.StatusOK, histories)
+}
+
 // GET: /accounts/:id
 //
 // Get the spending summary of the account

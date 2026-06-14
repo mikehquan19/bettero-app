@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -66,6 +67,11 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
+	if body.CreatedAt.Before(time.Now().AddDate(0, 0, -14)) {
+		// Transaction older than 2 weeks ago can't be created
+		return newTransaction, models.ErrTransactionTooOld
+	}
+
 	// Insert the new transaction data
 	inserted, err := s.tranRepo.InsertTransaction(ctx, tx, body)
 	if err != nil {
@@ -114,6 +120,10 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 	previous, err := s.tranRepo.GetTransaction(ctx, tx, id)
 	if err != nil {
 		return updatedTransaction, err
+	}
+
+	if previous.CreatedAt.Before(time.Now().AddDate(0, 0, -14)) {
+		return updatedTransaction, models.ErrTransactionTooOld
 	}
 
 	// Update the transaction
@@ -167,6 +177,11 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 	if err != nil {
 		return err
 	}
+
+	if deleted.CreatedAt.Before(time.Now().AddDate(0, 0, -14)) {
+		return models.ErrTransactionTooOld
+	}
+
 	if deleted.ID != id {
 		return fmt.Errorf("expected to delete transaction %d, deleted %d", id, deleted.ID)
 	}

@@ -22,12 +22,13 @@ type AccountService struct {
 
 // Generate a new account service
 func NewAccountService(
-	db *pgxpool.Pool, accRepo *repositories.AccountRepo, tranRepo *repositories.TransactionRepo,
+	db *pgxpool.Pool, accRepo *repositories.AccountRepo, accHistRepo *repositories.AccountHistoryRepo, tranRepo *repositories.TransactionRepo,
 ) *AccountService {
 	return &AccountService{
-		db:       db,
-		accRepo:  accRepo,
-		tranRepo: tranRepo,
+		db:         db,
+		accRepo:    accRepo,
+		accHisRepo: accHistRepo,
+		tranRepo:   tranRepo,
 	}
 }
 
@@ -65,9 +66,9 @@ func (s *AccountService) GetAccount(ctx context.Context, id int64) (models.Accou
 
 // ListAccountTransactions returns the list of transactions of account
 func (s *AccountService) ListAccountTransactions(
-	ctx context.Context, id int64, tranFilter models.TransactionFilter, offset int64,
+	ctx context.Context, id int64, filter models.TransactionFilter, offset int64,
 ) (int, []models.Transaction, error) {
-	count, transactions, err := s.accRepo.ListTransactions(ctx, s.db, id, tranFilter, offset)
+	count, transactions, err := s.accRepo.ListAccountTransactions(ctx, s.db, id, filter, offset)
 	if err != nil {
 		return -1, nil, err
 	}
@@ -76,10 +77,14 @@ func (s *AccountService) ListAccountTransactions(
 
 // CreateAccount inserts new account.
 // If the account references a non-existent user, it returns a custom not found error.
-func (s *AccountService) CreateAccount(
-	ctx context.Context, userId int64, body models.PostAccountBody,
-) (models.Account, error) {
+func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body models.PostAccountBody) (models.Account, error) {
 	var newAccount models.Account
+
+	// Debit account is not supposed to have credit limit and next due
+	// Credit account must have credit limit and next due
+	if err := body.Validate(); err != nil {
+		return newAccount, err
+	}
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -100,10 +105,16 @@ func (s *AccountService) CreateAccount(
 		LoggedTime: newAccount.CreatedAt,
 		Balance:    newAccount.Balance,
 	}
-	_, err = s.accHisRepo.InsertHistory(ctx, tx, accHistBody)
+	insertedHistory, err := s.accHisRepo.InsertHistory(ctx, tx, accHistBody)
 	if err != nil {
 		return newAccount, err
 	}
+	// Log the account's history
+	log.Printf("History for account %d, balance %f on %s",
+		insertedHistory.AccountId,
+		insertedHistory.Balance,
+		insertedHistory.LoggedTime,
+	)
 
 	if err = tx.Commit(ctx); err != nil {
 		return newAccount, err
@@ -139,7 +150,8 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 	if err != nil {
 		return updatedAcc, err
 	}
-	// Validate the PUT body based on the current account data
+	// Debit account can't have credit limit and next due
+	// Credit account must have credit limit and next due
 	if err = body.Validate(previousAcc.Type); err != nil {
 		return updatedAcc, err
 	}
@@ -207,45 +219,11 @@ func (s *AccountService) DeleteAccount(ctx context.Context, id int64) error {
 	return nil
 }
 
-// Return the list of account histories
+// ListHistories returns the list of balance histories of the account with given ID
 func (s *AccountService) ListHistories(ctx context.Context, id int64) ([]models.AccountHistory, error) {
 	histories, err := s.accHisRepo.ListHistories(ctx, s.db, id)
 	if err != nil {
 		return nil, err
 	}
 	return histories, nil
-}
-
-// Validate if there's any discrepany between account's balance and list of transactions.
-func (s *AccountService) Validate(ctx context.Context, account models.Account) (float64, error) {
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return -1, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	// Get the latest account history
-	latestHist, err := s.accHisRepo.GetLatestHistory(ctx, tx, account.ID)
-	if err != nil {
-		return -1, err
-	}
-
-	// Get the sum of transactions
-	total, err := s.tranRepo.GetTransactionSum(ctx, tx, account.ID, latestHist.LoggedTime)
-	if err != nil {
-		return -1, err
-	}
-
-	if err = tx.Commit(ctx); err != nil {
-		return -1, err
-	}
-
-	// Latest logged balance along with all the transactions ever since
-	// should be equal to the current balance.
-	discrepancyAmount := If(
-		account.Type == "Debit",
-		account.Balance-(latestHist.Balance-total),
-		account.Balance-(latestHist.Balance+total),
-	)
-	return discrepancyAmount, nil
 }
