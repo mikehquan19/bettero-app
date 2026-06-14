@@ -33,7 +33,7 @@ func (r *TransactionRepo) FilterTransactions(
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Dynamically build the filter based on values from query params
-	sql, args := buildDynamicFilter("user_id = $1", userId, filter)
+	sql, args := buildDynamicFilter("a.user_id = $1", userId, filter)
 
 	// Fetch the total number of transactions
 	const baseCountQuery = `

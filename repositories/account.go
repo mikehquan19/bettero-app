@@ -100,14 +100,10 @@ func (r *AccountRepo) ListAccountTransactions(
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Dynamically build the filter based on values from query params
-	sql, args := buildDynamicFilter("a.id = $1", id, filter)
+	sql, args := buildDynamicFilter("t.account_id = $1", id, filter)
 
 	// Fetch the total number of transactions
-	const baseCountQuery = `
-	SELECT COUNT(*)
-	FROM transactions t 
-	JOIN accounts a ON t.account_id = a.id
-	`
+	const baseCountQuery = "SELECT COUNT(*) FROM transactions t "
 	row := tx.QueryRow(ctx, baseCountQuery+sql, args...)
 	if err := row.Scan(&count); err != nil {
 		return -1, nil, err
