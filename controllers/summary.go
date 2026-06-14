@@ -26,6 +26,7 @@ func (s *SummaryController) GetSummary(c *gin.Context) {
 	defer cancel()
 
 	var dates [2]time.Time
+	var intervalType string
 	var err error
 	for i, end := range [2]string{"start", "end"} {
 		dates[i], err = time.Parse("2006-01-02", c.Query(end))
@@ -33,6 +34,9 @@ func (s *SummaryController) GetSummary(c *gin.Context) {
 			respondError(c, http.StatusBadRequest, err)
 			return
 		}
+	}
+	if intervalType = c.Query("interval_type"); intervalType == "" {
+		intervalType = "MONTH"
 	}
 
 	basic, err := s.summaryService.GetBasicAnalysis(ctx, UserID, dates[0], dates[1])
@@ -53,7 +57,7 @@ func (s *SummaryController) GetSummary(c *gin.Context) {
 		return
 	}
 
-	change, err := s.summaryService.GetChangeMap(ctx, "user", UserID, dates[0], dates[1])
+	change, err := s.summaryService.GetChangeMap(ctx, "user", UserID, intervalType, dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return

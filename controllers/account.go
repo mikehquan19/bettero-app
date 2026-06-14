@@ -268,7 +268,7 @@ func (a *AccountController) GetAccountSummary(c *gin.Context) {
 		return
 	}
 
-	change, err := a.summaryService.GetChangeMap(ctx, "account", int64(id), dates[0], dates[1])
+	change, err := a.summaryService.GetChangeMap(ctx, "account", int64(id), "MONTH", dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
