@@ -152,17 +152,6 @@ type Transaction struct {
 	UpdatedAt       time.Time     `json:"updated_at" db:"updated_at"`
 }
 
-type NonNestedTransaction struct {
-	ID              int64     `json:"id" db:"id"`
-	AccountId       int64     `json:"account_id" db:"account_id"`
-	Merchant        string    `json:"merchant" db:"merchant"`
-	TranDescription string    `json:"tran_description" db:"tran_description"`
-	Category        string    `json:"category" db:"category"`
-	Amount          float64   `json:"amount" db:"amount"`
-	CreatedAt       time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at" db:"updated_at"`
-}
-
 // A shortened version of account that is used in nested transaction
 type NestedAccount struct {
 	Id          int64  `json:"id" db:"id"`
@@ -205,21 +194,6 @@ func ScanTransaction(tranRow pgx.Row, tran *Transaction) error {
 	return err
 }
 
-// ScanNonNestedTransaction parses the returned row into transaction and destinations
-func ScanNonNestedTran(tranRow pgx.Row, tran *NonNestedTransaction) error {
-	err := tranRow.Scan(
-		&tran.ID,
-		&tran.AccountId,
-		&tran.Merchant,
-		&tran.TranDescription,
-		&tran.Category,
-		&tran.Amount,
-		&tran.CreatedAt,
-		&tran.UpdatedAt,
-	)
-	return err
-}
-
 type TransactionFilter struct {
 	Category        string     `db:"category" operator:"="`
 	Merchant        string     `db:"merchant" operator:"="`
@@ -247,35 +221,11 @@ type BillBody struct {
 	DueDate     time.Time `json:"due_date"`
 }
 
-type NonNestedBill struct {
-	ID          int64     `json:"id" db:"id"`
-	AccountId   int64     `json:"account_id" db:"account_id"`
-	Merchant    string    `json:"merchant" db:"merchant"`
-	Description string    `json:"description" db:"description"`
-	Category    string    `json:"category" db:"category"`
-	Amount      float64   `json:"amount" db:"amount"`
-	DueDate     time.Time `json:"due_date" db:"due_date"`
-}
-
 // ScanBill parses the returned row into bill
 func ScanBill(billRow pgx.Row, bill *Bill) error {
 	err := billRow.Scan(
 		&bill.ID,
 		&bill.Account,
-		&bill.Merchant,
-		&bill.Description,
-		&bill.Category,
-		&bill.Amount,
-		&bill.DueDate,
-	)
-	return err
-}
-
-// ScanNonNestedBill parses the returned row into bill without nested account
-func ScanNonNestedBill(billRow pgx.Row, bill *NonNestedBill) error {
-	err := billRow.Scan(
-		&bill.ID,
-		&bill.AccountId,
 		&bill.Merchant,
 		&bill.Description,
 		&bill.Category,

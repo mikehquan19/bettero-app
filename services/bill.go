@@ -50,14 +50,7 @@ func (s *BillService) CreateBill(ctx context.Context, body models.BillBody) (mod
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Insert the bill into the database, and get the non-nested one
-	inserted, err := s.billRepo.InsertBill(ctx, tx, body)
-	if err != nil {
-		return createdBill, err
-	}
-
-	// Get the created bill with nested account
-	createdBill, err = s.billRepo.GetBill(ctx, tx, inserted.ID)
+	createdBill, err = s.billRepo.InsertBill(ctx, tx, body)
 	if err != nil {
 		return createdBill, err
 	}
@@ -81,14 +74,7 @@ func (s *BillService) UpdateBill(ctx context.Context, id int64, body models.Bill
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Update the bill, get the non-nested
-	updated, err := s.billRepo.UpdateBill(ctx, tx, id, body)
-	if err != nil {
-		return updatedBill, err
-	}
-
-	// Fetch the updated bill with nested account
-	updatedBill, err = s.billRepo.GetBill(ctx, tx, updated.ID)
+	updatedBill, err = s.billRepo.UpdateBill(ctx, tx, id, body)
 	if err != nil {
 		return updatedBill, err
 	}
@@ -126,7 +112,7 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 	if pay {
 		// Create the transaction representing bill payment
 		paymentBody := models.PostTransactionBody{
-			AccountID:       deleted.AccountId,
+			AccountID:       deleted.Account.Id,
 			Merchant:        deleted.Merchant,
 			TranDescription: fmt.Sprintf("Payment to %s", deleted.Description),
 			Category:        deleted.Category,
@@ -140,7 +126,7 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 		log.Printf("Transaction %s has been inserted\n", inserted.TranDescription)
 
 		// Bill payment is considered expense, so auto-update the balance
-		balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, deleted.AccountId, deleted.Amount)
+		balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, deleted.Account.Id, deleted.Amount)
 		if err != nil {
 			return err
 		}
@@ -149,7 +135,7 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 	if recurring {
 		// Insert the recurring bill that is due next month
 		recurringBody := models.BillBody{
-			AccountID:   deleted.AccountId,
+			AccountID:   deleted.Account.Id,
 			Merchant:    deleted.Merchant,
 			Description: deleted.Description,
 			Category:    deleted.Category,
