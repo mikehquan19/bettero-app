@@ -4,7 +4,6 @@ import (
 	"betterov2/models"
 	"betterov2/repositories"
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -168,10 +167,6 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 
 	if deleted.CreatedAt.Before(time.Now().AddDate(0, 0, -14)) {
 		return models.ErrTransactionTooOld
-	}
-
-	if deleted.ID != id {
-		return fmt.Errorf("expected to delete transaction %d, deleted %d", id, deleted.ID)
 	}
 
 	// Reverse the effect of creating the transaction

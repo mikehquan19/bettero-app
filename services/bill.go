@@ -105,9 +105,6 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 	if err != nil {
 		return err
 	}
-	if deleted.ID != id {
-		return fmt.Errorf("expected to delete bill %d, deleted %d", id, deleted.ID)
-	}
 
 	if pay {
 		// Create the transaction representing bill payment

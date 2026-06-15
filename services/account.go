@@ -204,12 +204,9 @@ func (s *AccountService) DeleteAccount(ctx context.Context, id int64) error {
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	deleted, err := s.accRepo.DeleteAccount(ctx, tx, id)
+	_, err = s.accRepo.DeleteAccount(ctx, tx, id)
 	if err != nil {
 		return err
-	}
-	if deleted.ID != id {
-		return fmt.Errorf("expected to delete acccount %d, deleted %d", id, deleted.ID)
 	}
 
 	if err = tx.Commit(ctx); err != nil {
