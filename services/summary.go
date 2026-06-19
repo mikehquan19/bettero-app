@@ -64,8 +64,8 @@ func (s *SummaryService) GetBasicAnalysis(
 		e.total_expense
 	FROM total_balance b, total_amount_due a, total_income i, total_expense e
 	`
-	analysisRow := s.database.QueryRow(ctx, getAnalysisQuery, userId, start, end)
-	if err := models.ScanAnalysis(analysisRow, &analysis); err != nil {
+	row := s.database.QueryRow(ctx, getAnalysisQuery, userId, start, end)
+	if err := models.ScanAnalysis(row, &analysis); err != nil {
 		return analysis, err
 	}
 
@@ -168,21 +168,17 @@ func (s *SummaryService) GetDateToAmount(
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY date;
 	`, objectTable, objectFilter)
-	groupByDateRows, err := s.database.Query(ctx, getDateToAmtQuery, id, start, end)
+	rows, err := s.database.Query(ctx, getDateToAmtQuery, id, start, end)
 	if err != nil {
 		return dateToAmount, err
 	}
 
 	var date time.Time
 	var amount float64
-	_, err = pgx.ForEachRow(
-		groupByDateRows,
-		[]any{&date, &amount},
-		func() error {
-			dateToAmount[date.Format("2006-01-02")] = amount
-			return nil
-		},
-	)
+	_, err = pgx.ForEachRow(rows, []any{&date, &amount}, func() error {
+		dateToAmount[date.Format("2006-01-02")] = amount
+		return nil
+	})
 
 	return dateToAmount, err
 }
@@ -241,21 +237,17 @@ func getCategoryToAmount(
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY t.category;
 	`, objectTable, objectFilter)
-	groupByCategoryRows, err := db.Query(ctx, getCatToAmtQuery, id, start, end)
+	rows, err := db.Query(ctx, getCatToAmtQuery, id, start, end)
 	if err != nil {
 		return categoryToAmount, err
 	}
 
 	var category string
 	var amount float64
-	_, err = pgx.ForEachRow(
-		groupByCategoryRows,
-		[]any{&category, &amount},
-		func() error {
-			categoryToAmount[category] = amount
-			return nil
-		},
-	)
+	_, err = pgx.ForEachRow(rows, []any{&category, &amount}, func() error {
+		categoryToAmount[category] = amount
+		return nil
+	})
 
 	return categoryToAmount, err
 }
