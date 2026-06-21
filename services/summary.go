@@ -115,8 +115,11 @@ func (s *SummaryService) GetChangeMap(
 		return changeMap, err
 	}
 
-	prevStart, prevEnd := getPrevInterval(intervalType, start, end)
-	previous, err := getCategoryToAmount(ctx, s.database, objectType, id, prevStart, prevEnd)
+	prevStart, prevEnd, err := getPrevInterval(intervalType, start, end)
+	if err != nil {
+		return changeMap, err
+	}
+	previous, err := getCategoryToAmount(ctx, s.database, objectType, id, *prevStart, *prevEnd)
 	if err != nil {
 		return changeMap, err
 	}
@@ -184,20 +187,32 @@ func (s *SummaryService) GetDateToAmount(
 }
 
 // getPrevInterval gets the previous period of the 2 dates
-func getPrevInterval(intervalType string, start, end time.Time) (time.Time, time.Time) {
+func getPrevInterval(intervalType string, start, end time.Time) (*time.Time, *time.Time, error) {
+	var prevStart, prevEnd time.Time
 	switch intervalType {
 	case "MONTH":
-		return start.AddDate(0, -1, 0), end.AddDate(0, -1, 0)
+		prevStart = start.AddDate(0, -1, 0)
+		prevEnd = time.Date(
+			prevStart.Year(),
+			prevStart.Month()+1,
+			0,
+			0, 0, 0, 0, // From hour -> nsec
+			prevStart.Location(),
+		)
 
 	case "WEEK":
-		return start.AddDate(0, 0, -7), end.AddDate(0, 0, -7)
+		prevStart = start.AddDate(0, 0, -7)
+		prevEnd = end.AddDate(0, 0, -7)
 
 	case "BIWEEK":
-		return start.AddDate(0, 0, -14), end.AddDate(0, 0, -14)
+		prevStart = start.AddDate(0, 0, -14)
+		prevEnd = end.AddDate(0, 0, -14)
 
 	default:
-		panic(fmt.Errorf("Invalid inverval type"))
+		return nil, nil, fmt.Errorf("Invalid interval type")
 	}
+
+	return &prevStart, &prevEnd, nil
 }
 
 // Helper function: getCategoryToAmount returns the map from categoryto total expense
