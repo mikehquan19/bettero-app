@@ -33,21 +33,23 @@ func (r *TransactionRepo) FilterTransactions(
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Dynamically build the filter based on values from query params
-	sql, args := buildDynamicFilter("a.user_id = $1", userId, filter)
+	condition, args := buildDynamicFilter("a.user_id = $1", userId, filter)
 
 	// Fetch the total number of transactions
-	const baseCountQuery = `
+	countQuery := fmt.Sprintf(`
 	SELECT COUNT(*)
 	FROM transactions t 
 	JOIN accounts a ON t.account_id = a.id
-	`
-	row := tx.QueryRow(ctx, baseCountQuery+sql, args...)
+	%s
+	`, condition)
+	row := tx.QueryRow(ctx, countQuery, args...)
 	if err := row.Scan(&count); err != nil {
 		return -1, nil, err
 	}
 
 	// List the page of transactions from this filter
-	const baseListQuery = `
+	paginate := fmt.Sprintf("ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", len(args)+1)
+	listQuery := fmt.Sprintf(`
 	SELECT 
 		t.id, 
 		t.merchant, t.tran_description, t.category, t.amount, 
@@ -61,11 +63,12 @@ func (r *TransactionRepo) FilterTransactions(
 		) AS account
 	FROM transactions t
 	JOIN accounts a ON t.account_id = a.id
-	`
-	page := fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", len(args)+1)
+	%s
+	%s
+	`, condition, paginate)
 	args = append(args, offset)
 
-	rows, err := tx.Query(ctx, baseListQuery+sql+page, args...)
+	rows, err := tx.Query(ctx, listQuery, args...)
 	if err != nil {
 		return -1, nil, err
 	}
@@ -174,21 +177,36 @@ func (r *TransactionRepo) ListSuggestions(
 
 // InsertTransaction inserts the transaction, and returns the inserted transaction
 // that matches the schema in the database (no nested account)
-func (r *TransactionRepo) InsertTransaction(ctx context.Context, tx pgx.Tx, body models.PostTransactionBody) (models.NonNestedTransaction, error) {
-	var newTran models.NonNestedTransaction
+func (r *TransactionRepo) InsertTransaction(ctx context.Context, tx pgx.Tx, body models.PostTransactionBody) (models.Transaction, error) {
+	var newTran models.Transaction
 
 	// Insert the new transaction, get its id, category, and amount
 	const insertTransactionQuery = `
-	INSERT INTO transactions (
-		account_id, 
-		merchant, 
-		tran_description, 
-		category, 
-		amount,
-		created_at
+	WITH new_transaction AS (
+		INSERT INTO transactions (
+			account_id,
+			merchant,
+			tran_description,
+			category,
+			amount,
+			created_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING *
 	)
-	VALUES ($1, $2, $3, $4, $5, $6)
-	RETURNING *;
+	SELECT
+		t.id,
+		json_build_object(
+			'id', a.id,
+			'acc_number', a.acc_number,
+			'acc_name', a.acc_name,
+			'institution', a.institution,
+			'type', a.type
+		) AS account,
+		t.merchant, t.tran_description, t.category, t.amount,
+		t.created_at, t.updated_at
+	FROM new_transaction t
+	JOIN accounts a ON a.id = t.account_id;
 	`
 	row := tx.QueryRow(ctx, insertTransactionQuery,
 		body.AccountID,
@@ -198,7 +216,7 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, tx pgx.Tx, body
 		body.Amount,
 		body.CreatedAt,
 	)
-	if err := models.ScanNonNestedTran(row, &newTran); err != nil {
+	if err := models.ScanTransaction(row, &newTran); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
 			// Insert a transaction for non-existent account
 			return newTran, models.GetForeignKey[models.Account](body.AccountID)
@@ -213,20 +231,35 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, tx pgx.Tx, body
 // that matches the schema in the database (no nested account)
 func (r *TransactionRepo) UpdateTransaction(
 	ctx context.Context, tx pgx.Tx, id int64, body models.PutTransactionBody,
-) (models.NonNestedTransaction, error) {
-	var updatedTran models.NonNestedTransaction
+) (models.Transaction, error) {
+	var updatedTran models.Transaction
 
 	// Store the previous category and amount before updating
 	const updateTranQuery = `
-	UPDATE transactions
-	SET merchant = $2, 
-		tran_description = $3, 
-		category = $4, 
-		amount = $5, 
-		created_at = $6,
-		updated_at = NOW()
-	WHERE id = $1
-	RETURNING *;
+	WITH updated_transaction AS (
+		UPDATE transactions
+		SET merchant = $2, 
+			tran_description = $3, 
+			category = $4, 
+			amount = $5, 
+			created_at = $6,
+			updated_at = NOW()
+		WHERE id = $1
+		RETURNING *;
+	)
+	SELECT
+		t.id,
+		json_build_object(
+			'id', a.id,
+			'acc_number', a.acc_number,
+			'acc_name', a.acc_name,
+			'institution', a.institution,
+			'type', a.type
+		) AS account,
+		t.merchant, t.tran_description, t.category, t.amount,
+		t.created_at, t.updated_at
+	FROM updated_transaction t
+	JOIN accounts a ON a.id = t.account_id;
 	`
 	row := tx.QueryRow(ctx, updateTranQuery,
 		id,
@@ -236,7 +269,7 @@ func (r *TransactionRepo) UpdateTransaction(
 		body.Amount,
 		body.CreatedAt,
 	)
-	if err := models.ScanNonNestedTran(row, &updatedTran); err != nil {
+	if err := models.ScanTransaction(row, &updatedTran); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Update a non-existent transaction
 			return updatedTran, models.GetNotFound[models.Transaction](id)
@@ -249,14 +282,29 @@ func (r *TransactionRepo) UpdateTransaction(
 
 // DeleteTransaction deletes the transaction, and returns the deleted transaction
 // that matches the schema in the database (no nested account)
-func (r *TransactionRepo) DeleteTransaction(ctx context.Context, tx pgx.Tx, id int64) (models.NonNestedTransaction, error) {
-	var deletedTran models.NonNestedTransaction
+func (r *TransactionRepo) DeleteTransaction(ctx context.Context, tx pgx.Tx, id int64) (models.Transaction, error) {
+	var deletedTran models.Transaction
 
 	const deleteTranQuery = `
-	DELETE FROM transactions WHERE id = $1 RETURNING *;
+	WITH deleted_transaction AS (
+		DELETE FROM transactions WHERE id = $1 RETURNING *
+	)
+	SELECT
+		t.id,
+		json_build_object(
+			'id', a.id,
+			'acc_number', a.acc_number,
+			'acc_name', a.acc_name,
+			'institution', a.institution,
+			'type', a.type
+		) AS account,
+		t.merchant, t.tran_description, t.category, t.amount,
+		t.created_at, t.updated_at
+	FROM deleted_transaction t
+	JOIN accounts a ON a.id = t.account_id;
 	`
 	row := tx.QueryRow(ctx, deleteTranQuery, id)
-	if err := models.ScanNonNestedTran(row, &deletedTran); err != nil {
+	if err := models.ScanTransaction(row, &deletedTran); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return deletedTran, models.GetNotFound[models.Transaction](id)
 		}

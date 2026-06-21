@@ -64,8 +64,8 @@ func (s *SummaryService) GetBasicAnalysis(
 		e.total_expense
 	FROM total_balance b, total_amount_due a, total_income i, total_expense e
 	`
-	analysisRow := s.database.QueryRow(ctx, getAnalysisQuery, userId, start, end)
-	if err := models.ScanAnalysis(analysisRow, &analysis); err != nil {
+	row := s.database.QueryRow(ctx, getAnalysisQuery, userId, start, end)
+	if err := models.ScanAnalysis(row, &analysis); err != nil {
 		return analysis, err
 	}
 
@@ -115,8 +115,11 @@ func (s *SummaryService) GetChangeMap(
 		return changeMap, err
 	}
 
-	prevStart, prevEnd := getPrevInterval(intervalType, start, end)
-	previous, err := getCategoryToAmount(ctx, s.database, objectType, id, prevStart, prevEnd)
+	prevStart, prevEnd, err := getPrevInterval(intervalType, start, end)
+	if err != nil {
+		return changeMap, err
+	}
+	previous, err := getCategoryToAmount(ctx, s.database, objectType, id, *prevStart, *prevEnd)
 	if err != nil {
 		return changeMap, err
 	}
@@ -168,40 +171,48 @@ func (s *SummaryService) GetDateToAmount(
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY date;
 	`, objectTable, objectFilter)
-	groupByDateRows, err := s.database.Query(ctx, getDateToAmtQuery, id, start, end)
+	rows, err := s.database.Query(ctx, getDateToAmtQuery, id, start, end)
 	if err != nil {
 		return dateToAmount, err
 	}
 
 	var date time.Time
 	var amount float64
-	_, err = pgx.ForEachRow(
-		groupByDateRows,
-		[]any{&date, &amount},
-		func() error {
-			dateToAmount[date.Format("2006-01-02")] = amount
-			return nil
-		},
-	)
+	_, err = pgx.ForEachRow(rows, []any{&date, &amount}, func() error {
+		dateToAmount[date.Format("2006-01-02")] = amount
+		return nil
+	})
 
 	return dateToAmount, err
 }
 
 // getPrevInterval gets the previous period of the 2 dates
-func getPrevInterval(intervalType string, start, end time.Time) (time.Time, time.Time) {
+func getPrevInterval(intervalType string, start, end time.Time) (*time.Time, *time.Time, error) {
+	var prevStart, prevEnd time.Time
 	switch intervalType {
 	case "MONTH":
-		return start.AddDate(0, -1, 0), end.AddDate(0, -1, 0)
+		prevStart = start.AddDate(0, -1, 0)
+		prevEnd = time.Date(
+			prevStart.Year(),
+			prevStart.Month()+1,
+			0,
+			0, 0, 0, 0, // From hour -> nsec
+			prevStart.Location(),
+		)
 
 	case "WEEK":
-		return start.AddDate(0, 0, -7), end.AddDate(0, 0, -7)
+		prevStart = start.AddDate(0, 0, -7)
+		prevEnd = end.AddDate(0, 0, -7)
 
 	case "BIWEEK":
-		return start.AddDate(0, 0, -14), end.AddDate(0, 0, -14)
+		prevStart = start.AddDate(0, 0, -14)
+		prevEnd = end.AddDate(0, 0, -14)
 
 	default:
-		panic(fmt.Errorf("Invalid inverval type"))
+		return nil, nil, fmt.Errorf("Invalid interval type")
 	}
+
+	return &prevStart, &prevEnd, nil
 }
 
 // Helper function: getCategoryToAmount returns the map from categoryto total expense
@@ -241,21 +252,17 @@ func getCategoryToAmount(
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY t.category;
 	`, objectTable, objectFilter)
-	groupByCategoryRows, err := db.Query(ctx, getCatToAmtQuery, id, start, end)
+	rows, err := db.Query(ctx, getCatToAmtQuery, id, start, end)
 	if err != nil {
 		return categoryToAmount, err
 	}
 
 	var category string
 	var amount float64
-	_, err = pgx.ForEachRow(
-		groupByCategoryRows,
-		[]any{&category, &amount},
-		func() error {
-			categoryToAmount[category] = amount
-			return nil
-		},
-	)
+	_, err = pgx.ForEachRow(rows, []any{&category, &amount}, func() error {
+		categoryToAmount[category] = amount
+		return nil
+	})
 
 	return categoryToAmount, err
 }

@@ -65,7 +65,8 @@ func (r *BillRepo) GetBill(ctx context.Context, tx pgx.Tx, id int64) (models.Bil
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
-		b.merchant, b.description, b.category, b.amount, b.due_date
+		b.merchant, b.description, b.category, b.amount, 
+		b.due_date
 	FROM bills b
 	JOIN accounts a ON b.account_id = a.id
 	WHERE b.id = $1;
@@ -82,20 +83,35 @@ func (r *BillRepo) GetBill(ctx context.Context, tx pgx.Tx, id int64) (models.Bil
 }
 
 // InsertBill inserts a bill into the database and returns the non-nested bill
-func (r *BillRepo) InsertBill(ctx context.Context, tx pgx.Tx, body models.BillBody) (models.NonNestedBill, error) {
-	var newBill models.NonNestedBill
+func (r *BillRepo) InsertBill(ctx context.Context, tx pgx.Tx, body models.BillBody) (models.Bill, error) {
+	var newBill models.Bill
 
 	const insertBillQuery = `
-	INSERT INTO bills (
-		account_id, 
-		merchant, 
-		description, 
-		category, 
-		amount, 
-		due_date
+	WITH new_bill AS (
+		INSERT INTO bills (
+			account_id, 
+			merchant, 
+			description, 
+			category, 
+			amount, 
+			due_date
+		)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING *;
 	)
-	VALUES ($1, $2, $3, $4, $5, $6)
-	RETURNING *;
+	SELECT
+		b.id,
+		json_build_object(
+			'id', a.id,
+			'acc_number', a.acc_number,
+			'acc_name', a.acc_name,
+			'institution', a.institution,
+			'type', a.type
+		) AS account,
+		b.merchant, b.description, b.category, b.amount, 
+		b.due_date
+	FROM new_bill b
+	JOIN accounts a ON b.account_id = a.id;
 	`
 	row := tx.QueryRow(ctx, insertBillQuery,
 		body.AccountID,
@@ -105,7 +121,7 @@ func (r *BillRepo) InsertBill(ctx context.Context, tx pgx.Tx, body models.BillBo
 		body.Amount,
 		body.DueDate,
 	)
-	if err := models.ScanNonNestedBill(row, &newBill); err != nil {
+	if err := models.ScanBill(row, &newBill); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
 			// Insert a bill for non-existent account
 			return newBill, models.GetForeignKey[models.Account](body.AccountID)
@@ -119,19 +135,34 @@ func (r *BillRepo) InsertBill(ctx context.Context, tx pgx.Tx, body models.BillBo
 // UpdateBill updates a bill in the database and returns the non-nested bill
 func (r *BillRepo) UpdateBill(
 	ctx context.Context, tx pgx.Tx, id int64, body models.BillBody,
-) (models.NonNestedBill, error) {
-	var updatedBill models.NonNestedBill
+) (models.Bill, error) {
+	var updatedBill models.Bill
 
 	const updateBillQuery = `
-	UPDATE bills
-	SET account_id = $2, 
-		merchant = $3, 
-		description = $4, 
-		category = $5, 
-		amount = $6, 
-		due_date = $7
-	WHERE id = $1
-	RETURNING *;
+	WITH updated_bill AS (
+		UPDATE bills
+		SET account_id = $2, 
+			merchant = $3, 
+			description = $4, 
+			category = $5, 
+			amount = $6, 
+			due_date = $7
+		WHERE id = $1
+		RETURNING *;
+	)
+	SELECT
+		b.id,
+		json_build_object(
+			'id', a.id,
+			'acc_number', a.acc_number,
+			'acc_name', a.acc_name,
+			'institution', a.institution,
+			'type', a.type
+		) AS account,
+		b.merchant, b.description, b.category, b.amount, 
+		b.due_date
+	FROM updated_bill b
+	JOIN accounts a ON b.account_id = a.id;
 	`
 	row := tx.QueryRow(ctx, updateBillQuery,
 		id,
@@ -142,7 +173,7 @@ func (r *BillRepo) UpdateBill(
 		body.Amount,
 		body.DueDate,
 	)
-	if err := models.ScanNonNestedBill(row, &updatedBill); err != nil {
+	if err := models.ScanBill(row, &updatedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return updatedBill, models.GetNotFound[models.Bill](id)
 		}
@@ -153,12 +184,29 @@ func (r *BillRepo) UpdateBill(
 }
 
 // DeleteBill deletes a bill from the database and returns the non-nested bill
-func (r *BillRepo) DeleteBill(ctx context.Context, tx pgx.Tx, id int64) (models.NonNestedBill, error) {
-	var deletedBill models.NonNestedBill
+func (r *BillRepo) DeleteBill(ctx context.Context, tx pgx.Tx, id int64) (models.Bill, error) {
+	var deletedBill models.Bill
 
-	const deleteBillQuery = "DELETE FROM bills WHERE id = $1 RETURNING *;"
+	const deleteBillQuery = `
+	WITH deleted_bill AS (
+		DELETE FROM bills WHERE id = $1 RETURNING *;
+	)
+	SELECT
+		b.id,
+		json_build_object(
+			'id', a.id,
+			'acc_number', a.acc_number,
+			'acc_name', a.acc_name,
+			'institution', a.institution,
+			'type', a.type
+		) AS account,
+		b.merchant, b.description, b.category, b.amount, 
+		b.due_date
+	FROM deleted_bill b
+	JOIN accounts a ON b.account_id = a.id
+	`
 	row := tx.QueryRow(ctx, deleteBillQuery, id)
-	if err := models.ScanNonNestedBill(row, &deletedBill); err != nil {
+	if err := models.ScanBill(row, &deletedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return deletedBill, models.GetNotFound[models.Bill](id)
 		}

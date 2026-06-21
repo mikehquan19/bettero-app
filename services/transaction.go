@@ -4,7 +4,6 @@ import (
 	"betterov2/models"
 	"betterov2/repositories"
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -59,77 +58,71 @@ func (s *TransactionService) ListSuggestions(ctx context.Context, userId int64, 
 //   - Debit card's balance will decrease
 //   - Credit card's balance will increase
 func (s *TransactionService) CreateTransaction(ctx context.Context, body models.PostTransactionBody) (models.Transaction, error) {
-	var newTransaction models.Transaction
+	var created models.Transaction
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return newTransaction, err
+		return created, err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	if body.CreatedAt.Before(time.Now().AddDate(0, 0, -14)) {
 		// Transaction older than 2 weeks ago can't be created
-		return newTransaction, models.ErrTransactionTooOld
+		return created, models.ErrTransactionTooOld
 	}
 
 	// Insert the new transaction data
-	inserted, err := s.tranRepo.InsertTransaction(ctx, tx, body)
+	created, err = s.tranRepo.InsertTransaction(ctx, tx, body)
 	if err != nil {
-		return newTransaction, err
+		return created, err
 	}
 
 	// Update the account balance data
-	netChange := If(inserted.Category == "Income", -inserted.Amount, inserted.Amount)
-	balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, inserted.AccountId, netChange)
+	netChange := If(created.Category == "Income", -created.Amount, created.Amount)
+	balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, created.Account.Id, netChange)
 	if err != nil {
-		return newTransaction, err
+		return created, err
 	}
 	log.Printf("Balance changes to: %f", balance)
 
-	// Get the created transaction with nested account
-	newTransaction, err = s.tranRepo.GetTransaction(ctx, tx, inserted.ID)
-	if err != nil {
-		return newTransaction, err
-	}
-
 	if err = tx.Commit(ctx); err != nil {
-		return newTransaction, err
+		return created, err
 	}
 
-	return newTransaction, nil
+	return created, nil
 }
 
 // UpateTransaction updates the transaction's info and update the account's balance.
 //
-// Net change to be updated is computed as follows:
+// Net change to be updatedTransaction is computed as follows:
 //
 // # net change = current effect - previous effect
 //
 //   - previous effect: amount if the transaction with previous info was deleted
-//   - current effect: amount if the transaction with updated info was inserted
+//   - current effect: amount if the transaction with updatedTransaction info was inserted
 func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, body models.PutTransactionBody) (models.Transaction, error) {
-	var updatedTransaction models.Transaction
+	var updated models.Transaction
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return updatedTransaction, err
+		return updated, err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Get previous account before updating
 	previous, err := s.tranRepo.GetTransaction(ctx, tx, id)
 	if err != nil {
-		return updatedTransaction, err
+		return updated, err
 	}
 
 	if previous.CreatedAt.Before(time.Now().AddDate(0, 0, -14)) {
-		return updatedTransaction, models.ErrTransactionTooOld
+		return updated, models.ErrTransactionTooOld
 	}
 
 	// Update the transaction
-	updated, err := s.tranRepo.UpdateTransaction(ctx, tx, id, body)
+	updated, err = s.tranRepo.UpdateTransaction(ctx, tx, id, body)
 	if err != nil {
-		return updatedTransaction, err
+		return updated, err
 	}
 
 	// Compute the amount to update the account balance (if balance change)
@@ -137,24 +130,18 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 		prevChange := If(previous.Category == "Income", -previous.Amount, previous.Amount)
 		currChange := If(updated.Category == "Income", -updated.Amount, updated.Amount)
 		netChange := currChange - prevChange
-		balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, updated.AccountId, netChange)
+		balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, updated.Account.Id, netChange)
 		if err != nil {
-			return updatedTransaction, err
+			return updated, err
 		}
 		log.Printf("Balance changes to: %f", balance)
 	}
 
-	// Get the updated transaction with nested account
-	updatedTransaction, err = s.tranRepo.GetTransaction(ctx, tx, id)
-	if err != nil {
-		return updatedTransaction, err
-	}
-
 	if err = tx.Commit(ctx); err != nil {
-		return updatedTransaction, err
+		return updated, err
 	}
 
-	return updatedTransaction, nil
+	return updated, nil
 }
 
 // DeleteTransaction deletes the transaction from database and update balance.
@@ -182,13 +169,9 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 		return models.ErrTransactionTooOld
 	}
 
-	if deleted.ID != id {
-		return fmt.Errorf("expected to delete transaction %d, deleted %d", id, deleted.ID)
-	}
-
 	// Reverse the effect of creating the transaction
 	netChange := If(deleted.Category == "Income", deleted.Amount, -deleted.Amount)
-	balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, deleted.AccountId, netChange)
+	balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, deleted.Account.Id, netChange)
 	if err != nil {
 		return err
 	}
