@@ -87,8 +87,8 @@ func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, tx pgx.Tx, body 
 	return newAccHistory, nil
 }
 
-// DeleteOutdatedHistories deletes the outdated account history of account with given ID from database.
-// Returns the number of successfully deleted history
+// DeleteOutdatedHistories deletes the outdated balance history of account.
+// Returns the number of successfully deleted history.
 func (r *AccountHistoryRepo) DeleteOutdatedHistories(ctx context.Context, tx pgx.Tx, accountId int64) (int, error) {
 	const deleteHistQuery = `
 	DELETE FROM account_histories 

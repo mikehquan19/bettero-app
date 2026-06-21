@@ -46,11 +46,10 @@ func (r *AccountRepo) ListAllAccounts(
 ) ([]models.Account, error) {
 	var accounts []models.Account
 
+	var filter string
 	if pastDue && unFlagged {
 		return nil, fmt.Errorf("Querying by both pastDue & unFlagged is not supported for now")
 	}
-
-	var filter string
 	if pastDue {
 		filter = "WHERE next_due < CURRENT_DATE"
 	} else if unFlagged {
@@ -100,17 +99,21 @@ func (r *AccountRepo) ListAccountTransactions(
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Dynamically build the filter based on values from query params
-	sql, args := buildDynamicFilter("t.account_id = $1", id, filter)
+	condition, args := buildDynamicFilter("t.account_id = $1", id, filter)
 
 	// Fetch the total number of transactions
-	const baseCountQuery = "SELECT COUNT(*) FROM transactions t "
-	row := tx.QueryRow(ctx, baseCountQuery+sql, args...)
+	countQuery := fmt.Sprintf(`
+	SELECT COUNT(*) FROM transactions t
+	%s
+	`, condition)
+	row := tx.QueryRow(ctx, countQuery, args...)
 	if err := row.Scan(&count); err != nil {
 		return -1, nil, err
 	}
 
 	// List the page of transactions from this filter
-	const baseListQuery = `
+	paginate := fmt.Sprintf("ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", len(args)+1)
+	listQuery := fmt.Sprintf(`
 	SELECT 
 		t.id, 
 		t.merchant, t.tran_description, t.category, t.amount, 
@@ -124,11 +127,12 @@ func (r *AccountRepo) ListAccountTransactions(
 		) AS account
 	FROM transactions t
 	JOIN accounts a ON t.account_id = a.id
-	`
-	page := fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", len(args)+1)
+	%s
+	%s
+	`, condition, paginate)
 	args = append(args, offset)
 
-	rows, err := tx.Query(ctx, baseListQuery+sql+page, args...)
+	rows, err := tx.Query(ctx, listQuery, args...)
 	if err != nil {
 		return -1, nil, err
 	}
