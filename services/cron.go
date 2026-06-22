@@ -38,7 +38,7 @@ func NewCronService(
 // It's because accounts that have will not be queried.
 func (cs *CronService) MoveAccountsDueDate() error {
 	ctx := context.Background()
-	pastDueAccounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, true, false)
+	pastDueAccounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, repositories.PastDue)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func (cs *CronService) MoveAccountsDueDate() error {
 // the successfully validated accounts.
 func (cs *CronService) ValidateAccounts() error {
 	ctx := context.Background()
-	accounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, false, false)
+	accounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, repositories.All)
 	if err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func (cs *CronService) validate(ctx context.Context, account models.Account) err
 // and delete the history that is older than 6 months ago.
 func (cs *CronService) UpdateHistory() error {
 	ctx := context.Background()
-	unflaggedAccounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, false, true)
+	unflaggedAccounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, repositories.Unflagged)
 	if err != nil {
 		return err
 	}
@@ -212,7 +212,7 @@ func (cs *CronService) updateHistory(ctx context.Context, account models.Account
 // all the accounts
 func (cs *CronService) DeleteOutdatedTransactions() error {
 	ctx := context.Background()
-	accounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, false, false)
+	accounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, repositories.All)
 	if err != nil {
 		return err
 	}

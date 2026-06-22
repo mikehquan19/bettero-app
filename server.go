@@ -6,6 +6,7 @@ import (
 	"betterov2/routes"
 	"betterov2/services"
 	"betterov2/setup"
+	"log"
 	"net/http"
 	"time"
 
@@ -15,10 +16,6 @@ import (
 
 func main() {
 	// Connect to database
-	setup.ConnectDB()
-
-	router := gin.Default()
-
 	var db = setup.ConnectDB()
 
 	// Initialize repositories
@@ -28,32 +25,26 @@ func main() {
 	billRepo := repositories.NewBillRepo()
 
 	// Dependency injection
-	accountService := services.NewAccountService(
-		db,
-		accountRepo,
-		accountHistoryRepo,
-		transactionRepo,
-	)
-	transactionService := services.NewTransactionService(
-		db,
-		transactionRepo,
-		accountRepo,
-	)
-	billService := services.NewBillService(
-		db,
-		billRepo,
-		accountRepo,
-		transactionRepo,
-	)
+	accountService := services.NewAccountService(db, accountRepo, accountHistoryRepo, transactionRepo)
+	transactionService := services.NewTransactionService(db, transactionRepo, accountRepo)
+	billService := services.NewBillService(db, billRepo, accountRepo, transactionRepo)
 	summaryService := services.NewSummaryService(db)
 
-	accountController := controllers.NewAccountController(
-		accountService,
-		summaryService,
-	)
+	accountController := controllers.NewAccountController(accountService, summaryService)
 	transactionController := controllers.NewTransactionController(transactionService)
 	billController := controllers.NewBillController(billService)
 	summaryController := controllers.NewSummaryController(summaryService)
+
+	// Initialize the router
+	router := gin.Default()
+
+	// Logger
+	router.Use(gin.Logger())
+	log.SetPrefix("[APP] ")
+	log.SetOutput(gin.DefaultWriter)
+
+	// Recovers the panics and returns the 500. Note that we should not panic in the app anyway
+	router.Use(gin.Recovery())
 
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},

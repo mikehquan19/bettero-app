@@ -46,18 +46,8 @@ func (s *AccountService) ListAccounts(ctx context.Context, userId int64) ([]mode
 func (s *AccountService) GetAccount(ctx context.Context, id int64) (models.Account, error) {
 	var account models.Account
 
-	tx, err := s.db.Begin(ctx)
+	account, err := s.accRepo.GetAccount(ctx, s.db, id)
 	if err != nil {
-		return account, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	account, err = s.accRepo.GetAccount(ctx, tx, id)
-	if err != nil {
-		return account, err
-	}
-
-	if err = tx.Commit(ctx); err != nil {
 		return account, err
 	}
 
@@ -110,7 +100,7 @@ func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body m
 		return newAccount, err
 	}
 	// Log the account's history
-	log.Printf("History for account %d, balance %f on %s",
+	log.Printf("History for account %d, balance %f on %s\n",
 		insertedHistory.AccountId,
 		insertedHistory.Balance,
 		insertedHistory.LoggedTime,
@@ -196,31 +186,22 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 	return updatedAcc, nil
 }
 
-// DeleteAccount deletes the account and all of its transactions.
+// DeleteAccount deletes the account, its transactions and account history
 func (s *AccountService) DeleteAccount(ctx context.Context, id int64) error {
-	tx, err := s.db.Begin(ctx)
+	_, err := s.accRepo.DeleteAccount(ctx, s.db, id)
 	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	_, err = s.accRepo.DeleteAccount(ctx, tx, id)
-	if err != nil {
-		return err
-	}
-
-	if err = tx.Commit(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// ListHistories returns the list of balance histories of the account with given ID
+// ListHistories returns the list of balance histories of the account
 func (s *AccountService) ListHistories(ctx context.Context, id int64) ([]models.AccountHistory, error) {
 	histories, err := s.accHisRepo.ListHistories(ctx, s.db, id)
 	if err != nil {
 		return nil, err
 	}
+
 	return histories, nil
 }

@@ -44,18 +44,8 @@ func (s *BillService) ListBills(ctx context.Context, userId int64) ([]models.Bil
 func (s *BillService) CreateBill(ctx context.Context, body models.BillBody) (models.Bill, error) {
 	var createdBill models.Bill
 
-	tx, err := s.db.Begin(ctx)
+	createdBill, err := s.billRepo.InsertBill(ctx, s.db, body)
 	if err != nil {
-		return createdBill, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	createdBill, err = s.billRepo.InsertBill(ctx, tx, body)
-	if err != nil {
-		return createdBill, err
-	}
-
-	if err = tx.Commit(ctx); err != nil {
 		return createdBill, err
 	}
 
@@ -68,18 +58,8 @@ func (s *BillService) CreateBill(ctx context.Context, body models.BillBody) (mod
 func (s *BillService) UpdateBill(ctx context.Context, id int64, body models.BillBody) (models.Bill, error) {
 	var updatedBill models.Bill
 
-	tx, err := s.db.Begin(ctx)
+	updatedBill, err := s.billRepo.UpdateBill(ctx, s.db, id, body)
 	if err != nil {
-		return updatedBill, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	updatedBill, err = s.billRepo.UpdateBill(ctx, tx, id, body)
-	if err != nil {
-		return updatedBill, err
-	}
-
-	if err = tx.Commit(ctx); err != nil {
 		return updatedBill, err
 	}
 
@@ -127,7 +107,7 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 		if err != nil {
 			return err
 		}
-		log.Printf("Balance changes to: %f", balance)
+		log.Printf("Balance changes to: %f\n", balance)
 	}
 	if recurring {
 		// Insert the recurring bill that is due next month
