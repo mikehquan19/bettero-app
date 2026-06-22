@@ -83,7 +83,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 	if err != nil {
 		return created, err
 	}
-	log.Printf("Balance changes to: %f", balance)
+	log.Printf("Balance changes to: %f\n", balance)
 
 	if err = tx.Commit(ctx); err != nil {
 		return created, err
@@ -134,7 +134,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 		if err != nil {
 			return updated, err
 		}
-		log.Printf("Balance changes to: %f", balance)
+		log.Printf("Balance changes to: %f\n", balance)
 	}
 
 	if err = tx.Commit(ctx); err != nil {
@@ -175,7 +175,7 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 	if err != nil {
 		return err
 	}
-	log.Printf("Balance changes to: %f", balance)
+	log.Printf("Balance changes to: %f\n", balance)
 
 	if err = tx.Commit(ctx); err != nil {
 		return err

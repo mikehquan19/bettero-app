@@ -59,8 +59,6 @@ func (r *AccountRepo) ListAllAccounts(ctx context.Context, db DBTX, status Filte
 		filter = "WHERE discrepancy_flagged = FALSE"
 	case All:
 		filter = ""
-	default:
-		return nil, fmt.Errorf("Invalid account status")
 	}
 
 	listAccountQuery := fmt.Sprintf("SELECT * FROM accounts %s", filter)

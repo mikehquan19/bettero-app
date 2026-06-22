@@ -100,7 +100,7 @@ func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body m
 		return newAccount, err
 	}
 	// Log the account's history
-	log.Printf("History for account %d, balance %f on %s",
+	log.Printf("History for account %d, balance %f on %s\n",
 		insertedHistory.AccountId,
 		insertedHistory.Balance,
 		insertedHistory.LoggedTime,

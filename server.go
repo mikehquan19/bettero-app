@@ -6,6 +6,7 @@ import (
 	"betterov2/routes"
 	"betterov2/services"
 	"betterov2/setup"
+	"log"
 	"net/http"
 	"time"
 
@@ -18,6 +19,11 @@ func main() {
 	setup.ConnectDB()
 
 	router := gin.Default()
+	router.Use(gin.Logger())
+	router.Use(gin.Recovery())
+
+	log.SetPrefix("[APP] ")
+	log.SetOutput(gin.DefaultWriter)
 
 	var db = setup.ConnectDB()
 

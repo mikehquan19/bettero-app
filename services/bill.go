@@ -107,7 +107,7 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 		if err != nil {
 			return err
 		}
-		log.Printf("Balance changes to: %f", balance)
+		log.Printf("Balance changes to: %f\n", balance)
 	}
 	if recurring {
 		// Insert the recurring bill that is due next month
