@@ -7,7 +7,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type AccountHistoryRepo struct{}
@@ -17,7 +16,7 @@ func NewAccountHistoryRepo() *AccountHistoryRepo {
 }
 
 // ListHistories returns list of balance history of the account over time
-func (r *AccountHistoryRepo) ListHistories(ctx context.Context, db *pgxpool.Pool, accountId int64) ([]models.AccountHistory, error) {
+func (r *AccountHistoryRepo) ListHistories(ctx context.Context, db DBTX, accountId int64) ([]models.AccountHistory, error) {
 	var histories []models.AccountHistory
 
 	const listHistoryQuery = `
@@ -37,7 +36,7 @@ func (r *AccountHistoryRepo) ListHistories(ctx context.Context, db *pgxpool.Pool
 }
 
 // GetLatest gets the most recent account history, used for validating primarily
-func (r *AccountHistoryRepo) GetLatestHistory(ctx context.Context, tx pgx.Tx, accountId int64) (models.AccountHistory, error) {
+func (r *AccountHistoryRepo) GetLatestHistory(ctx context.Context, db DBTX, accountId int64) (models.AccountHistory, error) {
 	var latestHistory models.AccountHistory
 
 	const getLatestHistoryQuery = `
@@ -45,7 +44,7 @@ func (r *AccountHistoryRepo) GetLatestHistory(ctx context.Context, tx pgx.Tx, ac
 	WHERE account_id = $1
 	ORDER BY logged_time DESC LIMIT 1;
 	`
-	row := tx.QueryRow(ctx, getLatestHistoryQuery, accountId)
+	row := db.QueryRow(ctx, getLatestHistoryQuery, accountId)
 	if err := models.ScanAccHistory(row, &latestHistory); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// No history found for the account
@@ -58,7 +57,7 @@ func (r *AccountHistoryRepo) GetLatestHistory(ctx context.Context, tx pgx.Tx, ac
 }
 
 // InsertHistory inserts the account history to database
-func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, tx pgx.Tx, body models.PostAccHistBody) (models.AccountHistory, error) {
+func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, db DBTX, body models.PostAccHistBody) (models.AccountHistory, error) {
 	var newAccHistory models.AccountHistory
 
 	// Don't need to include time because it's auto now
@@ -71,7 +70,7 @@ func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, tx pgx.Tx, body 
 	VALUES ($1, $2, $3)
 	RETURNING *;
 	`
-	row := tx.QueryRow(ctx, insertHistoryQuery,
+	row := db.QueryRow(ctx, insertHistoryQuery,
 		body.AccountId,
 		body.LoggedTime,
 		body.Balance,
@@ -89,7 +88,7 @@ func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, tx pgx.Tx, body 
 
 // DeleteOutdatedHistories deletes the outdated balance history of account.
 // Returns the number of successfully deleted history.
-func (r *AccountHistoryRepo) DeleteOutdatedHistories(ctx context.Context, tx pgx.Tx, accountId int64) (int, error) {
+func (r *AccountHistoryRepo) DeleteOutdatedHistories(ctx context.Context, db DBTX, accountId int64) (int, error) {
 	const deleteHistQuery = `
 	DELETE FROM account_histories 
 	WHERE
@@ -97,7 +96,7 @@ func (r *AccountHistoryRepo) DeleteOutdatedHistories(ctx context.Context, tx pgx
 		AND account_id = $1
 	RETURNING ids;
 	`
-	rows, err := tx.Query(ctx, deleteHistQuery, accountId)
+	rows, err := db.Query(ctx, deleteHistQuery, accountId)
 	if err != nil {
 		return -1, err
 	}

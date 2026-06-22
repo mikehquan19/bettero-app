@@ -2,11 +2,26 @@ package repositories
 
 import (
 	"betterov2/models"
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// DBTX represents a database connection that can execute queries
+// and start transactions. It is implemented by both pgxpool.Pool and pgx.Tx,
+// allowing repositories and services to operate on
+// either a direct database connection or an active transaction.
+type DBTX interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
 
 // buildFilterSQL gets the SQL query to filter transaction from the TransactionFilter.
 // For this to work, model TransactionFilter needs to have tags: "db" and "operator". Keep that

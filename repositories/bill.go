@@ -7,7 +7,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type BillRepo struct {
@@ -18,7 +17,7 @@ func NewBillRepo() *BillRepo {
 }
 
 // ListBills gets the list of bills ordered by its due date
-func (r *BillRepo) ListBills(ctx context.Context, db *pgxpool.Pool, userId int64) ([]models.Bill, error) {
+func (r *BillRepo) ListBills(ctx context.Context, db DBTX, userId int64) ([]models.Bill, error) {
 	var bills []models.Bill
 
 	const listBillQuery = `
@@ -52,7 +51,7 @@ func (r *BillRepo) ListBills(ctx context.Context, db *pgxpool.Pool, userId int64
 }
 
 // GetBill returns a bill with nested account data using a transaction
-func (r *BillRepo) GetBill(ctx context.Context, tx pgx.Tx, id int64) (models.Bill, error) {
+func (r *BillRepo) GetBill(ctx context.Context, db DBTX, id int64) (models.Bill, error) {
 	var bill models.Bill
 
 	const getNestedBillQuery = `
@@ -71,8 +70,8 @@ func (r *BillRepo) GetBill(ctx context.Context, tx pgx.Tx, id int64) (models.Bil
 	JOIN accounts a ON b.account_id = a.id
 	WHERE b.id = $1;
 	`
-	billRow := tx.QueryRow(ctx, getNestedBillQuery, id)
-	if err := models.ScanBill(billRow, &bill); err != nil {
+	row := db.QueryRow(ctx, getNestedBillQuery, id)
+	if err := models.ScanBill(row, &bill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return bill, models.GetNotFound[models.Bill](id)
 		}
@@ -83,7 +82,7 @@ func (r *BillRepo) GetBill(ctx context.Context, tx pgx.Tx, id int64) (models.Bil
 }
 
 // InsertBill inserts a bill into the database and returns the non-nested bill
-func (r *BillRepo) InsertBill(ctx context.Context, tx pgx.Tx, body models.BillBody) (models.Bill, error) {
+func (r *BillRepo) InsertBill(ctx context.Context, db DBTX, body models.BillBody) (models.Bill, error) {
 	var newBill models.Bill
 
 	const insertBillQuery = `
@@ -113,7 +112,7 @@ func (r *BillRepo) InsertBill(ctx context.Context, tx pgx.Tx, body models.BillBo
 	FROM new_bill b
 	JOIN accounts a ON b.account_id = a.id;
 	`
-	row := tx.QueryRow(ctx, insertBillQuery,
+	row := db.QueryRow(ctx, insertBillQuery,
 		body.AccountID,
 		body.Merchant,
 		body.Description,
@@ -134,7 +133,7 @@ func (r *BillRepo) InsertBill(ctx context.Context, tx pgx.Tx, body models.BillBo
 
 // UpdateBill updates a bill in the database and returns the non-nested bill
 func (r *BillRepo) UpdateBill(
-	ctx context.Context, tx pgx.Tx, id int64, body models.BillBody,
+	ctx context.Context, db DBTX, id int64, body models.BillBody,
 ) (models.Bill, error) {
 	var updatedBill models.Bill
 
@@ -164,7 +163,7 @@ func (r *BillRepo) UpdateBill(
 	FROM updated_bill b
 	JOIN accounts a ON b.account_id = a.id;
 	`
-	row := tx.QueryRow(ctx, updateBillQuery,
+	row := db.QueryRow(ctx, updateBillQuery,
 		id,
 		body.AccountID,
 		body.Merchant,
@@ -184,7 +183,7 @@ func (r *BillRepo) UpdateBill(
 }
 
 // DeleteBill deletes a bill from the database and returns the non-nested bill
-func (r *BillRepo) DeleteBill(ctx context.Context, tx pgx.Tx, id int64) (models.Bill, error) {
+func (r *BillRepo) DeleteBill(ctx context.Context, db DBTX, id int64) (models.Bill, error) {
 	var deletedBill models.Bill
 
 	const deleteBillQuery = `
@@ -205,7 +204,7 @@ func (r *BillRepo) DeleteBill(ctx context.Context, tx pgx.Tx, id int64) (models.
 	FROM deleted_bill b
 	JOIN accounts a ON b.account_id = a.id
 	`
-	row := tx.QueryRow(ctx, deleteBillQuery, id)
+	row := db.QueryRow(ctx, deleteBillQuery, id)
 	if err := models.ScanBill(row, &deletedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return deletedBill, models.GetNotFound[models.Bill](id)
