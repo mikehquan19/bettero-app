@@ -1,9 +1,11 @@
 package models
 
 import (
+	"context"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Response struct {
@@ -195,11 +197,11 @@ func ScanTransaction(tranRow pgx.Row, tran *Transaction) error {
 }
 
 type TransactionFilter struct {
-	Category        string     `db:"category" operator:"="`
-	Merchant        string     `db:"merchant" operator:"="`
-	TranDescription string     `db:"tran_description" operator:"="`
-	CreatedAtFrom   *time.Time `db:"created_at" operator:">="`
-	CreatedAtTo     *time.Time `db:"created_at" operator:"<"`
+	Category        string
+	Merchant        string
+	TranDescription string
+	CreatedAtFrom   *time.Time
+	CreatedAtTo     *time.Time
 }
 
 type Bill struct {
@@ -296,11 +298,33 @@ type BudgetPlan struct {
 	UpdatedAt       time.Time          `json:"updated_at"`
 }
 
+func ScanBudgetPlan(budgetPlanRow pgx.Row, budgetPlan *BudgetPlan) error {
+	return nil
+}
+
+type IntervalType string
+
+const (
+	Month  IntervalType = "Month"
+	BiWeek IntervalType = "BiWeek"
+	Week   IntervalType = "Week"
+)
+
 // The overal result of the autocomplete search
 type Suggestion struct {
 	Type string `json:"type"`
 	Name string `json:"name"`
 }
 
-type APIKey struct {
+type APIKey struct{}
+
+// DBTX represents a database connection that can execute queries
+// and start transactions. It is implemented by both pgxpool.Pool and pgx.Tx,
+// allowing repositories and services to operate on
+// either a direct database connection or an active transaction.
+type DBTX interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
