@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -109,7 +110,7 @@ func (r *AccountRepo) ListAccountTransactions(
 
 	// Fetch the total number of transactions
 	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM transactions t WHERE %s;`, condition)
-	fmt.Println(condition)
+	log.Println(countQuery)
 	row := tx.QueryRow(ctx, countQuery, args...)
 	if err := row.Scan(&count); err != nil {
 		return -1, nil, err
@@ -139,8 +140,8 @@ func (r *AccountRepo) ListAccountTransactions(
 	LIMIT 20 
 	OFFSET $%d;
 	`, condition, len(args)+1)
-	args = append(args, len(args)+1)
-	fmt.Println(listQuery)
+	args = append(args, offset)
+	log.Println(listQuery)
 
 	rows, err := tx.Query(ctx, listQuery, args...)
 	if err != nil {
