@@ -8,10 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type AccountRepo struct {
-}
+type AccountRepo struct{}
 
 func NewAccountRepo() *AccountRepo {
 	return &AccountRepo{}
@@ -19,12 +19,10 @@ func NewAccountRepo() *AccountRepo {
 
 // ListAcccounts returns the list of accounts of given user,
 // sorted by updated recency.
-func (r *AccountRepo) ListAccounts(ctx context.Context, db DBTX, userId int64) ([]models.Account, error) {
+func (r *AccountRepo) ListAccounts(ctx context.Context, db models.DBTX, userId int64) ([]models.Account, error) {
 	var accounts []models.Account
 
-	const listAccountQuery = `
-	SELECT * FROM accounts WHERE user_id = $1 ORDER BY updated_at DESC;
-	`
+	const listAccountQuery = `SELECT * FROM accounts WHERE user_id = $1 ORDER BY updated_at DESC;`
 	rows, err := db.Query(ctx, listAccountQuery, userId)
 	if err != nil {
 		return nil, err
@@ -38,17 +36,17 @@ func (r *AccountRepo) ListAccounts(ctx context.Context, db DBTX, userId int64) (
 }
 
 // Available filter status, we can add more later
-type FilterStatus int
+type FilterStatus string
 
 const (
-	PastDue   FilterStatus = 0
-	Unflagged FilterStatus = 1
-	All       FilterStatus = 2 // All accounts
+	PastDue   FilterStatus = "PAST_DUE"
+	Unflagged FilterStatus = "UNFLAGGED"
+	All       FilterStatus = "All"
 )
 
 // ListAllAccounts returns the list of accounts based on filter status
 // This method primarily is used by cron jobs.
-func (r *AccountRepo) ListAllAccounts(ctx context.Context, db DBTX, status FilterStatus) ([]models.Account, error) {
+func (r *AccountRepo) ListAllAccounts(ctx context.Context, db models.DBTX, status FilterStatus) ([]models.Account, error) {
 	var accounts []models.Account
 
 	var filter string
@@ -61,8 +59,8 @@ func (r *AccountRepo) ListAllAccounts(ctx context.Context, db DBTX, status Filte
 		filter = ""
 	}
 
-	listAccountQuery := fmt.Sprintf("SELECT * FROM accounts %s", filter)
-	rows, err := db.Query(ctx, listAccountQuery)
+	listAllAccountQuery := fmt.Sprintf("SELECT * FROM accounts %s", filter)
+	rows, err := db.Query(ctx, listAllAccountQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +74,7 @@ func (r *AccountRepo) ListAllAccounts(ctx context.Context, db DBTX, status Filte
 }
 
 // GetAccount gets the account with given ID
-func (r *AccountRepo) GetAccount(ctx context.Context, db DBTX, id int64) (models.Account, error) {
+func (r *AccountRepo) GetAccount(ctx context.Context, db models.DBTX, id int64) (models.Account, error) {
 	var account models.Account
 
 	row := db.QueryRow(ctx, "SELECT * FROM accounts WHERE id = $1;", id)
@@ -90,9 +88,13 @@ func (r *AccountRepo) GetAccount(ctx context.Context, db DBTX, id int64) (models
 	return account, nil
 }
 
-// ListTransactions returns the paginated list of transactions of the acount
+// ListAccountTransactions returns the paginated list of transactions of the acount
 func (r *AccountRepo) ListAccountTransactions(
-	ctx context.Context, db DBTX, id int64, filter models.TransactionFilter, offset int64,
+	ctx context.Context,
+	db *pgxpool.Pool,
+	id int64,
+	filter models.TransactionFilter,
+	offset int64,
 ) (int, []models.Transaction, error) {
 	var count int
 	var transactions []models.Transaction
@@ -103,39 +105,42 @@ func (r *AccountRepo) ListAccountTransactions(
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Dynamically build the filter based on values from query params
-	condition, args := buildDynamicFilter("t.account_id = $1", id, filter)
+	condition, args := buildTransactionFilter("t.account_id = $1", id, filter)
 
 	// Fetch the total number of transactions
-	countQuery := fmt.Sprintf(`
-	SELECT COUNT(*) FROM transactions t
-	%s
-	`, condition)
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM transactions t WHERE %s;`, condition)
+	fmt.Println(condition)
 	row := tx.QueryRow(ctx, countQuery, args...)
 	if err := row.Scan(&count); err != nil {
 		return -1, nil, err
 	}
 
 	// List the page of transactions from this filter
-	paginate := fmt.Sprintf("ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", len(args)+1)
 	listQuery := fmt.Sprintf(`
 	SELECT 
 		t.id, 
-		t.merchant, t.tran_description, t.category, t.amount, 
-		t.created_at, t.updated_at,
 		json_build_object(
 			'id', a.id,
 			'acc_number', a.acc_number,
 			'acc_name', a.acc_name,
 			'institution', a.institution,
 			'type', a.type
-		) AS account
+		) AS account,
+		t.merchant, 
+		t.tran_description, 
+		t.category, 
+		t.amount, 
+		t.created_at, 
+		t.updated_at
 	FROM transactions t
 	JOIN accounts a ON t.account_id = a.id
-	%s
-	%s
-	`, condition, paginate)
-	args = append(args, offset)
+	WHERE %s
+	ORDER BY t.created_at DESC 
+	LIMIT 20 
+	OFFSET $%d;
+	`, condition, len(args)+1)
+	args = append(args, len(args)+1)
+	fmt.Println(listQuery)
 
 	rows, err := tx.Query(ctx, listQuery, args...)
 	if err != nil {
@@ -153,8 +158,12 @@ func (r *AccountRepo) ListAccountTransactions(
 	return count, transactions, err
 }
 
+// InsertAccount inserts and returns an account of the user
 func (r *AccountRepo) InsertAccount(
-	ctx context.Context, db DBTX, userId int64, body models.PostAccountBody,
+	ctx context.Context,
+	db models.DBTX,
+	userId int64,
+	body models.PostAccountBody,
 ) (models.Account, error) {
 	var newAccount models.Account
 
@@ -198,9 +207,12 @@ func (r *AccountRepo) InsertAccount(
 	return newAccount, nil
 }
 
-// Update the account's data and returns the updated data, doesn't allow for updating type.
+// UpdateAccount updates and returns the account by ID. It doesn't allow for updating type.
 func (r *AccountRepo) UpdateAccount(
-	ctx context.Context, db DBTX, id int64, body models.PutAccountBody,
+	ctx context.Context,
+	db models.DBTX,
+	id int64,
+	body models.PutAccountBody,
 ) (models.Account, error) {
 	var updatedAccount models.Account
 
@@ -239,7 +251,12 @@ func (r *AccountRepo) UpdateAccount(
 //
 //   - Debit card's balance will decrease
 //   - Credit card's balance will increase
-func (r *AccountRepo) UpdateAccountBalance(ctx context.Context, db DBTX, id int64, netChange float64) (float64, error) {
+func (r *AccountRepo) UpdateAccountBalance(
+	ctx context.Context,
+	db models.DBTX,
+	id int64,
+	netChange float64,
+) (float64, error) {
 	var newBalance float64
 
 	const updateBalanceQuery = `
@@ -262,8 +279,7 @@ func (r *AccountRepo) UpdateAccountBalance(ctx context.Context, db DBTX, id int6
 
 // MoveDueDateNextMonth bulk updates next due of the list of accounts to next month.
 // Returns the number of successfully updated accounts.
-// This method is primarily used by cron jobs
-func (r *AccountRepo) MoveAccountsDueDate(ctx context.Context, db DBTX, ids []int64) (int, error) {
+func (r *AccountRepo) MoveAccountsDueDate(ctx context.Context, db models.DBTX, ids []int64) (int, error) {
 	const updateDueDateQuery = `
 	UPDATE accounts a
 	SET next_due = next_due + INTERVAL '1 month'
@@ -284,7 +300,7 @@ func (r *AccountRepo) MoveAccountsDueDate(ctx context.Context, db DBTX, ids []in
 
 // FlagAccount will flag the account with the given discrepany amount.
 func (r *AccountRepo) FlagAccount(
-	ctx context.Context, db DBTX, id int64, discrepancyAmount float64,
+	ctx context.Context, db models.DBTX, id int64, discrepancyAmount float64,
 ) (models.Account, error) {
 	var flaggedAccount models.Account
 
@@ -307,12 +323,10 @@ func (r *AccountRepo) FlagAccount(
 }
 
 // Update the account's data and returns the deleted account
-func (r *AccountRepo) DeleteAccount(ctx context.Context, db DBTX, id int64) (models.Account, error) {
+func (r *AccountRepo) DeleteAccount(ctx context.Context, db models.DBTX, id int64) (models.Account, error) {
 	var deletedAccount models.Account
 
-	const deleteAccountQuery = `
-	DELETE FROM accounts WHERE id = $1 RETURNING *;
-	`
+	const deleteAccountQuery = `DELETE FROM accounts WHERE id = $1 RETURNING *;`
 	row := db.QueryRow(ctx, deleteAccountQuery, id)
 	if err := models.ScanAccount(row, &deletedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -9,18 +9,22 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type TransactionRepo struct {
-}
+type TransactionRepo struct{}
 
 func NewTransactionRepo() *TransactionRepo {
 	return &TransactionRepo{}
 }
 
-// FilterTransactions returns the list of filtered transactions with nested account
+// FilterTransactions returns the list of paginated transactions of the user
 func (r *TransactionRepo) FilterTransactions(
-	ctx context.Context, db DBTX, userId int64, filter models.TransactionFilter, offset int,
+	ctx context.Context,
+	db *pgxpool.Pool,
+	userId int64,
+	filter models.TransactionFilter,
+	offset int,
 ) (int, []models.Transaction, error) {
 	var count int
 	var transactions []models.Transaction
@@ -31,41 +35,48 @@ func (r *TransactionRepo) FilterTransactions(
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Dynamically build the filter based on values from query params
-	condition, args := buildDynamicFilter("a.user_id = $1", userId, filter)
+	condition, args := buildTransactionFilter("a.user_id = $1", userId, filter)
 
 	// Fetch the total number of transactions
 	countQuery := fmt.Sprintf(`
 	SELECT COUNT(*)
 	FROM transactions t 
 	JOIN accounts a ON t.account_id = a.id
-	%s
-	`, condition)
+	WHERE %s;`, condition)
+	fmt.Println(countQuery)
+
 	row := tx.QueryRow(ctx, countQuery, args...)
 	if err := row.Scan(&count); err != nil {
 		return -1, nil, err
 	}
 
 	// List the page of transactions from this filter
-	paginate := fmt.Sprintf("ORDER BY t.created_at DESC LIMIT 15 OFFSET $%d", len(args)+1)
+	// TODO: Don't use OFFSET, change to a more scalable approach
 	listQuery := fmt.Sprintf(`
 	SELECT 
 		t.id, 
-		t.merchant, t.tran_description, t.category, t.amount, 
-		t.created_at, t.updated_at,
 		json_build_object(
 			'id', a.id,
 			'acc_number', a.acc_number,
 			'acc_name', a.acc_name,
 			'institution', a.institution,
 			'type', a.type
-		) AS account
+		) AS account,
+		t.merchant, 
+		t.tran_description, 
+		t.category, 
+		t.amount, 
+		t.created_at, 
+		t.updated_at
 	FROM transactions t
 	JOIN accounts a ON t.account_id = a.id
-	%s
-	%s
-	`, condition, paginate)
+	WHERE %s
+	ORDER BY t.created_at DESC 
+	LIMIT 20
+	OFFSET $%d;
+	`, condition, len(args)+1)
 	args = append(args, offset)
+	fmt.Println(listQuery)
 
 	rows, err := tx.Query(ctx, listQuery, args...)
 	if err != nil {
@@ -84,7 +95,7 @@ func (r *TransactionRepo) FilterTransactions(
 }
 
 // Get the transaction with nested account data of a given id
-func (r *TransactionRepo) GetTransaction(ctx context.Context, db DBTX, id int64) (models.Transaction, error) {
+func (r *TransactionRepo) GetTransaction(ctx context.Context, db models.DBTX, id int64) (models.Transaction, error) {
 	var transaction models.Transaction
 
 	const getTransactionQuery = `
@@ -97,8 +108,12 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, db DBTX, id int64)
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
-		t.merchant, t.tran_description, t.category, t.amount, 
-		t.created_at, t.updated_at
+		t.merchant, 
+		t.tran_description, 
+		t.category, 
+		t.amount, 
+		t.created_at, 
+		t.updated_at
 	FROM transactions t
 	JOIN accounts a ON t.account_id = a.id
 	WHERE t.id = $1;
@@ -114,9 +129,12 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, db DBTX, id int64)
 	return transaction, nil
 }
 
-// Returns the list of results for autocompletes to search for transactions
+// ListSuggestions returns the list of results for autocompletes to search for transactions
 func (r *TransactionRepo) ListSuggestions(
-	ctx context.Context, db DBTX, userId int64, keyword string,
+	ctx context.Context,
+	db models.DBTX,
+	userId int64,
+	keyword string,
 ) ([]models.Suggestion, error) {
 	var suggestions []models.Suggestion
 
@@ -176,7 +194,7 @@ func (r *TransactionRepo) ListSuggestions(
 
 // InsertTransaction inserts the transaction, and returns the inserted transaction
 // that matches the schema in the database (no nested account)
-func (r *TransactionRepo) InsertTransaction(ctx context.Context, db DBTX, body models.PostTransactionBody) (models.Transaction, error) {
+func (r *TransactionRepo) InsertTransaction(ctx context.Context, db models.DBTX, body models.PostTransactionBody) (models.Transaction, error) {
 	var newTran models.Transaction
 
 	// Insert the new transaction, get its id, category, and amount
@@ -202,8 +220,12 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, db DBTX, body m
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
-		t.merchant, t.tran_description, t.category, t.amount,
-		t.created_at, t.updated_at
+		t.merchant, 
+		t.tran_description, 
+		t.category, 
+		t.amount,
+		t.created_at, 
+		t.updated_at
 	FROM new_transaction t
 	JOIN accounts a ON a.id = t.account_id;
 	`
@@ -226,10 +248,12 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, db DBTX, body m
 	return newTran, nil
 }
 
-// UpdateTransaction updates the transaction's info, and returns the updated transaction
-// that matches the schema in the database (no nested account)
+// UpdateTransaction updates and returns the transaction
 func (r *TransactionRepo) UpdateTransaction(
-	ctx context.Context, db DBTX, id int64, body models.PutTransactionBody,
+	ctx context.Context,
+	db models.DBTX,
+	id int64,
+	body models.PutTransactionBody,
 ) (models.Transaction, error) {
 	var updatedTran models.Transaction
 
@@ -255,8 +279,12 @@ func (r *TransactionRepo) UpdateTransaction(
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
-		t.merchant, t.tran_description, t.category, t.amount,
-		t.created_at, t.updated_at
+		t.merchant, 
+		t.tran_description, 
+		t.category, 
+		t.amount,
+		t.created_at, 
+		t.updated_at
 	FROM updated_transaction t
 	JOIN accounts a ON a.id = t.account_id;
 	`
@@ -279,9 +307,8 @@ func (r *TransactionRepo) UpdateTransaction(
 	return updatedTran, nil
 }
 
-// DeleteTransaction deletes the transaction, and returns the deleted transaction
-// that matches the schema in the database (no nested account)
-func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db DBTX, id int64) (models.Transaction, error) {
+// DeleteTransaction deletes and returns the transaction
+func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db models.DBTX, id int64) (models.Transaction, error) {
 	var deletedTran models.Transaction
 
 	const deleteTranQuery = `
@@ -297,8 +324,12 @@ func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db DBTX, id int
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
-		t.merchant, t.tran_description, t.category, t.amount,
-		t.created_at, t.updated_at
+		t.merchant, 
+		t.tran_description, 
+		t.category, 
+		t.amount,
+		t.created_at, 
+		t.updated_at
 	FROM deleted_transaction t
 	JOIN accounts a ON a.id = t.account_id;
 	`
@@ -313,9 +344,13 @@ func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db DBTX, id int
 	return deletedTran, nil
 }
 
-// Return the total sum of all transactions of an account from a given date.
-// Used by cron job.
-func (r *TransactionRepo) GetTransactionSum(ctx context.Context, db DBTX, accountId int64, from time.Time) (float64, error) {
+// GetTransactionSum returns the total sum of all transactions of the account from the date
+func (r *TransactionRepo) GetTransactionSum(
+	ctx context.Context,
+	db models.DBTX,
+	accountId int64,
+	from time.Time,
+) (float64, error) {
 	var transactionSum float64
 
 	const totalSumQuery = `
@@ -325,7 +360,7 @@ func (r *TransactionRepo) GetTransactionSum(ctx context.Context, db DBTX, accoun
 			ELSE 1 
 		END)
 	FROM transactions t
-	WHERE t.account_id = $1 AND t.created_at > $2
+	WHERE t.account_id = $1 AND t.created_at > $2;
 	`
 	row := db.QueryRow(ctx, totalSumQuery, accountId, from)
 	if err := row.Scan(&transactionSum); err != nil {
@@ -337,7 +372,7 @@ func (r *TransactionRepo) GetTransactionSum(ctx context.Context, db DBTX, accoun
 
 // DeleteOutdatedTransactions deleles the list of outdated transactions (older than 6 months ago)
 // and returns the number of successfully deleted ones.
-func (r *TransactionRepo) DeleteOutdatedTransactions(ctx context.Context, db DBTX, accountId int64) (int, error) {
+func (r *TransactionRepo) DeleteOutdatedTransactions(ctx context.Context, db models.DBTX, accountId int64) (int, error) {
 	const deleteOutdatedTranQuery = `
 	DELETE FROM transactions
 	WHERE 
