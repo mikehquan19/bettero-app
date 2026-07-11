@@ -256,7 +256,7 @@ func (a *AccountController) GetAccountSummary(c *gin.Context) {
 		}
 	}
 
-	daily, err := a.summaryService.GetDateToAmount(ctx, "account", int64(id), dates[0], dates[1])
+	daily, err := a.summaryService.GetDailyMap(ctx, "account", int64(id), dates[0], dates[1])
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return

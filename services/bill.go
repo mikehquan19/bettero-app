@@ -21,7 +21,10 @@ type BillService struct {
 
 // Generate a new bill service
 func NewBillService(
-	database *pgxpool.Pool, billRepo *repositories.BillRepo, accRepo *repositories.AccountRepo, tranRepo *repositories.TransactionRepo,
+	database *pgxpool.Pool,
+	billRepo *repositories.BillRepo,
+	accRepo *repositories.AccountRepo,
+	tranRepo *repositories.TransactionRepo,
 ) *BillService {
 	return &BillService{
 		db:       database,
