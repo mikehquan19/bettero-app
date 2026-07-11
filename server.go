@@ -22,13 +22,14 @@ func main() {
 	accountRepo := repositories.NewAccountRepo()
 	accountHistoryRepo := repositories.NewAccountHistoryRepo()
 	transactionRepo := repositories.NewTransactionRepo()
+	summaryRepo := repositories.NewSummaryRepo()
 	billRepo := repositories.NewBillRepo()
 
 	// Dependency injection
 	accountService := services.NewAccountService(db, accountRepo, accountHistoryRepo, transactionRepo)
 	transactionService := services.NewTransactionService(db, transactionRepo, accountRepo)
 	billService := services.NewBillService(db, billRepo, accountRepo, transactionRepo)
-	summaryService := services.NewSummaryService(db)
+	summaryService := services.NewSummaryService(db, summaryRepo)
 
 	accountController := controllers.NewAccountController(accountService, summaryService)
 	transactionController := controllers.NewTransactionController(transactionService)

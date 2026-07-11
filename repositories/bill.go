@@ -9,15 +9,14 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type BillRepo struct {
-}
+type BillRepo struct{}
 
 func NewBillRepo() *BillRepo {
 	return &BillRepo{}
 }
 
 // ListBills gets the list of bills ordered by its due date
-func (r *BillRepo) ListBills(ctx context.Context, db DBTX, userId int64) ([]models.Bill, error) {
+func (r *BillRepo) ListBills(ctx context.Context, db models.DBTX, userId int64) ([]models.Bill, error) {
 	var bills []models.Bill
 
 	const listBillQuery = `
@@ -30,7 +29,10 @@ func (r *BillRepo) ListBills(ctx context.Context, db DBTX, userId int64) ([]mode
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
-		b.merchant, b.description, b.category, b.amount, 
+		b.merchant, 
+		b.description, 
+		b.category, 
+		b.amount, 
 		b.due_date
 	FROM bills b 
 	JOIN accounts a ON b.account_id = a.id
@@ -50,8 +52,8 @@ func (r *BillRepo) ListBills(ctx context.Context, db DBTX, userId int64) ([]mode
 	return bills, nil
 }
 
-// GetBill returns a bill with nested account data using a transaction
-func (r *BillRepo) GetBill(ctx context.Context, db DBTX, id int64) (models.Bill, error) {
+// GetBill returns the list of bills
+func (r *BillRepo) GetBill(ctx context.Context, db models.DBTX, id int64) (models.Bill, error) {
 	var bill models.Bill
 
 	const getNestedBillQuery = `
@@ -64,7 +66,10 @@ func (r *BillRepo) GetBill(ctx context.Context, db DBTX, id int64) (models.Bill,
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
-		b.merchant, b.description, b.category, b.amount, 
+		b.merchant, 
+		b.description, 
+		b.category, 
+		b.amount, 
 		b.due_date
 	FROM bills b
 	JOIN accounts a ON b.account_id = a.id
@@ -81,8 +86,8 @@ func (r *BillRepo) GetBill(ctx context.Context, db DBTX, id int64) (models.Bill,
 	return bill, nil
 }
 
-// InsertBill inserts a bill into the database and returns the non-nested bill
-func (r *BillRepo) InsertBill(ctx context.Context, db DBTX, body models.BillBody) (models.Bill, error) {
+// InsertBill inserts a bill and returns the bill of the account
+func (r *BillRepo) InsertBill(ctx context.Context, db models.DBTX, body models.BillBody) (models.Bill, error) {
 	var newBill models.Bill
 
 	const insertBillQuery = `
@@ -96,7 +101,7 @@ func (r *BillRepo) InsertBill(ctx context.Context, db DBTX, body models.BillBody
 			due_date
 		)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING *;
+		RETURNING *
 	)
 	SELECT
 		b.id,
@@ -107,7 +112,10 @@ func (r *BillRepo) InsertBill(ctx context.Context, db DBTX, body models.BillBody
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
-		b.merchant, b.description, b.category, b.amount, 
+		b.merchant, 
+		b.description, 
+		b.category, 
+		b.amount, 
 		b.due_date
 	FROM new_bill b
 	JOIN accounts a ON b.account_id = a.id;
@@ -131,9 +139,12 @@ func (r *BillRepo) InsertBill(ctx context.Context, db DBTX, body models.BillBody
 	return newBill, nil
 }
 
-// UpdateBill updates a bill in the database and returns the non-nested bill
+// UpdateBill updates and returns the bill
 func (r *BillRepo) UpdateBill(
-	ctx context.Context, db DBTX, id int64, body models.BillBody,
+	ctx context.Context,
+	db models.DBTX,
+	id int64,
+	body models.BillBody,
 ) (models.Bill, error) {
 	var updatedBill models.Bill
 
@@ -147,7 +158,7 @@ func (r *BillRepo) UpdateBill(
 			amount = $6, 
 			due_date = $7
 		WHERE id = $1
-		RETURNING *;
+		RETURNING *
 	)
 	SELECT
 		b.id,
@@ -158,7 +169,10 @@ func (r *BillRepo) UpdateBill(
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
-		b.merchant, b.description, b.category, b.amount, 
+		b.merchant, 
+		b.description, 
+		b.category,
+		b.amount, 
 		b.due_date
 	FROM updated_bill b
 	JOIN accounts a ON b.account_id = a.id;
@@ -182,13 +196,13 @@ func (r *BillRepo) UpdateBill(
 	return updatedBill, nil
 }
 
-// DeleteBill deletes a bill from the database and returns the non-nested bill
-func (r *BillRepo) DeleteBill(ctx context.Context, db DBTX, id int64) (models.Bill, error) {
+// DeleteBill deletes and returns the bill by ID
+func (r *BillRepo) DeleteBill(ctx context.Context, db models.DBTX, id int64) (models.Bill, error) {
 	var deletedBill models.Bill
 
 	const deleteBillQuery = `
 	WITH deleted_bill AS (
-		DELETE FROM bills WHERE id = $1 RETURNING *;
+		DELETE FROM bills WHERE id = $1 RETURNING *
 	)
 	SELECT
 		b.id,
@@ -199,7 +213,10 @@ func (r *BillRepo) DeleteBill(ctx context.Context, db DBTX, id int64) (models.Bi
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
-		b.merchant, b.description, b.category, b.amount, 
+		b.merchant, 
+		b.description, 
+		b.category, 
+		b.amount, 
 		b.due_date
 	FROM deleted_bill b
 	JOIN accounts a ON b.account_id = a.id

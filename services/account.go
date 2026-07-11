@@ -22,7 +22,10 @@ type AccountService struct {
 
 // Generate a new account service
 func NewAccountService(
-	db *pgxpool.Pool, accRepo *repositories.AccountRepo, accHistRepo *repositories.AccountHistoryRepo, tranRepo *repositories.TransactionRepo,
+	db *pgxpool.Pool,
+	accRepo *repositories.AccountRepo,
+	accHistRepo *repositories.AccountHistoryRepo,
+	tranRepo *repositories.TransactionRepo,
 ) *AccountService {
 	return &AccountService{
 		db:         db,
@@ -56,7 +59,10 @@ func (s *AccountService) GetAccount(ctx context.Context, id int64) (models.Accou
 
 // ListAccountTransactions returns the list of transactions of account
 func (s *AccountService) ListAccountTransactions(
-	ctx context.Context, id int64, filter models.TransactionFilter, offset int64,
+	ctx context.Context,
+	id int64,
+	filter models.TransactionFilter,
+	offset int64,
 ) (int, []models.Transaction, error) {
 	count, transactions, err := s.accRepo.ListAccountTransactions(ctx, s.db, id, filter, offset)
 	if err != nil {

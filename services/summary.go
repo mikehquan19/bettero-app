@@ -2,85 +2,80 @@ package services
 
 import (
 	"betterov2/models"
+	"betterov2/repositories"
 	"context"
-	"fmt"
-	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // SummaryService
 type SummaryService struct {
-	database *pgxpool.Pool
+	db          *pgxpool.Pool
+	summaryRepo *repositories.SummaryRepo
 }
 
 // Generate a new summary service
-func NewSummaryService(database *pgxpool.Pool) *SummaryService {
+func NewSummaryService(db *pgxpool.Pool, summaryRepo *repositories.SummaryRepo) *SummaryService {
 	return &SummaryService{
-		database: database,
+		db:          db,
+		summaryRepo: summaryRepo,
 	}
 }
 
 // GetBasicAnalysis returns the basic aggregation of the user's account between 2 dates
 func (s *SummaryService) GetBasicAnalysis(
-	ctx context.Context, userId int64, start, end time.Time,
+	ctx context.Context,
+	userId int64,
+	dates models.SummaryDates,
 ) (models.BasicAnalysis, error) {
 	var analysis models.BasicAnalysis
 
-	getAnalysisQuery := `
-	WITH total_balance AS (
-		SELECT COALESCE(SUM(a.balance), 0) AS total_balance 
-		FROM accounts a 
-		WHERE a.user_id = $1 and a.type = 'Debit'
-	),
-	total_amount_due AS (
-		SELECT COALESCE(SUM(a.balance), 0) AS total_amount_due 
-		FROM accounts a 
-		WHERE a.user_id = $1 and a.type = 'Credit'
-	),
-	total_income AS (
-		SELECT COALESCE(SUM(t.amount), 0) AS total_income 
-		FROM transactions t
-		JOIN accounts a ON t.account_id = a.id
-		WHERE
-			a.user_id = $1 AND
-			t.category = 'Income' AND 
-			t.created_at >= $2 AND t.created_at < $3
-	),
-	total_expense AS (
-		SELECT COALESCE(SUM(t.amount), 0) AS total_expense
-		FROM transactions t
-		JOIN accounts a ON t.account_id = a.id
-		WHERE
-			a.user_id = $1 AND
-			t.category <> 'Income' AND 
-			t.created_at >= $2 AND t.created_at < $3
-	)
-	SELECT 
-		b.total_balance, 
-		a.total_amount_due, 
-		i.total_income, 
-		e.total_expense
-	FROM total_balance b, total_amount_due a, total_income i, total_expense e
-	`
-	row := s.database.QueryRow(ctx, getAnalysisQuery, userId, start, end)
-	if err := models.ScanAnalysis(row, &analysis); err != nil {
+	start := dates.CurrStart
+	end := dates.CurrEnd
+
+	analysis, err := s.summaryRepo.GetBasicAnalysis(ctx, s.db, userId, start, end)
+	if err != nil {
 		return analysis, err
 	}
 
 	return analysis, nil
 }
 
+// GetDailyMap returns the map from the date to expense
+func (s *SummaryService) GetDailyMap(
+	ctx context.Context,
+	objType models.ObjectType,
+	objId int64,
+	dates models.SummaryDates,
+) (map[string]float64, error) {
+	var dailyMap map[string]float64
+
+	start := dates.CurrStart
+	end := dates.CurrEnd
+
+	dailyMap, err := s.summaryRepo.GetDateToAmount(ctx, s.db, objType, objId, start, end)
+	if err != nil {
+		return dailyMap, err
+	}
+
+	return dailyMap, nil
+}
+
 // GetCompositionMap returns the map from category of expense to its percentage vs total expense.
 // If the total expense is 0, then each category takes up 0% of the total expense.
 // It uses the total expense computed by GetBasicAnalysis for efficiency.
 func (s *SummaryService) GetCompositionMap(
-	ctx context.Context, objectType string, id int64, start, end time.Time,
+	ctx context.Context,
+	objType models.ObjectType,
+	objId int64,
+	dates models.SummaryDates,
 ) (map[string]float64, error) {
 	var compositionMap = make(map[string]float64)
 
-	categoryToAmount, err := getCategoryToAmount(ctx, s.database, objectType, id, start, end)
+	start := dates.CurrStart
+	end := dates.CurrEnd
+
+	categoryToAmount, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, start, end)
 	if err != nil {
 		return compositionMap, err
 	}
@@ -106,20 +101,25 @@ func (s *SummaryService) GetCompositionMap(
 // from previous period to current period.
 // If the previous expense is 0 then it's null.
 func (s *SummaryService) GetChangeMap(
-	ctx context.Context, objectType string, id int64, intervalType string, start, end time.Time,
+	ctx context.Context,
+	objType models.ObjectType,
+	objId int64,
+	dates models.SummaryDates,
 ) (map[string]*float64, error) {
 	var changeMap = make(map[string]*float64)
 
-	current, err := getCategoryToAmount(ctx, s.database, objectType, id, start, end)
+	start := dates.CurrStart
+	end := dates.CurrEnd
+
+	current, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, start, end)
 	if err != nil {
 		return changeMap, err
 	}
 
-	prevStart, prevEnd, err := getPrevInterval(intervalType, start, end)
-	if err != nil {
-		return changeMap, err
-	}
-	previous, err := getCategoryToAmount(ctx, s.database, objectType, id, *prevStart, *prevEnd)
+	prevStart := dates.PrevStart
+	prevEnd := dates.PrevEnd
+
+	previous, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, prevStart, prevEnd)
 	if err != nil {
 		return changeMap, err
 	}
@@ -134,135 +134,4 @@ func (s *SummaryService) GetChangeMap(
 	}
 
 	return changeMap, err
-}
-
-// GetDateToAmount returns the map from date to total expense
-func (s *SummaryService) GetDateToAmount(
-	ctx context.Context, objectType string, id int64, start, end time.Time,
-) (map[string]float64, error) {
-	var dateToAmount = make(map[string]float64)
-
-	for date := start; !date.After(end); date = date.AddDate(0, 0, 1) {
-		dateToAmount[date.Format("2006-01-02")] = 0.0
-	}
-
-	var objectTable, objectFilter string
-	switch objectType {
-	case "user":
-		// For user, join accounts table to get user ID
-		objectTable = "transactions t JOIN accounts a ON t.account_id = a.id"
-		objectFilter = "a.user_id = $1"
-	case "account":
-		// Otherwise, account's ID is already in the transactions table
-		objectTable = "transactions t"
-		objectFilter = "t.account_id = $1"
-	default:
-		return nil, fmt.Errorf("invalid object type to filter, user or account")
-	}
-
-	getDateToAmtQuery := fmt.Sprintf(`
-	SELECT
-		t.created_at::date AS date, 
-		SUM(t.amount) AS amount
-	FROM %s
-	WHERE
-		%s AND
-		t.category <> 'Income' AND 
-		t.created_at >= $2 AND t.created_at < $3
-	GROUP BY date;
-	`, objectTable, objectFilter)
-	rows, err := s.database.Query(ctx, getDateToAmtQuery, id, start, end)
-	if err != nil {
-		return dateToAmount, err
-	}
-
-	var date time.Time
-	var amount float64
-	_, err = pgx.ForEachRow(rows, []any{&date, &amount}, func() error {
-		dateToAmount[date.Format("2006-01-02")] = amount
-		return nil
-	})
-
-	return dateToAmount, err
-}
-
-// getPrevInterval gets the previous period of the 2 dates
-func getPrevInterval(intervalType string, start, end time.Time) (*time.Time, *time.Time, error) {
-	var prevStart, prevEnd time.Time
-	switch intervalType {
-	case "MONTH":
-		prevStart = start.AddDate(0, -1, 0)
-		prevEnd = time.Date(
-			prevStart.Year(),
-			prevStart.Month()+1,
-			0,
-			0, 0, 0, 0, // From hour -> nsec
-			prevStart.Location(),
-		)
-
-	case "WEEK":
-		prevStart = start.AddDate(0, 0, -7)
-		prevEnd = end.AddDate(0, 0, -7)
-
-	case "BIWEEK":
-		prevStart = start.AddDate(0, 0, -14)
-		prevEnd = end.AddDate(0, 0, -14)
-
-	default:
-		return nil, nil, fmt.Errorf("Invalid interval type")
-	}
-
-	return &prevStart, &prevEnd, nil
-}
-
-// Helper function: getCategoryToAmount returns the map from categoryto total expense
-func getCategoryToAmount(
-	ctx context.Context, db *pgxpool.Pool, objectType string, id int64, start, end time.Time,
-) (map[string]float64, error) {
-	var categoryToAmount = make(map[string]float64)
-
-	// There are 10 categories
-	for _, category := range []string{
-		"Housing", "Automobile", "Medical", "Subscription", "Grocery", "Dining", "Shopping", "Gas", "Others",
-	} {
-		categoryToAmount[category] = 0.0
-	}
-
-	var objectTable, objectFilter string
-	switch objectType {
-	case "user":
-		// For user, join accounts table to get user ID
-		objectTable = "transactions t JOIN accounts a ON t.account_id = a.id"
-		objectFilter = "a.user_id = $1"
-	case "account":
-		objectTable = "transactions t"
-		objectFilter = "t.account_id = $1"
-	default:
-		return nil, fmt.Errorf("invalid object type to filter, user or account")
-	}
-
-	getCatToAmtQuery := fmt.Sprintf(`
-	SELECT
-		t.category, 
-		SUM(t.amount) AS amount
-	FROM %s
-	WHERE
-		%s AND
-		t.category <> 'Income' AND 
-		t.created_at >= $2 AND t.created_at < $3
-	GROUP BY t.category;
-	`, objectTable, objectFilter)
-	rows, err := db.Query(ctx, getCatToAmtQuery, id, start, end)
-	if err != nil {
-		return categoryToAmount, err
-	}
-
-	var category string
-	var amount float64
-	_, err = pgx.ForEachRow(rows, []any{&category, &amount}, func() error {
-		categoryToAmount[category] = amount
-		return nil
-	})
-
-	return categoryToAmount, err
 }

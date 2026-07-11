@@ -19,7 +19,9 @@ type TransactionService struct {
 
 // Generate a new transaction service
 func NewTransactionService(
-	database *pgxpool.Pool, tranRepo *repositories.TransactionRepo, accRepo *repositories.AccountRepo,
+	database *pgxpool.Pool,
+	tranRepo *repositories.TransactionRepo,
+	accRepo *repositories.AccountRepo,
 ) *TransactionService {
 	return &TransactionService{
 		db:       database,
@@ -30,9 +32,12 @@ func NewTransactionService(
 
 // FilterTransactions returns list of transactions of category between 2 dates
 func (s *TransactionService) FilterTransactions(
-	ctx context.Context, userId int64, tranFilter models.TransactionFilter, offset int,
+	ctx context.Context,
+	userId int64,
+	filter models.TransactionFilter,
+	offset int,
 ) (int, []models.Transaction, error) {
-	count, transactions, err := s.tranRepo.FilterTransactions(ctx, s.db, userId, tranFilter, offset)
+	count, transactions, err := s.tranRepo.FilterTransactions(ctx, s.db, userId, filter, offset)
 	if err != nil {
 		return -1, nil, err
 	}

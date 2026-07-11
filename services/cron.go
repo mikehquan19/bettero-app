@@ -117,11 +117,12 @@ func (cs *CronService) validate(ctx context.Context, account models.Account) err
 	}
 
 	// Latest balance + sum of transactions = the current balance.
-	discrepancy := account.Balance - If(
-		account.Type == "Debit",
-		latestHist.Balance-sum,
-		latestHist.Balance+sum,
-	)
+	var discrepancy float64
+	if account.Type == "Debit" {
+		discrepancy = account.Balance - latestHist.Balance - sum
+	} else {
+		discrepancy = account.Balance - latestHist.Balance + sum
+	}
 
 	if discrepancy != 0 {
 		// Flag the account because there is discrepancy here
