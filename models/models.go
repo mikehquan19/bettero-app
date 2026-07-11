@@ -268,6 +268,13 @@ type AccountFinancialSummary struct {
 	Composition map[string]float64  `json:"composition"`
 }
 
+type SummaryDates struct {
+	CurrStart time.Time
+	CurrEnd   time.Time
+	PrevStart time.Time
+	PrevEnd   time.Time
+}
+
 type CategoryProgress struct {
 	Budget     float64 `json:"budget"`
 	Current    float64 `json:"current"`
@@ -301,6 +308,13 @@ type BudgetPlan struct {
 func ScanBudgetPlan(budgetPlanRow pgx.Row, budgetPlan *BudgetPlan) error {
 	return nil
 }
+
+type ObjectType string
+
+const (
+	UserObj    ObjectType = "User"
+	AccountObj ObjectType = "Account"
+)
 
 type IntervalType string
 

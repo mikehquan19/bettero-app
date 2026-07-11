@@ -26,7 +26,7 @@ func (r *TransactionRepo) FilterTransactions(
 	filter models.TransactionFilter,
 	offset int,
 ) (int, []models.Transaction, error) {
-	var count int
+	var transactionCount int
 	var transactions []models.Transaction
 
 	tx, err := db.Begin(ctx)
@@ -43,8 +43,9 @@ func (r *TransactionRepo) FilterTransactions(
 	FROM transactions t 
 	JOIN accounts a ON t.account_id = a.id
 	WHERE %s;`, condition)
+
 	row := tx.QueryRow(ctx, countQuery, args...)
-	if err := row.Scan(&count); err != nil {
+	if err := row.Scan(&transactionCount); err != nil {
 		return -1, nil, err
 	}
 
@@ -71,8 +72,7 @@ func (r *TransactionRepo) FilterTransactions(
 	WHERE %s
 	ORDER BY t.created_at DESC 
 	LIMIT 20
-	OFFSET $%d;
-	`, condition, len(args)+1)
+	OFFSET $%d;`, condition, len(args)+1)
 	args = append(args, offset)
 
 	rows, err := tx.Query(ctx, listQuery, args...)
@@ -88,7 +88,7 @@ func (r *TransactionRepo) FilterTransactions(
 		return -1, nil, err
 	}
 
-	return count, transactions, err
+	return transactionCount, transactions, err
 }
 
 // Get the transaction with nested account data of a given id

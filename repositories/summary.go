@@ -76,8 +76,8 @@ func (s *SummaryRepo) GetBasicAnalysis(
 func (s *SummaryRepo) GetDateToAmount(
 	ctx context.Context,
 	db models.DBTX,
-	objectType string,
-	id int64,
+	objType models.ObjectType,
+	objId int64,
 	start, end time.Time,
 ) (map[string]float64, error) {
 	var dateToAmount = make(map[string]float64)
@@ -87,17 +87,15 @@ func (s *SummaryRepo) GetDateToAmount(
 	}
 
 	var table, filter string
-	switch objectType {
-	case "user":
+	switch objType {
+	case models.UserObj:
 		// For user, join accounts table to get user ID
 		table = "transactions t JOIN accounts a ON t.account_id = a.id"
 		filter = "a.user_id = $1"
-	case "account":
+	case models.AccountObj:
 		// Otherwise, account's ID is already in the transactions table
 		table = "transactions t"
 		filter = "t.account_id = $1"
-	default:
-		return nil, fmt.Errorf("invalid object type to filter, user or account")
 	}
 
 	getDateToAmtQuery := fmt.Sprintf(`
@@ -112,7 +110,7 @@ func (s *SummaryRepo) GetDateToAmount(
 	GROUP BY date;
 	`, table, filter)
 
-	rows, err := db.Query(ctx, getDateToAmtQuery, id, start, end)
+	rows, err := db.Query(ctx, getDateToAmtQuery, objId, start, end)
 	if err != nil {
 		return dateToAmount, err
 	}
@@ -127,12 +125,12 @@ func (s *SummaryRepo) GetDateToAmount(
 	return dateToAmount, err
 }
 
-// getCategoryToAmount returns the map from category to total expense of the user or account
+// getCategoryToAmount returns the map from category to total expense of the obj
 func (s *SummaryRepo) GetCategoryToAmount(
 	ctx context.Context,
 	db models.DBTX,
-	objectType string,
-	id int64,
+	objType models.ObjectType,
+	objId int64,
 	start, end time.Time,
 ) (map[string]float64, error) {
 	var categoryToAmount = make(map[string]float64)
@@ -145,16 +143,14 @@ func (s *SummaryRepo) GetCategoryToAmount(
 	}
 
 	var table, filter string
-	switch objectType {
-	case "user":
+	switch objType {
+	case models.UserObj:
 		// For user, join accounts table to get user ID
 		table = "transactions t JOIN accounts a ON t.account_id = a.id"
 		filter = "a.user_id = $1"
-	case "account":
+	case models.AccountObj:
 		table = "transactions t"
 		filter = "t.account_id = $1"
-	default:
-		return nil, fmt.Errorf("invalid object type to filter, user or account")
 	}
 
 	getCatToAmtQuery := fmt.Sprintf(`
@@ -168,7 +164,7 @@ func (s *SummaryRepo) GetCategoryToAmount(
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY t.category;
 	`, table, filter)
-	rows, err := db.Query(ctx, getCatToAmtQuery, id, start, end)
+	rows, err := db.Query(ctx, getCatToAmtQuery, objId, start, end)
 	if err != nil {
 		return categoryToAmount, err
 	}

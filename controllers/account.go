@@ -247,28 +247,25 @@ func (a *AccountController) GetAccountSummary(c *gin.Context) {
 		return
 	}
 
-	var dates [2]time.Time
-	for i, end := range [2]string{"start", "end"} {
-		dates[i], err = time.Parse("2006-01-02", c.Query(end))
-		if err != nil {
-			respondError(c, http.StatusBadRequest, err)
-			return
-		}
+	dates, err := getSummaryDates(c)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err)
+		return
 	}
 
-	daily, err := a.summaryService.GetDailyMap(ctx, "account", int64(id), dates[0], dates[1])
+	daily, err := a.summaryService.GetDailyMap(ctx, models.AccountObj, int64(id), dates)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	composition, err := a.summaryService.GetCompositionMap(ctx, "account", int64(id), dates[0], dates[1])
+	composition, err := a.summaryService.GetCompositionMap(ctx, models.AccountObj, int64(id), dates)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	change, err := a.summaryService.GetChangeMap(ctx, "account", int64(id), "MONTH", dates[0], dates[1])
+	change, err := a.summaryService.GetChangeMap(ctx, models.AccountObj, int64(id), dates)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return

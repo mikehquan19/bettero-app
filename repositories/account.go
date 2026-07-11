@@ -96,7 +96,7 @@ func (r *AccountRepo) ListAccountTransactions(
 	filter models.TransactionFilter,
 	offset int64,
 ) (int, []models.Transaction, error) {
-	var count int
+	var transactionCount int
 	var transactions []models.Transaction
 
 	tx, err := db.Begin(ctx)
@@ -110,7 +110,7 @@ func (r *AccountRepo) ListAccountTransactions(
 	// Fetch the total number of transactions
 	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM transactions t WHERE %s;`, condition)
 	row := tx.QueryRow(ctx, countQuery, args...)
-	if err := row.Scan(&count); err != nil {
+	if err := row.Scan(&transactionCount); err != nil {
 		return -1, nil, err
 	}
 
@@ -136,8 +136,7 @@ func (r *AccountRepo) ListAccountTransactions(
 	WHERE %s
 	ORDER BY t.created_at DESC 
 	LIMIT 20 
-	OFFSET $%d;
-	`, condition, len(args)+1)
+	OFFSET $%d;`, condition, len(args)+1)
 	args = append(args, offset)
 
 	rows, err := tx.Query(ctx, listQuery, args...)
@@ -153,7 +152,7 @@ func (r *AccountRepo) ListAccountTransactions(
 		return -1, nil, err
 	}
 
-	return count, transactions, err
+	return transactionCount, transactions, err
 }
 
 // InsertAccount inserts and returns an account of the user

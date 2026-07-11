@@ -4,8 +4,6 @@ import (
 	"betterov2/models"
 	"betterov2/repositories"
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -28,9 +26,12 @@ func NewSummaryService(db *pgxpool.Pool, summaryRepo *repositories.SummaryRepo) 
 func (s *SummaryService) GetBasicAnalysis(
 	ctx context.Context,
 	userId int64,
-	start, end time.Time,
+	dates models.SummaryDates,
 ) (models.BasicAnalysis, error) {
 	var analysis models.BasicAnalysis
+
+	start := dates.CurrStart
+	end := dates.CurrEnd
 
 	analysis, err := s.summaryRepo.GetBasicAnalysis(ctx, s.db, userId, start, end)
 	if err != nil {
@@ -43,13 +44,16 @@ func (s *SummaryService) GetBasicAnalysis(
 // GetDailyMap returns the map from the date to expense
 func (s *SummaryService) GetDailyMap(
 	ctx context.Context,
-	objectType string,
-	id int64,
-	start, end time.Time,
+	objType models.ObjectType,
+	objId int64,
+	dates models.SummaryDates,
 ) (map[string]float64, error) {
 	var dailyMap map[string]float64
 
-	dailyMap, err := s.summaryRepo.GetDateToAmount(ctx, s.db, objectType, id, start, end)
+	start := dates.CurrStart
+	end := dates.CurrEnd
+
+	dailyMap, err := s.summaryRepo.GetDateToAmount(ctx, s.db, objType, objId, start, end)
 	if err != nil {
 		return dailyMap, err
 	}
@@ -62,13 +66,16 @@ func (s *SummaryService) GetDailyMap(
 // It uses the total expense computed by GetBasicAnalysis for efficiency.
 func (s *SummaryService) GetCompositionMap(
 	ctx context.Context,
-	objectType string,
-	id int64,
-	start, end time.Time,
+	objType models.ObjectType,
+	objId int64,
+	dates models.SummaryDates,
 ) (map[string]float64, error) {
 	var compositionMap = make(map[string]float64)
 
-	categoryToAmount, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objectType, id, start, end)
+	start := dates.CurrStart
+	end := dates.CurrEnd
+
+	categoryToAmount, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, start, end)
 	if err != nil {
 		return compositionMap, err
 	}
@@ -95,23 +102,24 @@ func (s *SummaryService) GetCompositionMap(
 // If the previous expense is 0 then it's null.
 func (s *SummaryService) GetChangeMap(
 	ctx context.Context,
-	objectType string,
-	id int64,
-	intervalType string,
-	start, end time.Time,
+	objType models.ObjectType,
+	objId int64,
+	dates models.SummaryDates,
 ) (map[string]*float64, error) {
 	var changeMap = make(map[string]*float64)
 
-	current, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objectType, id, start, end)
+	start := dates.CurrStart
+	end := dates.CurrEnd
+
+	current, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, start, end)
 	if err != nil {
 		return changeMap, err
 	}
 
-	prevStart, prevEnd, err := getPrevInterval(intervalType, start, end)
-	if err != nil {
-		return changeMap, err
-	}
-	previous, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objectType, id, *prevStart, *prevEnd)
+	prevStart := dates.PrevStart
+	prevEnd := dates.PrevEnd
+
+	previous, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, prevStart, prevEnd)
 	if err != nil {
 		return changeMap, err
 	}
@@ -126,33 +134,4 @@ func (s *SummaryService) GetChangeMap(
 	}
 
 	return changeMap, err
-}
-
-// getPrevInterval gets the previous period of the 2 dates
-func getPrevInterval(intervalType string, start, end time.Time) (*time.Time, *time.Time, error) {
-	var prevStart, prevEnd time.Time
-	switch intervalType {
-	case "MONTH":
-		prevStart = start.AddDate(0, -1, 0)
-		prevEnd = time.Date(
-			prevStart.Year(),
-			prevStart.Month()+1,
-			0,
-			0, 0, 0, 0, // From hour -> nsec
-			prevStart.Location(),
-		)
-
-	case "WEEK":
-		prevStart = start.AddDate(0, 0, -7)
-		prevEnd = end.AddDate(0, 0, -7)
-
-	case "BIWEEK":
-		prevStart = start.AddDate(0, 0, -14)
-		prevEnd = end.AddDate(0, 0, -14)
-
-	default:
-		return nil, nil, fmt.Errorf("Invalid interval type")
-	}
-
-	return &prevStart, &prevEnd, nil
 }
