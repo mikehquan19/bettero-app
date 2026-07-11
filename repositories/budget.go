@@ -24,10 +24,7 @@ func (r *BudgetRepo) GetBudgetPlan(
 ) (models.BudgetPlan, error) {
 	var budgetPlan models.BudgetPlan
 
-	const getBudgetQuery = `
-	SELECT * FROM budget_plans 
-	WHERE user_id = $1 AND interval_type = $2;
-	`
+	const getBudgetQuery = `SELECT * FROM budget_plans WHERE user_id = $1 AND interval_type = $2;`
 	row := db.QueryRow(ctx, getBudgetQuery, userId, intervalType)
 	if err := models.ScanBudgetPlan(row, &budgetPlan); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

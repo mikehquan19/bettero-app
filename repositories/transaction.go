@@ -43,8 +43,6 @@ func (r *TransactionRepo) FilterTransactions(
 	FROM transactions t 
 	JOIN accounts a ON t.account_id = a.id
 	WHERE %s;`, condition)
-	fmt.Println(countQuery)
-
 	row := tx.QueryRow(ctx, countQuery, args...)
 	if err := row.Scan(&count); err != nil {
 		return -1, nil, err
@@ -76,7 +74,6 @@ func (r *TransactionRepo) FilterTransactions(
 	OFFSET $%d;
 	`, condition, len(args)+1)
 	args = append(args, offset)
-	fmt.Println(listQuery)
 
 	rows, err := tx.Query(ctx, listQuery, args...)
 	if err != nil {
@@ -248,7 +245,7 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, db models.DBTX,
 	return newTran, nil
 }
 
-// UpdateTransaction updates and returns the transaction
+// UpdateTransaction updates and returns the transaction. Doesn't allow for updating account ID
 func (r *TransactionRepo) UpdateTransaction(
 	ctx context.Context,
 	db models.DBTX,
