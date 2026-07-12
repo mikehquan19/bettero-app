@@ -113,8 +113,8 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, db models.DBTX, id
 		t.updated_at
 	FROM transactions t
 	JOIN accounts a ON t.account_id = a.id
-	WHERE t.id = $1;
-	`
+	WHERE t.id = $1;`
+
 	row := db.QueryRow(ctx, getTransactionQuery, id)
 	if err := models.ScanTransaction(row, &transaction); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -171,8 +171,8 @@ func (r *TransactionRepo) ListSuggestions(
 		WHERE t.merchant % $2 AND a.user_id = $1
 	)
 	ORDER BY score DESC
-	LIMIT 10;
-	`
+	LIMIT 10;`
+
 	rows, err := tx.Query(ctx, autocompleteQuery, userId, keyword)
 	if err != nil {
 		return nil, err
@@ -224,8 +224,8 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, db models.DBTX,
 		t.created_at, 
 		t.updated_at
 	FROM new_transaction t
-	JOIN accounts a ON a.id = t.account_id;
-	`
+	JOIN accounts a ON a.id = t.account_id;`
+
 	row := db.QueryRow(ctx, insertTransactionQuery,
 		body.AccountID,
 		body.Merchant,
@@ -283,8 +283,8 @@ func (r *TransactionRepo) UpdateTransaction(
 		t.created_at, 
 		t.updated_at
 	FROM updated_transaction t
-	JOIN accounts a ON a.id = t.account_id;
-	`
+	JOIN accounts a ON a.id = t.account_id;`
+
 	row := db.QueryRow(ctx, updateTranQuery,
 		id,
 		body.Merchant,
@@ -328,8 +328,8 @@ func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db models.DBTX,
 		t.created_at, 
 		t.updated_at
 	FROM deleted_transaction t
-	JOIN accounts a ON a.id = t.account_id;
-	`
+	JOIN accounts a ON a.id = t.account_id;`
+
 	row := db.QueryRow(ctx, deleteTranQuery, id)
 	if err := models.ScanTransaction(row, &deletedTran); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -357,8 +357,8 @@ func (r *TransactionRepo) GetTransactionSum(
 			ELSE 1 
 		END)
 	FROM transactions t
-	WHERE t.account_id = $1 AND t.created_at > $2;
-	`
+	WHERE t.account_id = $1 AND t.created_at > $2;`
+
 	row := db.QueryRow(ctx, totalSumQuery, accountId, from)
 	if err := row.Scan(&transactionSum); err != nil {
 		return -1, err
@@ -375,8 +375,8 @@ func (r *TransactionRepo) DeleteOutdatedTransactions(ctx context.Context, db mod
 	WHERE 
 		created_at < CURRENT_DATE - INTERVAL '6 months'
 		AND account_id = $1
-	RETURNING id;
-	`
+	RETURNING id;`
+
 	rows, err := db.Query(ctx, deleteOutdatedTranQuery, accountId)
 	if err != nil {
 		return -1, err

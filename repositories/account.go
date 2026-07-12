@@ -181,8 +181,8 @@ func (r *AccountRepo) InsertAccount(
 		next_due
 	)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	RETURNING *;
-	`
+	RETURNING *;`
+
 	row := db.QueryRow(ctx, insertAccountQuery,
 		userId,
 		body.AccNumber,
@@ -223,8 +223,8 @@ func (r *AccountRepo) UpdateAccount(
 		next_due = $7, 
 		updated_at = NOW()
 	WHERE id = $1
-	RETURNING *;
-	`
+	RETURNING *;`
+
 	row := db.QueryRow(ctx, updateAccountQuery,
 		id,
 		body.AccNumber,
@@ -281,8 +281,8 @@ func (r *AccountRepo) MoveAccountsDueDate(ctx context.Context, db models.DBTX, i
 	UPDATE accounts a
 	SET next_due = next_due + INTERVAL '1 month'
 	WHERE id = ANY($1)
-	RETURNING id;
-	`
+	RETURNING id;`
+
 	rows, err := db.Query(ctx, updateDueDateQuery, ids)
 	if err != nil {
 		return 0, err
@@ -306,8 +306,8 @@ func (r *AccountRepo) FlagAccount(
 	SET discrepancy_flagged = TRUE, 
 		discrepancy_amount = $2
 	WHERE id = $1
-	RETURNING *;
-	`
+	RETURNING *;`
+
 	row := db.QueryRow(ctx, flagAccountQuery, id, discrepancyAmount)
 	if err := models.ScanAccount(row, &flaggedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

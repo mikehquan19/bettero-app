@@ -94,14 +94,12 @@ func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body m
 	}
 
 	// Insert the account balance history at the time of creation
-	// We are guaranteed only after account is created will we be able to take actions on transactions.
-	// No hypothetical race conditions between acc and tran creation.
-	accHistBody := models.PostAccHistBody{
+	// Guaranteed that only after account is created can we take actions on transactions.
+	insertedHistory, err := s.accHisRepo.InsertHistory(ctx, tx, models.PostAccHistBody{
 		AccountId:  newAccount.ID,
 		LoggedTime: newAccount.CreatedAt,
 		Balance:    newAccount.Balance,
-	}
-	insertedHistory, err := s.accHisRepo.InsertHistory(ctx, tx, accHistBody)
+	})
 	if err != nil {
 		return newAccount, err
 	}
@@ -123,12 +121,12 @@ func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body m
 // If balance changes, it insert a new transaction for this account that reflects the balance change.
 //
 // For credit card,
-//   - If balance increases, transaction is considered an Others-type expense.
+//   - If balance increases, transaction is considered an Others.
 //   - If balance decreases, transaction is considered an income.
 //
 // For debit card,
 //   - If balance increases, transaction is considered an income.
-//   - If balance decreases, transaction is considered an Others-type expense.
+//   - If balance decreases, transaction is considered an Others.
 //
 // NOTE: The feature is to keep ledging consistency, but user won't likely update an account's balance.
 // Most of the time, they will create a descriptive transaction though.
@@ -163,22 +161,29 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 	if change != 0 {
 		var description, category string
 		if change > 0 {
-			description = fmt.Sprintf("Balance increases %f", round(math.Abs(change)))
-			category = If(updatedAcc.Type == "Credit", "Others", "Income")
+			description = fmt.Sprintf("Balance reconciled (+%.2f)", math.Abs(change))
+			if updatedAcc.Type == "Credit" {
+				category = "Others"
+			} else {
+				category = "Income"
+			}
 		} else {
-			description = fmt.Sprintf("Balance descreases %f", round(math.Abs(change)))
-			category = If(updatedAcc.Type == "Credit", "Income", "Others")
+			description = fmt.Sprintf("Balance reconciled (-%.2f)", math.Abs(change))
+			if updatedAcc.Type == "Credit" {
+				category = "Income"
+			} else {
+				category = "Others"
+			}
 		}
 
-		tranBody := models.PostTransactionBody{
+		tran, err := s.tranRepo.InsertTransaction(ctx, tx, models.PostTransactionBody{
 			AccountID:       id,
 			Merchant:        updatedAcc.Institution,
 			TranDescription: description,
 			Category:        category,
 			Amount:          math.Abs(change),
 			CreatedAt:       time.Now(),
-		}
-		tran, err := s.tranRepo.InsertTransaction(ctx, tx, tranBody)
+		})
 		if err != nil {
 			return updatedAcc, err
 		}

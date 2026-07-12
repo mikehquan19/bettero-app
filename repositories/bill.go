@@ -37,8 +37,8 @@ func (r *BillRepo) ListBills(ctx context.Context, db models.DBTX, userId int64) 
 	FROM bills b 
 	JOIN accounts a ON b.account_id = a.id
 	WHERE a.user_id = $1
-	ORDER BY b.due_date ASC;
-	`
+	ORDER BY b.due_date ASC;`
+
 	rows, err := db.Query(ctx, listBillQuery, userId)
 	if err != nil {
 		return bills, err
@@ -73,8 +73,8 @@ func (r *BillRepo) GetBill(ctx context.Context, db models.DBTX, id int64) (model
 		b.due_date
 	FROM bills b
 	JOIN accounts a ON b.account_id = a.id
-	WHERE b.id = $1;
-	`
+	WHERE b.id = $1;`
+
 	row := db.QueryRow(ctx, getNestedBillQuery, id)
 	if err := models.ScanBill(row, &bill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -118,8 +118,8 @@ func (r *BillRepo) InsertBill(ctx context.Context, db models.DBTX, body models.B
 		b.amount, 
 		b.due_date
 	FROM new_bill b
-	JOIN accounts a ON b.account_id = a.id;
-	`
+	JOIN accounts a ON b.account_id = a.id;`
+
 	row := db.QueryRow(ctx, insertBillQuery,
 		body.AccountID,
 		body.Merchant,
@@ -175,8 +175,8 @@ func (r *BillRepo) UpdateBill(
 		b.amount, 
 		b.due_date
 	FROM updated_bill b
-	JOIN accounts a ON b.account_id = a.id;
-	`
+	JOIN accounts a ON b.account_id = a.id;`
+
 	row := db.QueryRow(ctx, updateBillQuery,
 		id,
 		body.AccountID,
@@ -219,8 +219,8 @@ func (r *BillRepo) DeleteBill(ctx context.Context, db models.DBTX, id int64) (mo
 		b.amount, 
 		b.due_date
 	FROM deleted_bill b
-	JOIN accounts a ON b.account_id = a.id
-	`
+	JOIN accounts a ON b.account_id = a.id;`
+
 	row := db.QueryRow(ctx, deleteBillQuery, id)
 	if err := models.ScanBill(row, &deletedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
