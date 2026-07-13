@@ -1,0 +1,126 @@
+name: bettero-go-api
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: mikequan19/bettero-app
+
+jobs:
+  lint-and-test:
+    name: Lint, format, and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.11.4
+          args: --timeout=10m
+
+      - name: Lint and format
+        run: |
+          go vet ./...
+          gofmt -w $(find . -name '*.go' -not -path './vendor/*')
+          golangci-lint run
+
+      - name: Test
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: go test ./... -count=1
+
+  build-and-push:
+    name: Build and push image
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binary
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: go build -o bettero-app server.go
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/bettero-app:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/bettero-app:${{ github.sha }}
+
+  integration-test:
+    name: Integration test container
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image locally for smoke test
+        run: docker build -t bettero-app:test .
+
+      - name: Start the API container
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          docker run -d --name bettero-api -p 8080:8080 \
+            -e DATABASE_URL="$DATABASE_URL" \
+            bettero-app:test
+
+      - name: Wait for the health endpoint
+        run: |
+          set -e
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8080/health >/tmp/health.json; then
+              echo "SUCCESS DEPLOYED API"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ERROR DEPLOYED API"
+          docker logs bettero-api || true
+          exit 1
+
+      - name: Clean up container
+        if: always()
+        run: docker rm -f bettero-api || true
