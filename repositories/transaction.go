@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -235,8 +234,7 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, db models.DBTX,
 		body.CreatedAt,
 	)
 	if err := models.ScanTransaction(row, &newTran); err != nil {
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
-			// Insert a transaction for non-existent account
+		if isForeignKeyViolation(err) {
 			return newTran, models.ErrForeignKey
 		}
 		return newTran, err

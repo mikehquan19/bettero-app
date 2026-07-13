@@ -4,6 +4,8 @@ import (
 	"betterov2/models"
 	"fmt"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // buildTransactionFilter gets the SQL query to filter transaction from the TransactionFilter.
@@ -45,4 +47,9 @@ func buildTransactionFilter(initCond string, value int64, filter models.Transact
 
 	sql := strings.Join(conditions, " AND ")
 	return sql, args
+}
+
+func isForeignKeyViolation(err error) bool {
+	pgErr, ok := err.(*pgconn.PgError)
+	return ok && pgErr.Code == "23503"
 }

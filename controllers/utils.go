@@ -4,7 +4,6 @@ import (
 	"betterov2/models"
 	"log"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,27 +31,4 @@ func getOffset(c *gin.Context) (int, error) {
 		}
 	}
 	return offset, nil
-}
-
-// getSummaryDates parses the summary dates from query params
-func getSummaryDates(c *gin.Context) (models.SummaryDates, error) {
-	var dates models.SummaryDates
-	var err error
-
-	for _, field := range []struct {
-		dest *time.Time
-		name string
-	}{
-		{dest: &dates.CurrStart, name: "curr_start"},
-		{dest: &dates.CurrEnd, name: "curr_end"},
-		{dest: &dates.PrevStart, name: "prev_start"},
-		{dest: &dates.PrevEnd, name: "prev_end"},
-	} {
-		*field.dest, err = time.Parse("2006-01-02", c.Query(field.name))
-		if err != nil {
-			return models.SummaryDates{}, err
-		}
-	}
-
-	return dates, nil
 }

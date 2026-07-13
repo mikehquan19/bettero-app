@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type AccountHistoryRepo struct{}
@@ -78,8 +77,7 @@ func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, db models.DBTX, 
 		body.Balance,
 	)
 	if err := models.ScanAccHistory(row, &newAccHistory); err != nil {
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
-			// Insert history that references non-existent account
+		if isForeignKeyViolation(err) {
 			return newAccHistory, models.ErrForeignKey
 		}
 		return newAccHistory, err

@@ -174,18 +174,6 @@ func (s *BudgetService) UpdateBudgetPlan(
 	return updatedBudgetPlan, nil
 }
 
-// DeleteBudgetPlan deletes and returns the budget plan by interval type
-func (s *BudgetService) DeleteBudgetPlan(ctx context.Context, userId int64, intervalType models.IntervalType) (models.BudgetPlan, error) {
-	var deletedBudgetPlan models.BudgetPlan
-
-	deletedBudgetPlan, err := s.budgetRepo.DeleteBudgetPlan(ctx, s.db, userId, intervalType)
-	if err != nil {
-		return deletedBudgetPlan, err
-	}
-
-	return deletedBudgetPlan, nil
-}
-
 // validatePortion validates the budget plan body.
 //
 //   - Expense portion must be valid percentage (0 - 100%)
@@ -219,4 +207,16 @@ func validatePortion(body models.GenericBudgetPlanBody) error {
 	}
 
 	return nil
+}
+
+// DeleteBudgetPlan deletes and returns the budget plan by interval type
+func (s *BudgetService) DeleteBudgetPlan(ctx context.Context, userId int64, intervalType models.IntervalType) (models.BudgetPlan, error) {
+	var deletedBudgetPlan models.BudgetPlan
+
+	deletedBudgetPlan, err := s.budgetRepo.DeleteBudgetPlan(ctx, s.db, userId, intervalType)
+	if err != nil {
+		return deletedBudgetPlan, err
+	}
+
+	return deletedBudgetPlan, nil
 }

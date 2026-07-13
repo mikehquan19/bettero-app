@@ -86,9 +86,7 @@ func (s *AccountService) ListAccountHistories(ctx context.Context, id int64) ([]
 func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body models.PostAccountBody) (models.Account, error) {
 	var newAccount models.Account
 
-	// Debit account is not supposed to have credit limit and next due
-	// Credit account must have credit limit and next due
-	if err := body.Validate(); err != nil {
+	if err := validateAcc(body.Type, body.AccountBody); err != nil {
 		return newAccount, err
 	}
 
@@ -154,9 +152,7 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 	if err != nil {
 		return updatedAcc, err
 	}
-	// Debit account can't have credit limit and next due
-	// Credit account must have credit limit and next due
-	if err = body.Validate(previousAcc.Type); err != nil {
+	if err = validateAcc(previousAcc.Type, body.AccountBody); err != nil {
 		return updatedAcc, err
 	}
 
@@ -205,6 +201,23 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 	}
 
 	return updatedAcc, nil
+}
+
+// validate validates the account body
+//
+//   - Debit account can't have credit limit and next due
+//
+//   - Credit account must have credit limit and next due
+func validateAcc(aType string, body models.AccountBody) error {
+	if aType == "Debit" && (body.NextDue != nil || body.CreditLimit != nil) {
+		return models.ErrDebitCardWithCreditInfo
+	}
+
+	if aType == "Credit" && (body.NextDue == nil || body.CreditLimit == nil) {
+		return models.ErrCreditCardWithoutCreditInfo
+	}
+
+	return nil
 }
 
 // DeleteAccount deletes the account, its transactions and account history

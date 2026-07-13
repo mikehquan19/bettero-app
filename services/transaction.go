@@ -71,9 +71,8 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	if body.CreatedAt.Before(time.Now().AddDate(0, 0, -13)) {
-		// Transaction older than 2 weeks ago can't be created
-		return created, models.ErrTransactionTooOld
+	if err := validateTranTime(body.CreatedAt); err != nil {
+		return created, err
 	}
 
 	// Insert the new transaction data
@@ -125,8 +124,8 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 		return updated, err
 	}
 
-	if previous.CreatedAt.Before(time.Now().AddDate(0, 0, -13)) {
-		return updated, models.ErrTransactionTooOld
+	if err := validateTranTime(previous.CreatedAt); err != nil {
+		return updated, err
 	}
 
 	// Update the transaction
@@ -184,8 +183,8 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 		return err
 	}
 
-	if deleted.CreatedAt.Before(time.Now().AddDate(0, 0, -13)) {
-		return models.ErrTransactionTooOld
+	if err := validateTranTime(deleted.CreatedAt); err != nil {
+		return err
 	}
 
 	// Reverse the effect of creating the transaction
@@ -205,5 +204,14 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 		return err
 	}
 
+	return nil
+}
+
+// validateTran validates the transaction.
+// Transaction older than 2 weeks ago can't be created
+func validateTranTime(created time.Time) error {
+	if created.Before(time.Now().AddDate(0, 0, -13)) {
+		return models.ErrTransactionTooOld
+	}
 	return nil
 }
