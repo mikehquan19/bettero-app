@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type BillRepo struct{}
@@ -129,8 +128,7 @@ func (r *BillRepo) InsertBill(ctx context.Context, db models.DBTX, body models.B
 		body.DueDate,
 	)
 	if err := models.ScanBill(row, &newBill); err != nil {
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
-			// Insert a bill for non-existent account
+		if isForeignKeyViolation(err) {
 			return newBill, models.ErrForeignKey
 		}
 		return newBill, err

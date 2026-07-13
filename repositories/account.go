@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -164,11 +163,6 @@ func (r *AccountRepo) InsertAccount(
 ) (models.Account, error) {
 	var newAccount models.Account
 
-	// If the account's body doesn't satify the requirements
-	if err := body.Validate(); err != nil {
-		return newAccount, err
-	}
-
 	const insertAccountQuery = `
 	INSERT INTO accounts (
 		user_id, 
@@ -194,8 +188,7 @@ func (r *AccountRepo) InsertAccount(
 		body.NextDue,
 	)
 	if err := models.ScanAccount(row, &newAccount); err != nil {
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
-			// Insert account that references non-existent user
+		if isForeignKeyViolation(err) {
 			return newAccount, models.ErrForeignKey
 		}
 		return newAccount, err

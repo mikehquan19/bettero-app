@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type BudgetRepo struct{}
@@ -64,7 +63,7 @@ func (r *BudgetRepo) InsertBudgetPlan(
 		body.CategoryPortion,
 	)
 	if err := models.ScanBudgetPlan(row, &newBudgetPlan); err != nil {
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
+		if isForeignKeyViolation(err) {
 			return newBudgetPlan, models.ErrForeignKey
 		}
 		return newBudgetPlan, err
