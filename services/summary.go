@@ -30,10 +30,7 @@ func (s *SummaryService) GetBasicAnalysis(
 ) (models.BasicAnalysis, error) {
 	var analysis models.BasicAnalysis
 
-	start := dates.CurrStart
-	end := dates.CurrEnd
-
-	analysis, err := s.summaryRepo.GetBasicAnalysis(ctx, s.db, userId, start, end)
+	analysis, err := s.summaryRepo.GetBasicAnalysis(ctx, s.db, userId, dates.CurrStart, dates.CurrStart)
 	if err != nil {
 		return analysis, err
 	}
@@ -50,10 +47,7 @@ func (s *SummaryService) GetDailyMap(
 ) (map[string]float64, error) {
 	var dailyMap map[string]float64
 
-	start := dates.CurrStart
-	end := dates.CurrEnd
-
-	dailyMap, err := s.summaryRepo.GetDateToAmount(ctx, s.db, objType, objId, start, end)
+	dailyMap, err := s.summaryRepo.GetDateToAmount(ctx, s.db, objType, objId, dates.CurrStart, dates.CurrEnd)
 	if err != nil {
 		return dailyMap, err
 	}
@@ -72,10 +66,7 @@ func (s *SummaryService) GetCompositionMap(
 ) (map[string]float64, error) {
 	var compositionMap = make(map[string]float64)
 
-	start := dates.CurrStart
-	end := dates.CurrEnd
-
-	categoryToAmount, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, start, end)
+	categoryToAmount, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, dates.CurrStart, dates.CurrEnd)
 	if err != nil {
 		return compositionMap, err
 	}
@@ -108,18 +99,12 @@ func (s *SummaryService) GetChangeMap(
 ) (map[string]*float64, error) {
 	var changeMap = make(map[string]*float64)
 
-	start := dates.CurrStart
-	end := dates.CurrEnd
-
-	current, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, start, end)
+	current, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, dates.CurrStart, dates.CurrEnd)
 	if err != nil {
 		return changeMap, err
 	}
 
-	prevStart := dates.PrevStart
-	prevEnd := dates.PrevEnd
-
-	previous, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, prevStart, prevEnd)
+	previous, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, dates.PrevStart, dates.PrevEnd)
 	if err != nil {
 		return changeMap, err
 	}

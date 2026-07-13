@@ -71,7 +71,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	if body.CreatedAt.Before(time.Now().AddDate(0, 0, -14)) {
+	if body.CreatedAt.Before(time.Now().AddDate(0, 0, -13)) {
 		// Transaction older than 2 weeks ago can't be created
 		return created, models.ErrTransactionTooOld
 	}
@@ -83,7 +83,12 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 	}
 
 	// Update the account balance data
-	netChange := If(created.Category == "Income", -created.Amount, created.Amount)
+	var netChange float64
+	if created.Category == "Income" {
+		netChange = -created.Amount
+	} else {
+		netChange = created.Amount
+	}
 	balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, created.Account.Id, netChange)
 	if err != nil {
 		return created, err
@@ -120,7 +125,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 		return updated, err
 	}
 
-	if previous.CreatedAt.Before(time.Now().AddDate(0, 0, -14)) {
+	if previous.CreatedAt.Before(time.Now().AddDate(0, 0, -13)) {
 		return updated, models.ErrTransactionTooOld
 	}
 
@@ -132,10 +137,19 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 
 	// Compute the amount to update the account balance (if balance change)
 	if previous.Amount != updated.Amount {
-		prevChange := If(previous.Category == "Income", -previous.Amount, previous.Amount)
-		currChange := If(updated.Category == "Income", -updated.Amount, updated.Amount)
-		netChange := currChange - prevChange
-		balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, updated.Account.Id, netChange)
+		var prevChange, currChange float64
+		if previous.Category == "Income" {
+			prevChange = -previous.Amount
+		} else {
+			prevChange = previous.Amount
+		}
+		if updated.Category == "Income" {
+			currChange = -updated.Amount
+		} else {
+			currChange = updated.Amount
+		}
+
+		balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, updated.Account.Id, currChange-prevChange)
 		if err != nil {
 			return updated, err
 		}
@@ -170,12 +184,17 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 		return err
 	}
 
-	if deleted.CreatedAt.Before(time.Now().AddDate(0, 0, -14)) {
+	if deleted.CreatedAt.Before(time.Now().AddDate(0, 0, -13)) {
 		return models.ErrTransactionTooOld
 	}
 
 	// Reverse the effect of creating the transaction
-	netChange := If(deleted.Category == "Income", deleted.Amount, -deleted.Amount)
+	var netChange float64
+	if deleted.Category == "Income" {
+		netChange = deleted.Amount
+	} else {
+		netChange = -deleted.Amount
+	}
 	balance, err := s.accRepo.UpdateAccountBalance(ctx, tx, deleted.Account.Id, netChange)
 	if err != nil {
 		return err

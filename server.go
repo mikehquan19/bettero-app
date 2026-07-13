@@ -24,17 +24,20 @@ func main() {
 	transactionRepo := repositories.NewTransactionRepo()
 	summaryRepo := repositories.NewSummaryRepo()
 	billRepo := repositories.NewBillRepo()
+	budgetRepo := repositories.NewBudgetRepo()
 
 	// Dependency injection
 	accountService := services.NewAccountService(db, accountRepo, accountHistoryRepo, transactionRepo)
 	transactionService := services.NewTransactionService(db, transactionRepo, accountRepo)
 	billService := services.NewBillService(db, billRepo, accountRepo, transactionRepo)
 	summaryService := services.NewSummaryService(db, summaryRepo)
+	budgetService := services.NewBudgetService(db, budgetRepo, summaryRepo)
 
 	accountController := controllers.NewAccountController(accountService, summaryService)
 	transactionController := controllers.NewTransactionController(transactionService)
 	billController := controllers.NewBillController(billService)
 	summaryController := controllers.NewSummaryController(summaryService)
+	budgetController := controllers.NewBudgetController(budgetService)
 
 	// Initialize the router
 	router := gin.Default()
@@ -67,6 +70,7 @@ func main() {
 	routes.RegisterTransactionRoutes(router, transactionController)
 	routes.RegisterSummaryRoutes(router, summaryController)
 	routes.RegisterBillRoutes(router, billController)
+	routes.RegisterBudgetRoutes(router, budgetController)
 
 	if err := router.Run(":8080"); err != nil {
 		panic(err)

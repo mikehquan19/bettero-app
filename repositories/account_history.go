@@ -50,7 +50,7 @@ func (r *AccountHistoryRepo) GetLatestHistory(ctx context.Context, db models.DBT
 	if err := models.ScanAccHistory(row, &latestHistory); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// No history found for the account
-			return latestHistory, models.GetNotFound[models.Account](accountId)
+			return latestHistory, models.ErrNotFound
 		}
 		return latestHistory, err
 	}
@@ -80,7 +80,7 @@ func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, db models.DBTX, 
 	if err := models.ScanAccHistory(row, &newAccHistory); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
 			// Insert history that references non-existent account
-			return newAccHistory, models.GetForeignKey[models.Account](body.AccountId)
+			return newAccHistory, models.ErrForeignKey
 		}
 		return newAccHistory, err
 	}

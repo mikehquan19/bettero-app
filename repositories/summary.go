@@ -62,8 +62,7 @@ func (s *SummaryRepo) GetBasicAnalysis(
 		total_balance b, 
 		total_amount_due a, 
 		total_income i, 
-		total_expense e
-	`
+		total_expense e;`
 	row := db.QueryRow(ctx, getAnalysisQuery, userId, start, end)
 	if err := models.ScanAnalysis(row, &analysis); err != nil {
 		return analysis, err
@@ -107,8 +106,7 @@ func (s *SummaryRepo) GetDateToAmount(
 		%s AND
 		t.category <> 'Income' AND 
 		t.created_at >= $2 AND t.created_at < $3
-	GROUP BY date;
-	`, table, filter)
+	GROUP BY date;`, table, filter)
 
 	rows, err := db.Query(ctx, getDateToAmtQuery, objId, start, end)
 	if err != nil {
@@ -162,8 +160,8 @@ func (s *SummaryRepo) GetCategoryToAmount(
 		%s AND
 		t.category <> 'Income' AND 
 		t.created_at >= $2 AND t.created_at < $3
-	GROUP BY t.category;
-	`, table, filter)
+	GROUP BY t.category;`, table, filter)
+
 	rows, err := db.Query(ctx, getCatToAmtQuery, objId, start, end)
 	if err != nil {
 		return categoryToAmount, err
