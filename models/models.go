@@ -51,46 +51,23 @@ type Account struct {
 	DiscrepancyAmount  float64    `json:"discrepancy_amount" db:"discrepancy_amount"`
 }
 
-type PostAccountBody struct {
+type AccountBody struct {
 	AccNumber   int64      `json:"acc_number"`
 	AccName     string     `json:"acc_name"`
 	Institution string     `json:"institution"`
-	Type        string     `json:"type"`
 	Balance     float64    `json:"balance"`
 	CreditLimit *float64   `json:"credit_limit"`
 	NextDue     *time.Time `json:"next_due"`
 }
 
-func (p PostAccountBody) Validate() error {
-	if p.Type == "Debit" && (p.NextDue != nil || p.CreditLimit != nil) {
-		return ErrDebitCardWithCreditInfo
-	}
-	if p.Type == "Credit" && (p.NextDue == nil || p.CreditLimit == nil) {
-		return ErrCreditCardWithoutCreditInfo
-	}
-
-	return nil
+type PostAccountBody struct {
+	AccountBody
+	Type string `json:"type"`
 }
 
 // User is not allowed to update the type of the account
 type PutAccountBody struct {
-	AccNumber   int64    `json:"acc_number"`
-	AccName     string   `json:"acc_name"`
-	Institution string   `json:"institution"`
-	Balance     float64  `json:"balance"`
-	CreditLimit *float64 `json:"credit_limit"`
-	NextDue     *string  `json:"next_due"`
-}
-
-func (p PutAccountBody) Validate(accType string) error {
-	if accType == "Debit" && (p.NextDue != nil || p.CreditLimit != nil) {
-		return ErrDebitCardWithCreditInfo
-	}
-	if accType == "Credit" && (p.NextDue == nil || p.CreditLimit == nil) {
-		return ErrCreditCardWithoutCreditInfo
-	}
-
-	return nil
+	AccountBody
 }
 
 // ScanAccount parses the returned db row into account struct and destinations
