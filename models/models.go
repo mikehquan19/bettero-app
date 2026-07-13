@@ -276,22 +276,26 @@ type SummaryDates struct {
 }
 
 type CategoryProgress struct {
-	Budget     float64 `json:"budget"`
 	Current    float64 `json:"current"`
+	Budget     float64 `json:"budget"`
 	Percentage float64 `json:"percentage"`
 }
 
 type BudgetComposition struct {
-	Goal map[string]float64 `json:"goal"`
-	Real map[string]float64 `json:"real"`
+	Goal map[string]float64 `json:"goal"` // Goal composition, which is the category portion
+	Real map[string]float64 `json:"real"` // Real composition, computed from GetCompositionMap logic
 }
 
+// A detailed analysis of user's spending analysis and budget's info
 type BudgetResponse struct {
-	ID                int64                       `json:"id"`
-	RecurringIncome   float64                     `json:"recurring_income"`
-	ExpensePortion    float64                     `json:"expense_portion"`
-	BudgetComposition BudgetComposition           `json:"budget_composition"`
-	Progress          map[string]CategoryProgress `json:"progress"`
+	ID                int64                        `json:"id"`
+	IntervalType      string                       `json:"interval_type"`
+	RecurringIncome   float64                      `json:"recurring_income"`
+	ExpensePortion    float64                      `json:"expense_portion"`
+	BudgetComposition BudgetComposition            `json:"budget_composition"`
+	Progress          map[string]*CategoryProgress `json:"progress"`
+	CreatedAt         time.Time                    `json:"created_at"`
+	UpdatedAt         time.Time                    `json:"updated_at"`
 }
 
 type BudgetPlan struct {
@@ -301,27 +305,53 @@ type BudgetPlan struct {
 	RecurringIncome float64            `json:"recurring_income" db:"recurring_income"`
 	ExpensePortion  float64            `json:"expense_portion" db:"expense_portion"`
 	CategoryPortion map[string]float64 `json:"category_portion" db:"category_portion"`
-	CreatedAt       time.Time          `json:"created_at"`
-	UpdatedAt       time.Time          `json:"updated_at"`
+	CreatedAt       time.Time          `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time          `json:"updated_at" db:"updated_at"`
+}
+
+type GenericBudgetPlanBody struct {
+	RecurringIncome float64            `json:"recurring_income"`
+	ExpensePortion  float64            `json:"expense_portion"`
+	CategoryPortion map[string]float64 `json:"category_portion"`
+}
+
+type PostBudgetPlanBody struct {
+	IntervalType string `json:"interval_type"`
+	GenericBudgetPlanBody
+}
+
+// BudgetPlanbody does not allow for updating the interval type
+type PutBudgetPlanBody struct {
+	GenericBudgetPlanBody
 }
 
 func ScanBudgetPlan(budgetPlanRow pgx.Row, budgetPlan *BudgetPlan) error {
-	return nil
+	err := budgetPlanRow.Scan(
+		&budgetPlan.ID,
+		&budgetPlan.UserID,
+		&budgetPlan.IntervalType,
+		&budgetPlan.RecurringIncome,
+		&budgetPlan.ExpensePortion,
+		&budgetPlan.CategoryPortion,
+		&budgetPlan.CreatedAt,
+		&budgetPlan.UpdatedAt,
+	)
+	return err
 }
 
 type ObjectType string
 
 const (
-	UserObj    ObjectType = "User"
-	AccountObj ObjectType = "Account"
+	UserObj    ObjectType = "user"
+	AccountObj ObjectType = "account"
 )
 
 type IntervalType string
 
 const (
-	Month  IntervalType = "Month"
-	BiWeek IntervalType = "BiWeek"
-	Week   IntervalType = "Week"
+	Month  IntervalType = "month"
+	BiWeek IntervalType = "bi_week"
+	Week   IntervalType = "week"
 )
 
 // The overal result of the autocomplete search

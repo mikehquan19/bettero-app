@@ -4,9 +4,9 @@ import (
 	"betterov2/models"
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type BudgetRepo struct{}
@@ -28,11 +28,107 @@ func (r *BudgetRepo) GetBudgetPlan(
 	row := db.QueryRow(ctx, getBudgetQuery, userId, intervalType)
 	if err := models.ScanBudgetPlan(row, &budgetPlan); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Budget doesn't exist
-			budgetNotFound := fmt.Errorf("Budget of %s not found, %w", intervalType, models.ErrNotFound)
-			return budgetPlan, budgetNotFound
+			return budgetPlan, models.ErrNotFound
 		}
+		return budgetPlan, err
 	}
 
 	return budgetPlan, nil
+}
+
+// InsertBudgetPlan inserts to the database and returns the new budget plan
+func (r *BudgetRepo) InsertBudgetPlan(
+	ctx context.Context,
+	db models.DBTX,
+	userId int64,
+	body models.PostBudgetPlanBody,
+) (models.BudgetPlan, error) {
+	var newBudgetPlan models.BudgetPlan
+
+	const insertBudgetQuery = `
+	INSERT INTO budget_plans (
+		user_id, 
+		interval_type, 
+		recurring_income, 
+		expense_portion, 
+		category_portion
+	) 
+	VALUES ($1, $2, $3, $4, $5)
+	RETURNING *;`
+
+	row := db.QueryRow(ctx, insertBudgetQuery,
+		userId,
+		body.IntervalType,
+		body.RecurringIncome,
+		body.ExpensePortion,
+		body.CategoryPortion,
+	)
+	if err := models.ScanBudgetPlan(row, &newBudgetPlan); err != nil {
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
+			return newBudgetPlan, models.ErrForeignKey
+		}
+		return newBudgetPlan, err
+	}
+
+	return newBudgetPlan, nil
+}
+
+// UpdateBudgetPlan updates and returns the budget plan by interval type
+func (r *BudgetRepo) UpdateBudgetPlan(
+	ctx context.Context,
+	db models.DBTX,
+	userId int64,
+	intervalType models.IntervalType,
+	body models.PutBudgetPlanBody,
+) (models.BudgetPlan, error) {
+	var updatedBudgetPlan models.BudgetPlan
+
+	const updateBudgetPlanQuery = `
+	UPDATE budget_plans
+	SET recurring_income = $3, 
+		expense_portion = $4, 
+		category_portion = $5,
+		updated_at = NOW()
+	WHERE user_id = $1 AND interval_type = $2
+	RETURNING *;`
+
+	row := db.QueryRow(ctx, updateBudgetPlanQuery,
+		userId,
+		intervalType,
+		body.RecurringIncome,
+		body.ExpensePortion,
+		body.CategoryPortion,
+	)
+	if err := models.ScanBudgetPlan(row, &updatedBudgetPlan); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return updatedBudgetPlan, models.ErrNotFound
+		}
+		return updatedBudgetPlan, err
+	}
+
+	return updatedBudgetPlan, nil
+}
+
+// DeleteBudgetPlan deletes and returns the budget plan
+func (r *BudgetRepo) DeleteBudgetPlan(
+	ctx context.Context,
+	db models.DBTX,
+	userId int64,
+	intervalType models.IntervalType,
+) (models.BudgetPlan, error) {
+	var deletedBudgetPlan models.BudgetPlan
+
+	const deleteBudgetPlanQuery = `
+	DELETE FROM budget_plans 
+	WHERE user_id = $1 AND interval_type = $2 
+	RETURNING *;`
+
+	row := db.QueryRow(ctx, deleteBudgetPlanQuery, userId, intervalType)
+	if err := models.ScanBudgetPlan(row, &deletedBudgetPlan); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return deletedBudgetPlan, models.ErrNotFound
+		}
+		return deletedBudgetPlan, err
+	}
+	return deletedBudgetPlan, nil
 }
