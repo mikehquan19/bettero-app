@@ -118,7 +118,7 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, db models.DBTX, id
 	row := db.QueryRow(ctx, getTransactionQuery, id)
 	if err := models.ScanTransaction(row, &transaction); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return transaction, models.GetNotFound[models.Transaction](id)
+			return transaction, models.ErrNotFound
 		}
 		return transaction, err
 	}
@@ -237,7 +237,7 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, db models.DBTX,
 	if err := models.ScanTransaction(row, &newTran); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
 			// Insert a transaction for non-existent account
-			return newTran, models.GetForeignKey[models.Account](body.AccountID)
+			return newTran, models.ErrForeignKey
 		}
 		return newTran, err
 	}
@@ -255,7 +255,7 @@ func (r *TransactionRepo) UpdateTransaction(
 	var updatedTran models.Transaction
 
 	// Store the previous category and amount before updating
-	const updateTranQuery = `
+	const updateTransactionQuery = `
 	WITH updated_transaction AS (
 		UPDATE transactions
 		SET merchant = $2, 
@@ -285,7 +285,7 @@ func (r *TransactionRepo) UpdateTransaction(
 	FROM updated_transaction t
 	JOIN accounts a ON a.id = t.account_id;`
 
-	row := db.QueryRow(ctx, updateTranQuery,
+	row := db.QueryRow(ctx, updateTransactionQuery,
 		id,
 		body.Merchant,
 		body.TranDescription,
@@ -296,7 +296,7 @@ func (r *TransactionRepo) UpdateTransaction(
 	if err := models.ScanTransaction(row, &updatedTran); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Update a non-existent transaction
-			return updatedTran, models.GetNotFound[models.Transaction](id)
+			return updatedTran, models.ErrNotFound
 		}
 		return updatedTran, err
 	}
@@ -308,7 +308,7 @@ func (r *TransactionRepo) UpdateTransaction(
 func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db models.DBTX, id int64) (models.Transaction, error) {
 	var deletedTran models.Transaction
 
-	const deleteTranQuery = `
+	const deleteTransactionQuery = `
 	WITH deleted_transaction AS (
 		DELETE FROM transactions WHERE id = $1 RETURNING *
 	)
@@ -330,10 +330,10 @@ func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db models.DBTX,
 	FROM deleted_transaction t
 	JOIN accounts a ON a.id = t.account_id;`
 
-	row := db.QueryRow(ctx, deleteTranQuery, id)
+	row := db.QueryRow(ctx, deleteTransactionQuery, id)
 	if err := models.ScanTransaction(row, &deletedTran); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return deletedTran, models.GetNotFound[models.Transaction](id)
+			return deletedTran, models.ErrNotFound
 		}
 		return deletedTran, err
 	}
@@ -346,7 +346,7 @@ func (r *TransactionRepo) GetTransactionSum(
 	ctx context.Context,
 	db models.DBTX,
 	accountId int64,
-	from time.Time,
+	startDate time.Time,
 ) (float64, error) {
 	var transactionSum float64
 
@@ -359,7 +359,7 @@ func (r *TransactionRepo) GetTransactionSum(
 	FROM transactions t
 	WHERE t.account_id = $1 AND t.created_at > $2;`
 
-	row := db.QueryRow(ctx, totalSumQuery, accountId, from)
+	row := db.QueryRow(ctx, totalSumQuery, accountId, startDate)
 	if err := row.Scan(&transactionSum); err != nil {
 		return -1, err
 	}

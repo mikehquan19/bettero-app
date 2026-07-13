@@ -225,7 +225,7 @@ func (a *AccountController) GetAccountHistories(c *gin.Context) {
 		return
 	}
 
-	histories, err := a.accService.ListHistories(ctx, int64(id))
+	histories, err := a.accService.ListAccountHistories(ctx, int64(id))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return

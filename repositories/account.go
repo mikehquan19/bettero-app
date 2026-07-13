@@ -80,7 +80,7 @@ func (r *AccountRepo) GetAccount(ctx context.Context, db models.DBTX, id int64) 
 	row := db.QueryRow(ctx, "SELECT * FROM accounts WHERE id = $1;", id)
 	if err := models.ScanAccount(row, &account); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return account, models.GetNotFound[models.Account](id)
+			return account, models.ErrNotFound
 		}
 		return account, err
 	}
@@ -196,7 +196,7 @@ func (r *AccountRepo) InsertAccount(
 	if err := models.ScanAccount(row, &newAccount); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
 			// Insert account that references non-existent user
-			return newAccount, models.GetForeignKey[models.User](userId)
+			return newAccount, models.ErrForeignKey
 		}
 		return newAccount, err
 	}
@@ -236,7 +236,7 @@ func (r *AccountRepo) UpdateAccount(
 	)
 	if err := models.ScanAccount(row, &updatedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return updatedAccount, models.GetNotFound[models.Account](id)
+			return updatedAccount, models.ErrNotFound
 		}
 		return updatedAccount, err
 	}
@@ -297,7 +297,10 @@ func (r *AccountRepo) MoveAccountsDueDate(ctx context.Context, db models.DBTX, i
 
 // FlagAccount will flag the account with the given discrepany amount.
 func (r *AccountRepo) FlagAccount(
-	ctx context.Context, db models.DBTX, id int64, discrepancyAmount float64,
+	ctx context.Context,
+	db models.DBTX,
+	id int64,
+	discrepancyAmount float64,
 ) (models.Account, error) {
 	var flaggedAccount models.Account
 
@@ -311,7 +314,7 @@ func (r *AccountRepo) FlagAccount(
 	row := db.QueryRow(ctx, flagAccountQuery, id, discrepancyAmount)
 	if err := models.ScanAccount(row, &flaggedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return flaggedAccount, models.GetNotFound[models.Account](id)
+			return flaggedAccount, models.ErrNotFound
 		}
 		return flaggedAccount, err
 	}
@@ -324,10 +327,11 @@ func (r *AccountRepo) DeleteAccount(ctx context.Context, db models.DBTX, id int6
 	var deletedAccount models.Account
 
 	const deleteAccountQuery = `DELETE FROM accounts WHERE id = $1 RETURNING *;`
+
 	row := db.QueryRow(ctx, deleteAccountQuery, id)
 	if err := models.ScanAccount(row, &deletedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return deletedAccount, models.GetNotFound[models.Account](id)
+			return deletedAccount, models.ErrNotFound
 		}
 		return deletedAccount, err
 	}

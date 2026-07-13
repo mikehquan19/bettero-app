@@ -71,6 +71,16 @@ func (s *AccountService) ListAccountTransactions(
 	return count, transactions, err
 }
 
+// ListHistories returns the list of balance histories of the account
+func (s *AccountService) ListAccountHistories(ctx context.Context, id int64) ([]models.AccountHistory, error) {
+	histories, err := s.accHisRepo.ListHistories(ctx, s.db, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return histories, nil
+}
+
 // CreateAccount inserts new account.
 // If the account references a non-existent user, it returns a custom not found error.
 func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body models.PostAccountBody) (models.Account, error) {
@@ -205,14 +215,4 @@ func (s *AccountService) DeleteAccount(ctx context.Context, id int64) error {
 	}
 
 	return nil
-}
-
-// ListHistories returns the list of balance histories of the account
-func (s *AccountService) ListHistories(ctx context.Context, id int64) ([]models.AccountHistory, error) {
-	histories, err := s.accHisRepo.ListHistories(ctx, s.db, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return histories, nil
 }

@@ -78,7 +78,7 @@ func (r *BillRepo) GetBill(ctx context.Context, db models.DBTX, id int64) (model
 	row := db.QueryRow(ctx, getNestedBillQuery, id)
 	if err := models.ScanBill(row, &bill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return bill, models.GetNotFound[models.Bill](id)
+			return bill, models.ErrNotFound
 		}
 		return bill, err
 	}
@@ -131,7 +131,7 @@ func (r *BillRepo) InsertBill(ctx context.Context, db models.DBTX, body models.B
 	if err := models.ScanBill(row, &newBill); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
 			// Insert a bill for non-existent account
-			return newBill, models.GetForeignKey[models.Account](body.AccountID)
+			return newBill, models.ErrForeignKey
 		}
 		return newBill, err
 	}
@@ -188,7 +188,7 @@ func (r *BillRepo) UpdateBill(
 	)
 	if err := models.ScanBill(row, &updatedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return updatedBill, models.GetNotFound[models.Bill](id)
+			return updatedBill, models.ErrNotFound
 		}
 		return updatedBill, err
 	}
@@ -224,7 +224,7 @@ func (r *BillRepo) DeleteBill(ctx context.Context, db models.DBTX, id int64) (mo
 	row := db.QueryRow(ctx, deleteBillQuery, id)
 	if err := models.ScanBill(row, &deletedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return deletedBill, models.GetNotFound[models.Bill](id)
+			return deletedBill, models.ErrNotFound
 		}
 		return deletedBill, err
 	}
