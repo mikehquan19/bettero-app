@@ -40,12 +40,12 @@ func (r *BillRepo) ListBills(ctx context.Context, db models.DBTX, userId int64) 
 
 	rows, err := db.Query(ctx, listBillQuery, userId)
 	if err != nil {
-		return bills, err
+		return nil, err
 	}
 
 	bills, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Bill])
 	if err != nil {
-		return bills, err
+		return nil, err
 	}
 
 	return bills, nil
@@ -77,9 +77,9 @@ func (r *BillRepo) GetBill(ctx context.Context, db models.DBTX, id int64) (model
 	row := db.QueryRow(ctx, getNestedBillQuery, id)
 	if err := models.ScanBill(row, &bill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return bill, models.ErrNotFound
+			return models.Bill{}, models.ErrNotFound
 		}
-		return bill, err
+		return models.Bill{}, err
 	}
 
 	return bill, nil
@@ -129,9 +129,9 @@ func (r *BillRepo) InsertBill(ctx context.Context, db models.DBTX, body models.B
 	)
 	if err := models.ScanBill(row, &newBill); err != nil {
 		if isForeignKeyViolation(err) {
-			return newBill, models.ErrForeignKey
+			return models.Bill{}, models.ErrForeignKey
 		}
-		return newBill, err
+		return models.Bill{}, err
 	}
 
 	return newBill, nil
@@ -186,9 +186,9 @@ func (r *BillRepo) UpdateBill(
 	)
 	if err := models.ScanBill(row, &updatedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return updatedBill, models.ErrNotFound
+			return models.Bill{}, models.ErrNotFound
 		}
-		return updatedBill, err
+		return models.Bill{}, err
 	}
 
 	return updatedBill, nil
@@ -222,9 +222,9 @@ func (r *BillRepo) DeleteBill(ctx context.Context, db models.DBTX, id int64) (mo
 	row := db.QueryRow(ctx, deleteBillQuery, id)
 	if err := models.ScanBill(row, &deletedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return deletedBill, models.ErrNotFound
+			return models.Bill{}, models.ErrNotFound
 		}
-		return deletedBill, err
+		return models.Bill{}, err
 	}
 
 	return deletedBill, nil

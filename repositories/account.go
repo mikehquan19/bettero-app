@@ -19,14 +19,12 @@ func NewAccountRepo() *AccountRepo {
 // ListAcccounts returns the list of accounts of given user,
 // sorted by updated recency.
 func (r *AccountRepo) ListAccounts(ctx context.Context, db models.DBTX, userId int64) ([]models.Account, error) {
-	var accounts []models.Account
-
 	const listAccountQuery = `SELECT * FROM accounts WHERE user_id = $1 ORDER BY updated_at DESC;`
 	rows, err := db.Query(ctx, listAccountQuery, userId)
 	if err != nil {
 		return nil, err
 	}
-	accounts, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Account])
+	accounts, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Account])
 	if err != nil {
 		return nil, err
 	}
@@ -43,11 +41,9 @@ const (
 	All       FilterStatus = "All"
 )
 
-// ListAllAccounts returns the list of accounts based on filter status
+// ListAllAccounts returns the list of accounts based on filter status.
 // This method primarily is used by cron jobs.
 func (r *AccountRepo) ListAllAccounts(ctx context.Context, db models.DBTX, status FilterStatus) ([]models.Account, error) {
-	var accounts []models.Account
-
 	var filter string
 	switch status {
 	case PastDue:
@@ -64,7 +60,7 @@ func (r *AccountRepo) ListAllAccounts(ctx context.Context, db models.DBTX, statu
 		return nil, err
 	}
 
-	accounts, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Account])
+	accounts, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Account])
 	if err != nil {
 		return nil, err
 	}
@@ -79,9 +75,9 @@ func (r *AccountRepo) GetAccount(ctx context.Context, db models.DBTX, id int64) 
 	row := db.QueryRow(ctx, "SELECT * FROM accounts WHERE id = $1;", id)
 	if err := models.ScanAccount(row, &account); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return account, models.ErrNotFound
+			return models.Account{}, models.ErrNotFound
 		}
-		return account, err
+		return models.Account{}, err
 	}
 
 	return account, nil
@@ -107,14 +103,14 @@ func (r *AccountRepo) ListAccountTransactions(
 	condition, args := buildTransactionFilter("t.account_id = $1", id, filter)
 
 	// Fetch the total number of transactions
-	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM transactions t WHERE %s;`, condition)
-	row := tx.QueryRow(ctx, countQuery, args...)
+	countTransactionQuery := fmt.Sprintf(`SELECT COUNT(*) FROM transactions t WHERE %s;`, condition)
+	row := tx.QueryRow(ctx, countTransactionQuery, args...)
 	if err := row.Scan(&transactionCount); err != nil {
 		return -1, nil, err
 	}
 
 	// List the page of transactions from this filter
-	listQuery := fmt.Sprintf(`
+	listTransactionQuery := fmt.Sprintf(`
 	SELECT 
 		t.id, 
 		json_build_object(
@@ -134,11 +130,10 @@ func (r *AccountRepo) ListAccountTransactions(
 	JOIN accounts a ON t.account_id = a.id
 	WHERE %s
 	ORDER BY t.created_at DESC 
-	LIMIT 20 
-	OFFSET $%d;`, condition, len(args)+1)
+	LIMIT 20 OFFSET $%d;`, condition, len(args)+1)
 	args = append(args, offset)
 
-	rows, err := tx.Query(ctx, listQuery, args...)
+	rows, err := tx.Query(ctx, listTransactionQuery, args...)
 	if err != nil {
 		return -1, nil, err
 	}
@@ -189,9 +184,9 @@ func (r *AccountRepo) InsertAccount(
 	)
 	if err := models.ScanAccount(row, &newAccount); err != nil {
 		if isForeignKeyViolation(err) {
-			return newAccount, models.ErrForeignKey
+			return models.Account{}, models.ErrForeignKey
 		}
-		return newAccount, err
+		return models.Account{}, err
 	}
 
 	return newAccount, nil
@@ -229,9 +224,9 @@ func (r *AccountRepo) UpdateAccount(
 	)
 	if err := models.ScanAccount(row, &updatedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return updatedAccount, models.ErrNotFound
+			return models.Account{}, models.ErrNotFound
 		}
-		return updatedAccount, err
+		return models.Account{}, err
 	}
 
 	return updatedAccount, nil
@@ -257,11 +252,11 @@ func (r *AccountRepo) UpdateAccountBalance(
 		END,
 		updated_at = NOW()
 	WHERE id = $1
-	RETURNING balance;
-	`
+	RETURNING balance;`
+
 	row := db.QueryRow(ctx, updateBalanceQuery, id, netChange)
 	if err := row.Scan(&newBalance); err != nil {
-		return newBalance, err
+		return -1, err
 	}
 
 	return newBalance, nil
@@ -307,9 +302,9 @@ func (r *AccountRepo) FlagAccount(
 	row := db.QueryRow(ctx, flagAccountQuery, id, discrepancyAmount)
 	if err := models.ScanAccount(row, &flaggedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return flaggedAccount, models.ErrNotFound
+			return models.Account{}, models.ErrNotFound
 		}
-		return flaggedAccount, err
+		return models.Account{}, err
 	}
 
 	return flaggedAccount, nil
@@ -324,9 +319,9 @@ func (r *AccountRepo) DeleteAccount(ctx context.Context, db models.DBTX, id int6
 	row := db.QueryRow(ctx, deleteAccountQuery, id)
 	if err := models.ScanAccount(row, &deletedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return deletedAccount, models.ErrNotFound
+			return models.Account{}, models.ErrNotFound
 		}
-		return deletedAccount, err
+		return models.Account{}, err
 	}
 	return deletedAccount, nil
 }

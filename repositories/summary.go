@@ -65,7 +65,7 @@ func (s *SummaryRepo) GetBasicAnalysis(
 		total_expense e;`
 	row := db.QueryRow(ctx, getAnalysisQuery, userId, start, end)
 	if err := models.ScanAnalysis(row, &analysis); err != nil {
-		return analysis, err
+		return models.BasicAnalysis{}, err
 	}
 
 	return analysis, nil
@@ -110,7 +110,7 @@ func (s *SummaryRepo) GetDateToAmount(
 
 	rows, err := db.Query(ctx, getDateToAmtQuery, objId, start, end)
 	if err != nil {
-		return dateToAmount, err
+		return nil, err
 	}
 
 	var date time.Time
@@ -120,7 +120,7 @@ func (s *SummaryRepo) GetDateToAmount(
 		return nil
 	})
 
-	return dateToAmount, err
+	return dateToAmount, nil
 }
 
 // getCategoryToAmount returns the map from category to total expense of the obj
@@ -164,7 +164,7 @@ func (s *SummaryRepo) GetCategoryToAmount(
 
 	rows, err := db.Query(ctx, getCatToAmtQuery, objId, start, end)
 	if err != nil {
-		return categoryToAmount, err
+		return nil, err
 	}
 
 	var category string
@@ -174,5 +174,5 @@ func (s *SummaryRepo) GetCategoryToAmount(
 		return nil
 	})
 
-	return categoryToAmount, err
+	return categoryToAmount, nil
 }
