@@ -114,6 +114,8 @@ func (t *TransactionController) PostTransaction(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, models.ErrForeignKey) {
 			respondError(c, http.StatusNotFound, err)
+		} else if errors.Is(err, models.ErrTransactionTooOld) {
+			respondError(c, http.StatusBadRequest, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)
 		}
@@ -146,6 +148,8 @@ func (t *TransactionController) PutTransaction(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
+		} else if errors.Is(err, models.ErrTransactionTooOld) {
+			respondError(c, http.StatusBadRequest, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)
 		}
@@ -171,6 +175,8 @@ func (t *TransactionController) DeleteTransaction(c *gin.Context) {
 	if err := t.tranService.DeleteTransaction(ctx, int64(id)); err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
+		} else if errors.Is(err, models.ErrTransactionTooOld) {
+			respondError(c, http.StatusBadRequest, err)
 		} else {
 			respondError(c, http.StatusInternalServerError, err)
 		}
