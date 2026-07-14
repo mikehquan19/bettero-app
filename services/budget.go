@@ -42,9 +42,9 @@ func (s *BudgetService) GetBudgetAnalysis(ctx context.Context, userId int64, int
 		ExpensePortion:  budgetPlan.ExpensePortion,
 		BudgetComposition: models.BudgetComposition{
 			Goal: budgetPlan.CategoryPortion,
-			Real: make(map[string]float64),
+			Real: make(map[models.TransactionCategory]float64),
 		},
-		Progress: make(map[string]*models.CategoryProgress),
+		Progress: make(map[models.TransactionCategory]*models.CategoryProgress),
 	}
 
 	// Get the interval based on the interval type
@@ -187,9 +187,7 @@ func validatePortion(body models.GenericBudgetPlanBody) error {
 
 	var totalPercent float64 = 0
 	for category, percent := range body.CategoryPortion {
-		if !slices.Contains([]string{
-			"Housing", "Automobile", "Medical", "Subscription", "Grocery", "Dining", "Shopping", "Gas", "Others",
-		}, category) {
+		if !slices.Contains(models.TransactionCategories, category) {
 			return models.ErrInvalidCategory
 		}
 		if percent < 0 || percent > 100 {

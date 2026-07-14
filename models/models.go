@@ -24,6 +24,13 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+type AccountType string
+
+const (
+	Debit  AccountType = "Debit"
+	Credit AccountType = "Credit"
+)
+
 // Financial account (card) of the user. There are 2 types of financial accounts:
 //
 // For debit card:
@@ -36,19 +43,19 @@ type User struct {
 //   - Balance is allowed to exceed credit limit, but there will be a message notifying in app
 //   - Next due date will be updated monthly if today is past the current due date.
 type Account struct {
-	ID                 int64      `json:"id" db:"id"`
-	UserID             int64      `json:"user_id" db:"user_id"`
-	AccNumber          int64      `json:"acc_number" db:"acc_number"`
-	AccName            string     `json:"acc_name" db:"acc_name"`
-	Institution        string     `json:"institution" db:"institution"`
-	Type               string     `json:"type" db:"type"`
-	Balance            float64    `json:"balance" db:"balance"`
-	CreditLimit        *float64   `json:"credit_limit,omitempty" db:"credit_limit"`
-	NextDue            *time.Time `json:"next_due,omitempty" db:"next_due"`
-	CreatedAt          time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at" db:"updated_at"`
-	DiscrepancyFlagged bool       `json:"discrepancy_flagged" db:"discrepancy_flagged"`
-	DiscrepancyAmount  float64    `json:"discrepancy_amount" db:"discrepancy_amount"`
+	ID                 int64       `json:"id" db:"id"`
+	UserID             int64       `json:"user_id" db:"user_id"`
+	AccNumber          int64       `json:"acc_number" db:"acc_number"`
+	AccName            string      `json:"acc_name" db:"acc_name"`
+	Institution        string      `json:"institution" db:"institution"`
+	Type               AccountType `json:"type" db:"type"`
+	Balance            float64     `json:"balance" db:"balance"`
+	CreditLimit        *float64    `json:"credit_limit,omitempty" db:"credit_limit"`
+	NextDue            *time.Time  `json:"next_due,omitempty" db:"next_due"`
+	CreatedAt          time.Time   `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time   `json:"updated_at" db:"updated_at"`
+	DiscrepancyFlagged bool        `json:"discrepancy_flagged" db:"discrepancy_flagged"`
+	DiscrepancyAmount  float64     `json:"discrepancy_amount" db:"discrepancy_amount"`
 }
 
 type AccountBody struct {
@@ -62,7 +69,7 @@ type AccountBody struct {
 
 type PostAccountBody struct {
 	AccountBody
-	Type string `json:"type"`
+	Type AccountType `json:"type"`
 }
 
 // User is not allowed to update the type of the account
@@ -120,42 +127,69 @@ type PaginatedResponse[T any] struct {
 	Data   []T `json:"data"`
 }
 
+type TransactionCategory string
+
+const (
+	Housing      TransactionCategory = "Housing"
+	Automobile   TransactionCategory = "Automobile"
+	Medical      TransactionCategory = "Medical"
+	Subscription TransactionCategory = "Subscription"
+	Grocery      TransactionCategory = "Grocery"
+	Dining       TransactionCategory = "Dining"
+	Shopping     TransactionCategory = "Shopping"
+	Gas          TransactionCategory = "Gas"
+	Others       TransactionCategory = "Others"
+	Income       TransactionCategory = "Income"
+)
+
+var TransactionCategories = []TransactionCategory{
+	Housing,
+	Automobile,
+	Medical,
+	Subscription,
+	Grocery,
+	Dining,
+	Shopping,
+	Gas,
+	Others,
+}
+
 type Transaction struct {
-	ID              int64         `json:"id" db:"id"`
-	Account         NestedAccount `json:"account" db:"account"`
-	Merchant        string        `json:"merchant" db:"merchant"`
-	TranDescription string        `json:"tran_description" db:"tran_description"`
-	Category        string        `json:"category" db:"category"`
-	Amount          float64       `json:"amount" db:"amount"`
-	CreatedAt       time.Time     `json:"created_at" db:"created_at"`
-	UpdatedAt       time.Time     `json:"updated_at" db:"updated_at"`
+	ID              int64               `json:"id" db:"id"`
+	Account         NestedAccount       `json:"account" db:"account"`
+	Merchant        string              `json:"merchant" db:"merchant"`
+	TranDescription string              `json:"tran_description" db:"tran_description"`
+	Category        TransactionCategory `json:"category" db:"category"`
+	Amount          float64             `json:"amount" db:"amount"`
+	CreatedAt       time.Time           `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time           `json:"updated_at" db:"updated_at"`
 }
 
 // A shortened version of account that is used in nested transaction
 type NestedAccount struct {
-	Id          int64  `json:"id" db:"id"`
-	AccNumber   int64  `json:"acc_number" db:"acc_number"`
-	AccName     string `json:"acc_name" db:"acc_name"`
-	Institution string `json:"institution" db:"institution"`
-	Type        string `json:"type" db:"type"`
+	Id          int64       `json:"id" db:"id"`
+	AccNumber   int64       `json:"acc_number" db:"acc_number"`
+	AccName     string      `json:"acc_name" db:"acc_name"`
+	Institution string      `json:"institution" db:"institution"`
+	Type        AccountType `json:"type" db:"type"`
 }
 
 type PostTransactionBody struct {
-	AccountID       int64     `json:"account_id"`
-	Merchant        string    `json:"merchant"`
-	TranDescription string    `json:"tran_description"`
-	Category        string    `json:"category"`
-	Amount          float64   `json:"amount"`
-	CreatedAt       time.Time `json:"created_at"`
+	AccountID       int64               `json:"account_id"`
+	Merchant        string              `json:"merchant"`
+	TranDescription string              `json:"tran_description"`
+	Category        TransactionCategory `json:"category"`
+	Amount          float64             `json:"amount"`
+	CreatedAt       time.Time           `json:"created_at"`
 }
 
 // User is not allowed to update account's Id
 type PutTransactionBody struct {
-	Merchant        string    `json:"merchant"`
-	TranDescription string    `json:"tran_description"`
-	Category        string    `json:"category"`
-	Amount          float64   `json:"amount"`
-	CreatedAt       time.Time `json:"created_at"`
+	Merchant        string              `json:"merchant"`
+	TranDescription string              `json:"tran_description"`
+	Category        TransactionCategory `json:"category"`
+	Amount          float64             `json:"amount"`
+	CreatedAt       time.Time           `json:"created_at"`
 }
 
 // ScanTransaction parses the returned row into transaction and destinations
@@ -174,7 +208,7 @@ func ScanTransaction(tranRow pgx.Row, tran *Transaction) error {
 }
 
 type TransactionFilter struct {
-	Category        string
+	Category        TransactionCategory
 	Merchant        string
 	TranDescription string
 	CreatedAtFrom   *time.Time
@@ -182,22 +216,22 @@ type TransactionFilter struct {
 }
 
 type Bill struct {
-	ID          int64         `json:"id" db:"id"`
-	Account     NestedAccount `json:"account" db:"account"`
-	Merchant    string        `json:"merchant" db:"merchant"`
-	Description string        `json:"description" db:"description"`
-	Category    string        `json:"category" db:"category"`
-	Amount      float64       `json:"amount" db:"amount"`
-	DueDate     time.Time     `json:"due_date" db:"due_date"`
+	ID          int64               `json:"id" db:"id"`
+	Account     NestedAccount       `json:"account" db:"account"`
+	Merchant    string              `json:"merchant" db:"merchant"`
+	Description string              `json:"description" db:"description"`
+	Category    TransactionCategory `json:"category" db:"category"`
+	Amount      float64             `json:"amount" db:"amount"`
+	DueDate     time.Time           `json:"due_date" db:"due_date"`
 }
 
 type BillBody struct {
-	AccountID   int64     `json:"account_id"`
-	Merchant    string    `json:"merchant"`
-	Description string    `json:"description"`
-	Category    string    `json:"category"`
-	Amount      float64   `json:"amount"`
-	DueDate     time.Time `json:"due_date"`
+	AccountID   int64               `json:"account_id"`
+	Merchant    string              `json:"merchant"`
+	Description string              `json:"description"`
+	Category    TransactionCategory `json:"category"`
+	Amount      float64             `json:"amount"`
+	DueDate     time.Time           `json:"due_date"`
 }
 
 // ScanBill parses the returned row into bill
@@ -232,17 +266,17 @@ func ScanAnalysis(analysisRow pgx.Row, analysis *BasicAnalysis) error {
 }
 
 type FinancialSummary struct {
-	Basic       BasicAnalysis       `json:"basic"`
-	Daily       map[string]float64  `json:"daily"`
-	Change      map[string]*float64 `json:"change"`
-	Composition map[string]float64  `json:"composition"`
+	Basic       BasicAnalysis                    `json:"basic"`
+	Daily       map[string]float64               `json:"daily"`
+	Change      map[TransactionCategory]*float64 `json:"change"`
+	Composition map[TransactionCategory]float64  `json:"composition"`
 }
 
 // Account financial summary doesn't need the basic info
 type AccountFinancialSummary struct {
-	Daily       map[string]float64  `json:"daily"`
-	Change      map[string]*float64 `json:"change"`
-	Composition map[string]float64  `json:"composition"`
+	Daily       map[string]float64               `json:"daily"`
+	Change      map[TransactionCategory]*float64 `json:"change"`
+	Composition map[TransactionCategory]float64  `json:"composition"`
 }
 
 type SummaryDates struct {
@@ -259,37 +293,37 @@ type CategoryProgress struct {
 }
 
 type BudgetComposition struct {
-	Goal map[string]float64 `json:"goal"` // Goal composition, which is the category portion
-	Real map[string]float64 `json:"real"` // Real composition, computed from GetCompositionMap logic
+	Goal map[TransactionCategory]float64 `json:"goal"` // Goal composition, which is the category portion
+	Real map[TransactionCategory]float64 `json:"real"` // Real composition, computed from GetCompositionMap logic
 }
 
 // A detailed analysis of user's spending analysis and budget's info
 type BudgetResponse struct {
-	ID                int64                        `json:"id"`
-	IntervalType      string                       `json:"interval_type"`
-	RecurringIncome   float64                      `json:"recurring_income"`
-	ExpensePortion    float64                      `json:"expense_portion"`
-	BudgetComposition BudgetComposition            `json:"budget_composition"`
-	Progress          map[string]*CategoryProgress `json:"progress"`
-	CreatedAt         time.Time                    `json:"created_at"`
-	UpdatedAt         time.Time                    `json:"updated_at"`
+	ID                int64                                     `json:"id"`
+	IntervalType      string                                    `json:"interval_type"`
+	RecurringIncome   float64                                   `json:"recurring_income"`
+	ExpensePortion    float64                                   `json:"expense_portion"`
+	BudgetComposition BudgetComposition                         `json:"budget_composition"`
+	Progress          map[TransactionCategory]*CategoryProgress `json:"progress"`
+	CreatedAt         time.Time                                 `json:"created_at"`
+	UpdatedAt         time.Time                                 `json:"updated_at"`
 }
 
 type BudgetPlan struct {
-	ID              int64              `json:"id" db:"id"`
-	UserID          int64              `json:"user_id" db:"user_id"`
-	IntervalType    string             `json:"interval_type" db:"interval_type"`
-	RecurringIncome float64            `json:"recurring_income" db:"recurring_income"`
-	ExpensePortion  float64            `json:"expense_portion" db:"expense_portion"`
-	CategoryPortion map[string]float64 `json:"category_portion" db:"category_portion"`
-	CreatedAt       time.Time          `json:"created_at" db:"created_at"`
-	UpdatedAt       time.Time          `json:"updated_at" db:"updated_at"`
+	ID              int64                           `json:"id" db:"id"`
+	UserID          int64                           `json:"user_id" db:"user_id"`
+	IntervalType    string                          `json:"interval_type" db:"interval_type"`
+	RecurringIncome float64                         `json:"recurring_income" db:"recurring_income"`
+	ExpensePortion  float64                         `json:"expense_portion" db:"expense_portion"`
+	CategoryPortion map[TransactionCategory]float64 `json:"category_portion" db:"category_portion"`
+	CreatedAt       time.Time                       `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time                       `json:"updated_at" db:"updated_at"`
 }
 
 type GenericBudgetPlanBody struct {
-	RecurringIncome float64            `json:"recurring_income"`
-	ExpensePortion  float64            `json:"expense_portion"`
-	CategoryPortion map[string]float64 `json:"category_portion"`
+	RecurringIncome float64                         `json:"recurring_income"`
+	ExpensePortion  float64                         `json:"expense_portion"`
+	CategoryPortion map[TransactionCategory]float64 `json:"category_portion"`
 }
 
 type PostBudgetPlanBody struct {

@@ -81,11 +81,13 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 
 	// Update the account balance data
 	netChange := newTransaction.Amount
-	if newTransaction.Category == "Income" {
+	if newTransaction.Category == models.Income {
 		netChange = -newTransaction.Amount
 	}
 
-	balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, newTransaction.Account.Id, netChange)
+	accountId := newTransaction.Account.Id
+
+	balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, netChange)
 	if err != nil {
 		return models.Transaction{}, err
 	}
@@ -132,16 +134,18 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 	// Compute the amount to update the account balance (if balance change)
 	if previousData.Amount != updatedTransaction.Amount {
 		prevChange := previousData.Amount
-		if previousData.Category == "Income" {
+		if previousData.Category == models.Income {
 			prevChange = -previousData.Amount
 		}
 
 		currChange := updatedTransaction.Amount
-		if updatedTransaction.Category == "Income" {
+		if updatedTransaction.Category == models.Income {
 			currChange = -updatedTransaction.Amount
 		}
 
-		balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, updatedTransaction.Account.Id, currChange-prevChange)
+		accountId := updatedTransaction.Account.Id
+
+		balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, currChange-prevChange)
 		if err != nil {
 			return models.Transaction{}, err
 		}
@@ -182,11 +186,13 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 
 	// Reverse the effect of creating the transaction
 	netChange := -deletedTransaction.Amount
-	if deletedTransaction.Category == "Income" {
+	if deletedTransaction.Category == models.Income {
 		netChange = deletedTransaction.Amount
 	}
 
-	balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, deletedTransaction.Account.Id, netChange)
+	accountId := deletedTransaction.Account.Id
+
+	balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, netChange)
 	if err != nil {
 		return err
 	}

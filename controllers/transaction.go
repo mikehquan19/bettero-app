@@ -75,7 +75,7 @@ func (t *TransactionController) GetTransactions(c *gin.Context) {
 		}
 	}
 	filter := models.TransactionFilter{
-		Category:        c.Query("category"),
+		Category:        models.TransactionCategory(c.Query("category")),
 		TranDescription: c.Query("description"),
 		Merchant:        c.Query("merchant"),
 		CreatedAtFrom:   dates[0],

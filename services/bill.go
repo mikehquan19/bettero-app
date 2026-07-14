@@ -100,6 +100,7 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 		if err != nil {
 			return err
 		}
+
 		log.Printf("Transaction %s has been inserted\n", insertedTransaction.TranDescription)
 
 		// Bill payment is considered expense, so auto-update the balance

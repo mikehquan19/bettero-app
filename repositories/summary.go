@@ -130,13 +130,11 @@ func (s *SummaryRepo) GetCategoryToAmount(
 	objType models.ObjectType,
 	objId int64,
 	start, end time.Time,
-) (map[string]float64, error) {
-	var categoryToAmount = make(map[string]float64)
+) (map[models.TransactionCategory]float64, error) {
+	var categoryToAmount = make(map[models.TransactionCategory]float64)
 
 	// There are 10 categories
-	for _, category := range []string{
-		"Housing", "Automobile", "Medical", "Subscription", "Grocery", "Dining", "Shopping", "Gas", "Others",
-	} {
+	for _, category := range models.TransactionCategories {
 		categoryToAmount[category] = 0.0
 	}
 
@@ -167,7 +165,7 @@ func (s *SummaryRepo) GetCategoryToAmount(
 		return nil, err
 	}
 
-	var category string
+	var category models.TransactionCategory
 	var amount float64
 	_, err = pgx.ForEachRow(rows, []any{&category, &amount}, func() error {
 		categoryToAmount[category] = amount
