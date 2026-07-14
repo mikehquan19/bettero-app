@@ -59,8 +59,8 @@ func (s *SummaryService) GetCompositionMap(
 	objType models.ObjectType,
 	objId int64,
 	dates models.SummaryDates,
-) (map[string]float64, error) {
-	var compositionMap = make(map[string]float64)
+) (map[models.TransactionCategory]float64, error) {
+	var compositionMap = make(map[models.TransactionCategory]float64)
 
 	categoryToAmount, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, dates.CurrStart, dates.CurrEnd)
 	if err != nil {
@@ -92,8 +92,8 @@ func (s *SummaryService) GetChangeMap(
 	objType models.ObjectType,
 	objId int64,
 	dates models.SummaryDates,
-) (map[string]*float64, error) {
-	var changeMap = make(map[string]*float64)
+) (map[models.TransactionCategory]*float64, error) {
+	var changeMap = make(map[models.TransactionCategory]*float64)
 
 	current, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, dates.CurrStart, dates.CurrEnd)
 	if err != nil {

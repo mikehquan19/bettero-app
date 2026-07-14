@@ -37,20 +37,20 @@ func (r *TransactionRepo) FilterTransactions(
 	condition, args := buildTransactionFilter("a.user_id = $1", userId, filter)
 
 	// Fetch the total number of transactions
-	countQuery := fmt.Sprintf(`
+	countTransactionQuery := fmt.Sprintf(`
 	SELECT COUNT(*)
 	FROM transactions t 
 	JOIN accounts a ON t.account_id = a.id
 	WHERE %s;`, condition)
 
-	row := tx.QueryRow(ctx, countQuery, args...)
+	row := tx.QueryRow(ctx, countTransactionQuery, args...)
 	if err := row.Scan(&transactionCount); err != nil {
 		return -1, nil, err
 	}
 
 	// List the page of transactions from this filter
 	// TODO: Don't use OFFSET, change to a more scalable approach
-	listQuery := fmt.Sprintf(`
+	listTransactionQuery := fmt.Sprintf(`
 	SELECT 
 		t.id, 
 		json_build_object(
@@ -73,7 +73,7 @@ func (r *TransactionRepo) FilterTransactions(
 	LIMIT 20 OFFSET $%d;`, condition, len(args)+1)
 	args = append(args, offset)
 
-	rows, err := tx.Query(ctx, listQuery, args...)
+	rows, err := tx.Query(ctx, listTransactionQuery, args...)
 	if err != nil {
 		return -1, nil, err
 	}
@@ -116,9 +116,9 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, db models.DBTX, id
 	row := db.QueryRow(ctx, getTransactionQuery, id)
 	if err := models.ScanTransaction(row, &transaction); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return transaction, models.ErrNotFound
+			return models.Transaction{}, models.ErrNotFound
 		}
-		return transaction, err
+		return models.Transaction{}, err
 	}
 
 	return transaction, nil
@@ -190,7 +190,7 @@ func (r *TransactionRepo) ListSuggestions(
 // InsertTransaction inserts the transaction, and returns the inserted transaction
 // that matches the schema in the database (no nested account)
 func (r *TransactionRepo) InsertTransaction(ctx context.Context, db models.DBTX, body models.PostTransactionBody) (models.Transaction, error) {
-	var newTran models.Transaction
+	var newTransaction models.Transaction
 
 	// Insert the new transaction, get its id, category, and amount
 	const insertTransactionQuery = `
@@ -232,14 +232,14 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, db models.DBTX,
 		body.Amount,
 		body.CreatedAt,
 	)
-	if err := models.ScanTransaction(row, &newTran); err != nil {
+	if err := models.ScanTransaction(row, &newTransaction); err != nil {
 		if isForeignKeyViolation(err) {
-			return newTran, models.ErrForeignKey
+			return models.Transaction{}, models.ErrForeignKey
 		}
-		return newTran, err
+		return models.Transaction{}, err
 	}
 
-	return newTran, nil
+	return newTransaction, nil
 }
 
 // UpdateTransaction updates and returns the transaction. Doesn't allow for updating account ID
@@ -249,7 +249,7 @@ func (r *TransactionRepo) UpdateTransaction(
 	id int64,
 	body models.PutTransactionBody,
 ) (models.Transaction, error) {
-	var updatedTran models.Transaction
+	var updatedTransaction models.Transaction
 
 	// Store the previous category and amount before updating
 	const updateTransactionQuery = `
@@ -290,20 +290,19 @@ func (r *TransactionRepo) UpdateTransaction(
 		body.Amount,
 		body.CreatedAt,
 	)
-	if err := models.ScanTransaction(row, &updatedTran); err != nil {
+	if err := models.ScanTransaction(row, &updatedTransaction); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Update a non-existent transaction
-			return updatedTran, models.ErrNotFound
+			return models.Transaction{}, models.ErrNotFound
 		}
-		return updatedTran, err
+		return models.Transaction{}, err
 	}
 
-	return updatedTran, nil
+	return updatedTransaction, nil
 }
 
 // DeleteTransaction deletes and returns the transaction
 func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db models.DBTX, id int64) (models.Transaction, error) {
-	var deletedTran models.Transaction
+	var deletedTransaction models.Transaction
 
 	const deleteTransactionQuery = `
 	WITH deleted_transaction AS (
@@ -328,14 +327,14 @@ func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db models.DBTX,
 	JOIN accounts a ON a.id = t.account_id;`
 
 	row := db.QueryRow(ctx, deleteTransactionQuery, id)
-	if err := models.ScanTransaction(row, &deletedTran); err != nil {
+	if err := models.ScanTransaction(row, &deletedTransaction); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return deletedTran, models.ErrNotFound
+			return models.Transaction{}, models.ErrNotFound
 		}
-		return deletedTran, err
+		return models.Transaction{}, err
 	}
 
-	return deletedTran, nil
+	return deletedTransaction, nil
 }
 
 // GetTransactionSum returns the total sum of all transactions of the account from the date

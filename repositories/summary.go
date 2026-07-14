@@ -24,7 +24,7 @@ func (s *SummaryRepo) GetBasicAnalysis(
 ) (models.BasicAnalysis, error) {
 	var analysis models.BasicAnalysis
 
-	getAnalysisQuery := `
+	getBasicAnalysisQuery := `
 	WITH total_balance AS (
 		SELECT COALESCE(SUM(a.balance), 0) AS total_balance 
 		FROM accounts a 
@@ -63,7 +63,7 @@ func (s *SummaryRepo) GetBasicAnalysis(
 		total_amount_due a, 
 		total_income i, 
 		total_expense e;`
-	row := db.QueryRow(ctx, getAnalysisQuery, userId, start, end)
+	row := db.QueryRow(ctx, getBasicAnalysisQuery, userId, start, end)
 	if err := models.ScanAnalysis(row, &analysis); err != nil {
 		return models.BasicAnalysis{}, err
 	}
@@ -97,7 +97,7 @@ func (s *SummaryRepo) GetDateToAmount(
 		filter = "t.account_id = $1"
 	}
 
-	getDateToAmtQuery := fmt.Sprintf(`
+	getDateToAmounttQuery := fmt.Sprintf(`
 	SELECT
 		t.created_at::date AS date, 
 		SUM(t.amount) AS amount
@@ -108,7 +108,7 @@ func (s *SummaryRepo) GetDateToAmount(
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY date;`, table, filter)
 
-	rows, err := db.Query(ctx, getDateToAmtQuery, objId, start, end)
+	rows, err := db.Query(ctx, getDateToAmounttQuery, objId, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -130,13 +130,11 @@ func (s *SummaryRepo) GetCategoryToAmount(
 	objType models.ObjectType,
 	objId int64,
 	start, end time.Time,
-) (map[string]float64, error) {
-	var categoryToAmount = make(map[string]float64)
+) (map[models.TransactionCategory]float64, error) {
+	var categoryToAmount = make(map[models.TransactionCategory]float64)
 
 	// There are 10 categories
-	for _, category := range []string{
-		"Housing", "Automobile", "Medical", "Subscription", "Grocery", "Dining", "Shopping", "Gas", "Others",
-	} {
+	for _, category := range models.TransactionCategories {
 		categoryToAmount[category] = 0.0
 	}
 
@@ -151,7 +149,7 @@ func (s *SummaryRepo) GetCategoryToAmount(
 		filter = "t.account_id = $1"
 	}
 
-	getCatToAmtQuery := fmt.Sprintf(`
+	getCategoryToAmountQuery := fmt.Sprintf(`
 	SELECT
 		t.category, 
 		SUM(t.amount) AS amount
@@ -162,12 +160,12 @@ func (s *SummaryRepo) GetCategoryToAmount(
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY t.category;`, table, filter)
 
-	rows, err := db.Query(ctx, getCatToAmtQuery, objId, start, end)
+	rows, err := db.Query(ctx, getCategoryToAmountQuery, objId, start, end)
 	if err != nil {
 		return nil, err
 	}
 
-	var category string
+	var category models.TransactionCategory
 	var amount float64
 	_, err = pgx.ForEachRow(rows, []any{&category, &amount}, func() error {
 		categoryToAmount[category] = amount

@@ -107,6 +107,7 @@ func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body m
 	if err != nil {
 		return models.Account{}, err
 	}
+
 	log.Printf("History for account %d, balance %f on %s\n",
 		insertedHistory.AccountId,
 		insertedHistory.Balance,
@@ -158,20 +159,21 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 	// Create the transaction reflecting the balance change (reconcile transaction)
 	change := updatedAccount.Balance - previousData.Balance
 	if change != 0 {
-		var description, category string
+		var description string
+		var category models.TransactionCategory
 		if change > 0 {
 			description = fmt.Sprintf("Balance reconciled (+%.2f)", math.Abs(change))
-			if updatedAccount.Type == "Credit" {
-				category = "Others"
-			} else {
-				category = "Income"
+
+			category = models.Income
+			if updatedAccount.Type == models.Credit {
+				category = models.Others
 			}
 		} else {
 			description = fmt.Sprintf("Balance reconciled (-%.2f)", math.Abs(change))
-			if updatedAccount.Type == "Credit" {
-				category = "Income"
-			} else {
-				category = "Others"
+
+			category = models.Others
+			if updatedAccount.Type == models.Credit {
+				category = models.Income
 			}
 		}
 		transaction, err := s.transactionRepo.InsertTransaction(ctx, tx, models.PostTransactionBody{
@@ -200,12 +202,12 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 //   - Debit account can't have credit limit and next due
 //
 //   - Credit account must have credit limit and next due
-func validateAccount(aType string, body models.AccountBody) error {
-	if aType == "Debit" && (body.NextDue != nil || body.CreditLimit != nil) {
+func validateAccount(aType models.AccountType, body models.AccountBody) error {
+	if aType == models.Debit && (body.NextDue != nil || body.CreditLimit != nil) {
 		return models.ErrDebitCardWithCreditInfo
 	}
 
-	if aType == "Credit" && (body.NextDue == nil || body.CreditLimit == nil) {
+	if aType == models.Credit && (body.NextDue == nil || body.CreditLimit == nil) {
 		return models.ErrCreditCardWithoutCreditInfo
 	}
 

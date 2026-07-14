@@ -192,7 +192,7 @@ func (a *AccountController) GetAccountTransactions(c *gin.Context) {
 		}
 	}
 	filter := models.TransactionFilter{
-		Category:        c.Query("category"),
+		Category:        models.TransactionCategory(c.Query("category")),
 		TranDescription: c.Query("description"),
 		CreatedAtFrom:   dates[0],
 		CreatedAtTo:     dates[1],
