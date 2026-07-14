@@ -1,11 +1,7 @@
 package models
 
 import (
-	"context"
 	"time"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Response struct {
@@ -77,26 +73,6 @@ type PutAccountBody struct {
 	AccountBody
 }
 
-// ScanAccount parses the returned db row into account struct and destinations
-func ScanAccount(accRow pgx.Row, acc *Account) error {
-	err := accRow.Scan(
-		&acc.ID,
-		&acc.UserID,
-		&acc.AccNumber,
-		&acc.AccName,
-		&acc.Institution,
-		&acc.Type,
-		&acc.Balance,
-		&acc.CreditLimit,
-		&acc.NextDue,
-		&acc.CreatedAt,
-		&acc.UpdatedAt,
-		&acc.DiscrepancyFlagged,
-		&acc.DiscrepancyAmount,
-	)
-	return err
-}
-
 type AccountHistory struct {
 	ID         int64     `json:"id" db:"id"`
 	AccountId  int64     `json:"account_id" db:"account_id"`
@@ -108,17 +84,6 @@ type PostAccHistBody struct {
 	AccountId  int64     `json:"account_id" db:"account_id"`
 	LoggedTime time.Time `json:"logged_time" db:"logged_time"`
 	Balance    float64   `json:"balance" db:"balance"`
-}
-
-// ScanAccHistory parses the returned db row into account history struct and destinations
-func ScanAccHistory(accHistRow pgx.Row, accHist *AccountHistory) error {
-	err := accHistRow.Scan(
-		&accHist.ID,
-		&accHist.AccountId,
-		&accHist.LoggedTime,
-		&accHist.Balance,
-	)
-	return err
 }
 
 type PaginatedResponse[T any] struct {
@@ -192,21 +157,6 @@ type PutTransactionBody struct {
 	CreatedAt       time.Time           `json:"created_at"`
 }
 
-// ScanTransaction parses the returned row into transaction and destinations
-func ScanTransaction(tranRow pgx.Row, tran *Transaction) error {
-	err := tranRow.Scan(
-		&tran.ID,
-		&tran.Account,
-		&tran.Merchant,
-		&tran.TranDescription,
-		&tran.Category,
-		&tran.Amount,
-		&tran.CreatedAt,
-		&tran.UpdatedAt,
-	)
-	return err
-}
-
 type TransactionFilter struct {
 	Category        TransactionCategory
 	Merchant        string
@@ -234,35 +184,11 @@ type BillBody struct {
 	DueDate     time.Time           `json:"due_date"`
 }
 
-// ScanBill parses the returned row into bill
-func ScanBill(billRow pgx.Row, bill *Bill) error {
-	err := billRow.Scan(
-		&bill.ID,
-		&bill.Account,
-		&bill.Merchant,
-		&bill.Description,
-		&bill.Category,
-		&bill.Amount,
-		&bill.DueDate,
-	)
-	return err
-}
-
 type BasicAnalysis struct {
 	TotalBalance   float64 `json:"total_balance"`
 	TotalAmountDue float64 `json:"total_amount_due"`
 	TotalIncome    float64 `json:"total_income"`
 	TotalExpense   float64 `json:"total_expense"`
-}
-
-func ScanAnalysis(analysisRow pgx.Row, analysis *BasicAnalysis) error {
-	err := analysisRow.Scan(
-		&analysis.TotalBalance,
-		&analysis.TotalAmountDue,
-		&analysis.TotalIncome,
-		&analysis.TotalExpense,
-	)
-	return err
 }
 
 type FinancialSummary struct {
@@ -336,20 +262,6 @@ type PutBudgetPlanBody struct {
 	GenericBudgetPlanBody
 }
 
-func ScanBudgetPlan(budgetPlanRow pgx.Row, budgetPlan *BudgetPlan) error {
-	err := budgetPlanRow.Scan(
-		&budgetPlan.ID,
-		&budgetPlan.UserID,
-		&budgetPlan.IntervalType,
-		&budgetPlan.RecurringIncome,
-		&budgetPlan.ExpensePortion,
-		&budgetPlan.CategoryPortion,
-		&budgetPlan.CreatedAt,
-		&budgetPlan.UpdatedAt,
-	)
-	return err
-}
-
 type ObjectType string
 
 const (
@@ -372,14 +284,3 @@ type Suggestion struct {
 }
 
 type APIKey struct{}
-
-// DBTX represents a database connection that can execute queries
-// and start transactions. It is implemented by both pgxpool.Pool and pgx.Tx,
-// allowing repositories and services to operate on
-// either a direct database connection or an active transaction.
-type DBTX interface {
-	Begin(ctx context.Context) (pgx.Tx, error)
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-}

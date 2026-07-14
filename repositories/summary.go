@@ -18,7 +18,7 @@ func NewSummaryRepo() *SummaryRepo {
 // GetBasicAnalysis returns the basic aggregation of the user's account between 2 dates
 func (s *SummaryRepo) GetBasicAnalysis(
 	ctx context.Context,
-	db models.DBTX,
+	db DBTX,
 	userId int64,
 	start, end time.Time,
 ) (models.BasicAnalysis, error) {
@@ -64,7 +64,7 @@ func (s *SummaryRepo) GetBasicAnalysis(
 		total_income i, 
 		total_expense e;`
 	row := db.QueryRow(ctx, getBasicAnalysisQuery, userId, start, end)
-	if err := models.ScanAnalysis(row, &analysis); err != nil {
+	if err := scanAnalysis(row, &analysis); err != nil {
 		return models.BasicAnalysis{}, err
 	}
 
@@ -74,7 +74,7 @@ func (s *SummaryRepo) GetBasicAnalysis(
 // GetDateToAmount returns the map from date to total expense of the user or account
 func (s *SummaryRepo) GetDateToAmount(
 	ctx context.Context,
-	db models.DBTX,
+	db DBTX,
 	objType models.ObjectType,
 	objId int64,
 	start, end time.Time,
@@ -126,7 +126,7 @@ func (s *SummaryRepo) GetDateToAmount(
 // getCategoryToAmount returns the map from category to total expense of the obj
 func (s *SummaryRepo) GetCategoryToAmount(
 	ctx context.Context,
-	db models.DBTX,
+	db DBTX,
 	objType models.ObjectType,
 	objId int64,
 	start, end time.Time,
@@ -173,4 +173,14 @@ func (s *SummaryRepo) GetCategoryToAmount(
 	})
 
 	return categoryToAmount, nil
+}
+
+func scanAnalysis(analysisRow pgx.Row, analysis *models.BasicAnalysis) error {
+	err := analysisRow.Scan(
+		&analysis.TotalBalance,
+		&analysis.TotalAmountDue,
+		&analysis.TotalIncome,
+		&analysis.TotalExpense,
+	)
+	return err
 }

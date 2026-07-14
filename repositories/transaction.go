@@ -90,7 +90,7 @@ func (r *TransactionRepo) FilterTransactions(
 }
 
 // Get the transaction with nested account data of a given id
-func (r *TransactionRepo) GetTransaction(ctx context.Context, db models.DBTX, id int64) (models.Transaction, error) {
+func (r *TransactionRepo) GetTransaction(ctx context.Context, db DBTX, id int64) (models.Transaction, error) {
 	var transaction models.Transaction
 
 	const getTransactionQuery = `
@@ -114,7 +114,7 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, db models.DBTX, id
 	WHERE t.id = $1;`
 
 	row := db.QueryRow(ctx, getTransactionQuery, id)
-	if err := models.ScanTransaction(row, &transaction); err != nil {
+	if err := scanTransaction(row, &transaction); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Transaction{}, models.ErrNotFound
 		}
@@ -127,7 +127,7 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, db models.DBTX, id
 // ListSuggestions returns the list of results for autocompletes to search for transactions
 func (r *TransactionRepo) ListSuggestions(
 	ctx context.Context,
-	db models.DBTX,
+	db DBTX,
 	userId int64,
 	keyword string,
 ) ([]models.Suggestion, error) {
@@ -189,7 +189,7 @@ func (r *TransactionRepo) ListSuggestions(
 
 // InsertTransaction inserts the transaction, and returns the inserted transaction
 // that matches the schema in the database (no nested account)
-func (r *TransactionRepo) InsertTransaction(ctx context.Context, db models.DBTX, body models.PostTransactionBody) (models.Transaction, error) {
+func (r *TransactionRepo) InsertTransaction(ctx context.Context, db DBTX, body models.PostTransactionBody) (models.Transaction, error) {
 	var newTransaction models.Transaction
 
 	// Insert the new transaction, get its id, category, and amount
@@ -232,7 +232,7 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, db models.DBTX,
 		body.Amount,
 		body.CreatedAt,
 	)
-	if err := models.ScanTransaction(row, &newTransaction); err != nil {
+	if err := scanTransaction(row, &newTransaction); err != nil {
 		if isForeignKeyViolation(err) {
 			return models.Transaction{}, models.ErrForeignKey
 		}
@@ -245,7 +245,7 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, db models.DBTX,
 // UpdateTransaction updates and returns the transaction. Doesn't allow for updating account ID
 func (r *TransactionRepo) UpdateTransaction(
 	ctx context.Context,
-	db models.DBTX,
+	db DBTX,
 	id int64,
 	body models.PutTransactionBody,
 ) (models.Transaction, error) {
@@ -290,7 +290,7 @@ func (r *TransactionRepo) UpdateTransaction(
 		body.Amount,
 		body.CreatedAt,
 	)
-	if err := models.ScanTransaction(row, &updatedTransaction); err != nil {
+	if err := scanTransaction(row, &updatedTransaction); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Transaction{}, models.ErrNotFound
 		}
@@ -301,7 +301,7 @@ func (r *TransactionRepo) UpdateTransaction(
 }
 
 // DeleteTransaction deletes and returns the transaction
-func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db models.DBTX, id int64) (models.Transaction, error) {
+func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db DBTX, id int64) (models.Transaction, error) {
 	var deletedTransaction models.Transaction
 
 	const deleteTransactionQuery = `
@@ -327,7 +327,7 @@ func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db models.DBTX,
 	JOIN accounts a ON a.id = t.account_id;`
 
 	row := db.QueryRow(ctx, deleteTransactionQuery, id)
-	if err := models.ScanTransaction(row, &deletedTransaction); err != nil {
+	if err := scanTransaction(row, &deletedTransaction); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Transaction{}, models.ErrNotFound
 		}
@@ -340,7 +340,7 @@ func (r *TransactionRepo) DeleteTransaction(ctx context.Context, db models.DBTX,
 // GetTransactionSum returns the total sum of all transactions of the account from the date
 func (r *TransactionRepo) GetTransactionSum(
 	ctx context.Context,
-	db models.DBTX,
+	db DBTX,
 	accountId int64,
 	startDate time.Time,
 ) (float64, error) {
@@ -365,7 +365,7 @@ func (r *TransactionRepo) GetTransactionSum(
 
 // DeleteOutdatedTransactions deleles the list of outdated transactions (older than 6 months ago)
 // and returns the number of successfully deleted ones.
-func (r *TransactionRepo) DeleteOutdatedTransactions(ctx context.Context, db models.DBTX, accountId int64) (int, error) {
+func (r *TransactionRepo) DeleteOutdatedTransactions(ctx context.Context, db DBTX, accountId int64) (int, error) {
 	const deleteOutdatedTranQuery = `
 	DELETE FROM transactions
 	WHERE 
@@ -384,4 +384,19 @@ func (r *TransactionRepo) DeleteOutdatedTransactions(ctx context.Context, db mod
 	}
 
 	return len(deleted), nil
+}
+
+// ScanTransaction parses the returned row into transaction and destinations
+func scanTransaction(tranRow pgx.Row, transaction *models.Transaction) error {
+	err := tranRow.Scan(
+		&transaction.ID,
+		&transaction.Account,
+		&transaction.Merchant,
+		&transaction.TranDescription,
+		&transaction.Category,
+		&transaction.Amount,
+		&transaction.CreatedAt,
+		&transaction.UpdatedAt,
+	)
+	return err
 }

@@ -15,7 +15,7 @@ func NewBillRepo() *BillRepo {
 }
 
 // ListBills gets the list of bills ordered by its due date
-func (r *BillRepo) ListBills(ctx context.Context, db models.DBTX, userId int64) ([]models.Bill, error) {
+func (r *BillRepo) ListBills(ctx context.Context, db DBTX, userId int64) ([]models.Bill, error) {
 	var bills []models.Bill
 
 	const listBillQuery = `
@@ -52,7 +52,7 @@ func (r *BillRepo) ListBills(ctx context.Context, db models.DBTX, userId int64) 
 }
 
 // GetBill returns the list of bills
-func (r *BillRepo) GetBill(ctx context.Context, db models.DBTX, id int64) (models.Bill, error) {
+func (r *BillRepo) GetBill(ctx context.Context, db DBTX, id int64) (models.Bill, error) {
 	var bill models.Bill
 
 	const getNestedBillQuery = `
@@ -75,7 +75,7 @@ func (r *BillRepo) GetBill(ctx context.Context, db models.DBTX, id int64) (model
 	WHERE b.id = $1;`
 
 	row := db.QueryRow(ctx, getNestedBillQuery, id)
-	if err := models.ScanBill(row, &bill); err != nil {
+	if err := scanBill(row, &bill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Bill{}, models.ErrNotFound
 		}
@@ -86,7 +86,7 @@ func (r *BillRepo) GetBill(ctx context.Context, db models.DBTX, id int64) (model
 }
 
 // InsertBill inserts a bill and returns the bill of the account
-func (r *BillRepo) InsertBill(ctx context.Context, db models.DBTX, body models.BillBody) (models.Bill, error) {
+func (r *BillRepo) InsertBill(ctx context.Context, db DBTX, body models.BillBody) (models.Bill, error) {
 	var newBill models.Bill
 
 	const insertBillQuery = `
@@ -127,7 +127,7 @@ func (r *BillRepo) InsertBill(ctx context.Context, db models.DBTX, body models.B
 		body.Amount,
 		body.DueDate,
 	)
-	if err := models.ScanBill(row, &newBill); err != nil {
+	if err := scanBill(row, &newBill); err != nil {
 		if isForeignKeyViolation(err) {
 			return models.Bill{}, models.ErrForeignKey
 		}
@@ -140,7 +140,7 @@ func (r *BillRepo) InsertBill(ctx context.Context, db models.DBTX, body models.B
 // UpdateBill updates and returns the bill
 func (r *BillRepo) UpdateBill(
 	ctx context.Context,
-	db models.DBTX,
+	db DBTX,
 	id int64,
 	body models.BillBody,
 ) (models.Bill, error) {
@@ -184,7 +184,7 @@ func (r *BillRepo) UpdateBill(
 		body.Amount,
 		body.DueDate,
 	)
-	if err := models.ScanBill(row, &updatedBill); err != nil {
+	if err := scanBill(row, &updatedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Bill{}, models.ErrNotFound
 		}
@@ -195,7 +195,7 @@ func (r *BillRepo) UpdateBill(
 }
 
 // DeleteBill deletes and returns the bill by ID
-func (r *BillRepo) DeleteBill(ctx context.Context, db models.DBTX, id int64) (models.Bill, error) {
+func (r *BillRepo) DeleteBill(ctx context.Context, db DBTX, id int64) (models.Bill, error) {
 	var deletedBill models.Bill
 
 	const deleteBillQuery = `
@@ -220,7 +220,7 @@ func (r *BillRepo) DeleteBill(ctx context.Context, db models.DBTX, id int64) (mo
 	JOIN accounts a ON b.account_id = a.id;`
 
 	row := db.QueryRow(ctx, deleteBillQuery, id)
-	if err := models.ScanBill(row, &deletedBill); err != nil {
+	if err := scanBill(row, &deletedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Bill{}, models.ErrNotFound
 		}
@@ -228,4 +228,18 @@ func (r *BillRepo) DeleteBill(ctx context.Context, db models.DBTX, id int64) (mo
 	}
 
 	return deletedBill, nil
+}
+
+// scanBill parses the returned row into bill
+func scanBill(billRow pgx.Row, bill *models.Bill) error {
+	err := billRow.Scan(
+		&bill.ID,
+		&bill.Account,
+		&bill.Merchant,
+		&bill.Description,
+		&bill.Category,
+		&bill.Amount,
+		&bill.DueDate,
+	)
+	return err
 }

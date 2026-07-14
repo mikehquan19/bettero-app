@@ -18,7 +18,7 @@ func NewAccountRepo() *AccountRepo {
 
 // ListAcccounts returns the list of accounts of given user,
 // sorted by updated recency.
-func (r *AccountRepo) ListAccounts(ctx context.Context, db models.DBTX, userId int64) ([]models.Account, error) {
+func (r *AccountRepo) ListAccounts(ctx context.Context, db DBTX, userId int64) ([]models.Account, error) {
 	const listAccountQuery = `SELECT * FROM accounts WHERE user_id = $1 ORDER BY updated_at DESC;`
 	rows, err := db.Query(ctx, listAccountQuery, userId)
 	if err != nil {
@@ -43,7 +43,7 @@ const (
 
 // ListAllAccounts returns the list of accounts based on filter status.
 // This method primarily is used by cron jobs.
-func (r *AccountRepo) ListAllAccounts(ctx context.Context, db models.DBTX, status FilterStatus) ([]models.Account, error) {
+func (r *AccountRepo) ListAllAccounts(ctx context.Context, db DBTX, status FilterStatus) ([]models.Account, error) {
 	var filter string
 	switch status {
 	case PastDue:
@@ -69,11 +69,11 @@ func (r *AccountRepo) ListAllAccounts(ctx context.Context, db models.DBTX, statu
 }
 
 // GetAccount gets the account with given ID
-func (r *AccountRepo) GetAccount(ctx context.Context, db models.DBTX, id int64) (models.Account, error) {
+func (r *AccountRepo) GetAccount(ctx context.Context, db DBTX, id int64) (models.Account, error) {
 	var account models.Account
 
 	row := db.QueryRow(ctx, "SELECT * FROM accounts WHERE id = $1;", id)
-	if err := models.ScanAccount(row, &account); err != nil {
+	if err := scanAccount(row, &account); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Account{}, models.ErrNotFound
 		}
@@ -152,7 +152,7 @@ func (r *AccountRepo) ListAccountTransactions(
 // InsertAccount inserts and returns an account of the user
 func (r *AccountRepo) InsertAccount(
 	ctx context.Context,
-	db models.DBTX,
+	db DBTX,
 	userId int64,
 	body models.PostAccountBody,
 ) (models.Account, error) {
@@ -182,7 +182,7 @@ func (r *AccountRepo) InsertAccount(
 		body.CreditLimit,
 		body.NextDue,
 	)
-	if err := models.ScanAccount(row, &newAccount); err != nil {
+	if err := scanAccount(row, &newAccount); err != nil {
 		if isForeignKeyViolation(err) {
 			return models.Account{}, models.ErrForeignKey
 		}
@@ -195,7 +195,7 @@ func (r *AccountRepo) InsertAccount(
 // UpdateAccount updates and returns the account by ID. It doesn't allow for updating type.
 func (r *AccountRepo) UpdateAccount(
 	ctx context.Context,
-	db models.DBTX,
+	db DBTX,
 	id int64,
 	body models.PutAccountBody,
 ) (models.Account, error) {
@@ -222,7 +222,7 @@ func (r *AccountRepo) UpdateAccount(
 		body.CreditLimit,
 		body.NextDue,
 	)
-	if err := models.ScanAccount(row, &updatedAccount); err != nil {
+	if err := scanAccount(row, &updatedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Account{}, models.ErrNotFound
 		}
@@ -238,7 +238,7 @@ func (r *AccountRepo) UpdateAccount(
 //   - Credit card's balance will increase
 func (r *AccountRepo) UpdateAccountBalance(
 	ctx context.Context,
-	db models.DBTX,
+	db DBTX,
 	id int64,
 	netChange float64,
 ) (float64, error) {
@@ -264,7 +264,7 @@ func (r *AccountRepo) UpdateAccountBalance(
 
 // MoveDueDateNextMonth bulk updates next due of the list of accounts to next month.
 // Returns the number of successfully updated accounts.
-func (r *AccountRepo) MoveAccountsDueDate(ctx context.Context, db models.DBTX, ids []int64) (int, error) {
+func (r *AccountRepo) MoveAccountsDueDate(ctx context.Context, db DBTX, ids []int64) (int, error) {
 	const updateDueDateQuery = `
 	UPDATE accounts a
 	SET next_due = next_due + INTERVAL '1 month'
@@ -286,7 +286,7 @@ func (r *AccountRepo) MoveAccountsDueDate(ctx context.Context, db models.DBTX, i
 // FlagAccount will flag the account with the given discrepany amount.
 func (r *AccountRepo) FlagAccount(
 	ctx context.Context,
-	db models.DBTX,
+	db DBTX,
 	id int64,
 	discrepancyAmount float64,
 ) (models.Account, error) {
@@ -300,7 +300,7 @@ func (r *AccountRepo) FlagAccount(
 	RETURNING *;`
 
 	row := db.QueryRow(ctx, flagAccountQuery, id, discrepancyAmount)
-	if err := models.ScanAccount(row, &flaggedAccount); err != nil {
+	if err := scanAccount(row, &flaggedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Account{}, models.ErrNotFound
 		}
@@ -311,17 +311,37 @@ func (r *AccountRepo) FlagAccount(
 }
 
 // Update the account's data and returns the deleted account
-func (r *AccountRepo) DeleteAccount(ctx context.Context, db models.DBTX, id int64) (models.Account, error) {
+func (r *AccountRepo) DeleteAccount(ctx context.Context, db DBTX, id int64) (models.Account, error) {
 	var deletedAccount models.Account
 
 	const deleteAccountQuery = `DELETE FROM accounts WHERE id = $1 RETURNING *;`
 
 	row := db.QueryRow(ctx, deleteAccountQuery, id)
-	if err := models.ScanAccount(row, &deletedAccount); err != nil {
+	if err := scanAccount(row, &deletedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Account{}, models.ErrNotFound
 		}
 		return models.Account{}, err
 	}
 	return deletedAccount, nil
+}
+
+// scanAccount parses the returned db row into account struct and destinations
+func scanAccount(accRow pgx.Row, acc *models.Account) error {
+	err := accRow.Scan(
+		&acc.ID,
+		&acc.UserID,
+		&acc.AccNumber,
+		&acc.AccName,
+		&acc.Institution,
+		&acc.Type,
+		&acc.Balance,
+		&acc.CreditLimit,
+		&acc.NextDue,
+		&acc.CreatedAt,
+		&acc.UpdatedAt,
+		&acc.DiscrepancyFlagged,
+		&acc.DiscrepancyAmount,
+	)
+	return err
 }
