@@ -137,16 +137,14 @@ func endOfISOWeek(t time.Time) time.Time {
 
 // CreateBudgetPlan creates and returns the new budget plan
 func (s *BudgetService) CreateBudgetPlan(ctx context.Context, userId int64, body models.PostBudgetPlanBody) (models.BudgetPlan, error) {
-	var newBudgetPlan models.BudgetPlan
-
 	err := validatePortion(body.GenericBudgetPlanBody)
 	if err != nil {
-		return newBudgetPlan, err
+		return models.BudgetPlan{}, err
 	}
 
-	newBudgetPlan, err = s.budgetRepo.InsertBudgetPlan(ctx, s.db, userId, body)
+	newBudgetPlan, err := s.budgetRepo.InsertBudgetPlan(ctx, s.db, userId, body)
 	if err != nil {
-		return newBudgetPlan, err
+		return models.BudgetPlan{}, err
 	}
 
 	return newBudgetPlan, nil
@@ -159,16 +157,14 @@ func (s *BudgetService) UpdateBudgetPlan(
 	intervalType models.IntervalType,
 	body models.PutBudgetPlanBody,
 ) (models.BudgetPlan, error) {
-	var updatedBudgetPlan models.BudgetPlan
-
 	err := validatePortion(body.GenericBudgetPlanBody)
 	if err != nil {
-		return updatedBudgetPlan, err
+		return models.BudgetPlan{}, err
 	}
 
-	updatedBudgetPlan, err = s.budgetRepo.UpdateBudgetPlan(ctx, s.db, userId, intervalType, body)
+	updatedBudgetPlan, err := s.budgetRepo.UpdateBudgetPlan(ctx, s.db, userId, intervalType, body)
 	if err != nil {
-		return updatedBudgetPlan, err
+		return models.BudgetPlan{}, err
 	}
 
 	return updatedBudgetPlan, nil
@@ -211,11 +207,9 @@ func validatePortion(body models.GenericBudgetPlanBody) error {
 
 // DeleteBudgetPlan deletes and returns the budget plan by interval type
 func (s *BudgetService) DeleteBudgetPlan(ctx context.Context, userId int64, intervalType models.IntervalType) (models.BudgetPlan, error) {
-	var deletedBudgetPlan models.BudgetPlan
-
 	deletedBudgetPlan, err := s.budgetRepo.DeleteBudgetPlan(ctx, s.db, userId, intervalType)
 	if err != nil {
-		return deletedBudgetPlan, err
+		return models.BudgetPlan{}, err
 	}
 
 	return deletedBudgetPlan, nil

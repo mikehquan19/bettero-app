@@ -27,9 +27,9 @@ func (r *BudgetRepo) GetBudgetPlan(
 	row := db.QueryRow(ctx, getBudgetQuery, userId, intervalType)
 	if err := models.ScanBudgetPlan(row, &budgetPlan); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return budgetPlan, models.ErrNotFound
+			return models.BudgetPlan{}, models.ErrNotFound
 		}
-		return budgetPlan, err
+		return models.BudgetPlan{}, err
 	}
 
 	return budgetPlan, nil
@@ -64,9 +64,9 @@ func (r *BudgetRepo) InsertBudgetPlan(
 	)
 	if err := models.ScanBudgetPlan(row, &newBudgetPlan); err != nil {
 		if isForeignKeyViolation(err) {
-			return newBudgetPlan, models.ErrForeignKey
+			return models.BudgetPlan{}, models.ErrForeignKey
 		}
-		return newBudgetPlan, err
+		return models.BudgetPlan{}, err
 	}
 
 	return newBudgetPlan, nil
@@ -100,9 +100,9 @@ func (r *BudgetRepo) UpdateBudgetPlan(
 	)
 	if err := models.ScanBudgetPlan(row, &updatedBudgetPlan); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return updatedBudgetPlan, models.ErrNotFound
+			return models.BudgetPlan{}, models.ErrNotFound
 		}
-		return updatedBudgetPlan, err
+		return models.BudgetPlan{}, err
 	}
 
 	return updatedBudgetPlan, nil
@@ -125,9 +125,9 @@ func (r *BudgetRepo) DeleteBudgetPlan(
 	row := db.QueryRow(ctx, deleteBudgetPlanQuery, userId, intervalType)
 	if err := models.ScanBudgetPlan(row, &deletedBudgetPlan); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return deletedBudgetPlan, models.ErrNotFound
+			return models.BudgetPlan{}, models.ErrNotFound
 		}
-		return deletedBudgetPlan, err
+		return models.BudgetPlan{}, err
 	}
 	return deletedBudgetPlan, nil
 }

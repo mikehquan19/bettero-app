@@ -181,12 +181,11 @@ func (cs *CronService) updateHistory(ctx context.Context, account models.Account
 
 	// Create the account history every month
 	if latestHist.LoggedTime.Before(time.Now().AddDate(0, -1, 0)) {
-		body := models.PostAccHistBody{
+		_, err := cs.accHistRepo.InsertHistory(accCtx, tx, models.PostAccHistBody{
 			AccountId:  account.ID,
 			LoggedTime: time.Now(),
 			Balance:    account.Balance,
-		}
-		_, err := cs.accHistRepo.InsertHistory(accCtx, tx, body)
+		})
 		if err != nil {
 			return err
 		}

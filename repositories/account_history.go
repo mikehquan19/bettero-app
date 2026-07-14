@@ -21,8 +21,8 @@ func (r *AccountHistoryRepo) ListHistories(ctx context.Context, db models.DBTX, 
 	const listHistoryQuery = `
 	SELECT * FROM account_histories
 	WHERE account_id = $1 
-	ORDER BY logged_time ASC;
-	`
+	ORDER BY logged_time ASC;`
+
 	rows, err := db.Query(ctx, listHistoryQuery, accountId)
 	if err != nil {
 		return nil, err
@@ -43,15 +43,14 @@ func (r *AccountHistoryRepo) GetLatestHistory(ctx context.Context, db models.DBT
 	SELECT * FROM account_histories
 	WHERE account_id = $1
 	ORDER BY logged_time DESC 
-	LIMIT 1;
-	`
+	LIMIT 1;`
+
 	row := db.QueryRow(ctx, getLatestHistoryQuery, accountId)
 	if err := models.ScanAccHistory(row, &latestHistory); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// No history found for the account
-			return latestHistory, models.ErrNotFound
+			return models.AccountHistory{}, models.ErrNotFound
 		}
-		return latestHistory, err
+		return models.AccountHistory{}, err
 	}
 
 	return latestHistory, nil
@@ -59,7 +58,7 @@ func (r *AccountHistoryRepo) GetLatestHistory(ctx context.Context, db models.DBT
 
 // InsertHistory inserts the account history to database
 func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, db models.DBTX, body models.PostAccHistBody) (models.AccountHistory, error) {
-	var newAccHistory models.AccountHistory
+	var newAccountHistory models.AccountHistory
 
 	// Don't need to include time because it's auto now
 	const insertHistoryQuery = `
@@ -69,21 +68,21 @@ func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, db models.DBTX, 
 		balance
 	)
 	VALUES ($1, $2, $3)
-	RETURNING *;
-	`
+	RETURNING *;`
+
 	row := db.QueryRow(ctx, insertHistoryQuery,
 		body.AccountId,
 		body.LoggedTime,
 		body.Balance,
 	)
-	if err := models.ScanAccHistory(row, &newAccHistory); err != nil {
+	if err := models.ScanAccHistory(row, &newAccountHistory); err != nil {
 		if isForeignKeyViolation(err) {
-			return newAccHistory, models.ErrForeignKey
+			return models.AccountHistory{}, models.ErrForeignKey
 		}
-		return newAccHistory, err
+		return models.AccountHistory{}, err
 	}
 
-	return newAccHistory, nil
+	return newAccountHistory, nil
 }
 
 // DeleteOutdatedHistories deletes the outdated balance history of account.
@@ -94,8 +93,8 @@ func (r *AccountHistoryRepo) DeleteOutdatedHistories(ctx context.Context, db mod
 	WHERE
 		logged_time < CURRENT_DATE - INTERVAL '6 months'
 		AND account_id = $1
-	RETURNING ids;
-	`
+	RETURNING ids;`
+
 	rows, err := db.Query(ctx, deleteHistQuery, accountId)
 	if err != nil {
 		return -1, err

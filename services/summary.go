@@ -28,11 +28,9 @@ func (s *SummaryService) GetBasicAnalysis(
 	userId int64,
 	dates models.SummaryDates,
 ) (models.BasicAnalysis, error) {
-	var analysis models.BasicAnalysis
-
 	analysis, err := s.summaryRepo.GetBasicAnalysis(ctx, s.db, userId, dates.CurrStart, dates.CurrStart)
 	if err != nil {
-		return analysis, err
+		return models.BasicAnalysis{}, err
 	}
 
 	return analysis, nil
@@ -45,11 +43,9 @@ func (s *SummaryService) GetDailyMap(
 	objId int64,
 	dates models.SummaryDates,
 ) (map[string]float64, error) {
-	var dailyMap map[string]float64
-
 	dailyMap, err := s.summaryRepo.GetDateToAmount(ctx, s.db, objType, objId, dates.CurrStart, dates.CurrEnd)
 	if err != nil {
-		return dailyMap, err
+		return nil, err
 	}
 
 	return dailyMap, nil
@@ -68,7 +64,7 @@ func (s *SummaryService) GetCompositionMap(
 
 	categoryToAmount, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, dates.CurrStart, dates.CurrEnd)
 	if err != nil {
-		return compositionMap, err
+		return nil, err
 	}
 
 	var totalExpense = 0.0
@@ -85,7 +81,7 @@ func (s *SummaryService) GetCompositionMap(
 		}
 	}
 
-	return compositionMap, err
+	return compositionMap, nil
 }
 
 // GetChangeMap returns the map from category to the expense change percentage
@@ -101,12 +97,12 @@ func (s *SummaryService) GetChangeMap(
 
 	current, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, dates.CurrStart, dates.CurrEnd)
 	if err != nil {
-		return changeMap, err
+		return nil, err
 	}
 
 	previous, err := s.summaryRepo.GetCategoryToAmount(ctx, s.db, objType, objId, dates.PrevStart, dates.PrevEnd)
 	if err != nil {
-		return changeMap, err
+		return nil, err
 	}
 
 	for category, amount := range previous {
@@ -118,5 +114,5 @@ func (s *SummaryService) GetChangeMap(
 		}
 	}
 
-	return changeMap, err
+	return changeMap, nil
 }

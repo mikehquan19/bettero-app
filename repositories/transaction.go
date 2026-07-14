@@ -70,8 +70,7 @@ func (r *TransactionRepo) FilterTransactions(
 	JOIN accounts a ON t.account_id = a.id
 	WHERE %s
 	ORDER BY t.created_at DESC 
-	LIMIT 20
-	OFFSET $%d;`, condition, len(args)+1)
+	LIMIT 20 OFFSET $%d;`, condition, len(args)+1)
 	args = append(args, offset)
 
 	rows, err := tx.Query(ctx, listQuery, args...)
@@ -141,8 +140,8 @@ func (r *TransactionRepo) ListSuggestions(
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Set the threshold per query since this is session-scoped
-	// NOTE: Keep low enough so it can be diverse, but also high enough so it doesn't return
-	// completely unrelated result
+	// NOTE: Keep low enough so it can be diverse, but also high enough
+	// so it doesn't return completely unrelated result
 	_, err = tx.Exec(ctx, "SET pg_trgm.similarity_threshold = 0.2;")
 	if err != nil {
 		return nil, err
