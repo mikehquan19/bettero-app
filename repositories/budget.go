@@ -17,14 +17,14 @@ func NewBudgetRepo() *BudgetRepo {
 // GetBudgetPlan returns the raw budget plan with given type from user
 func (r *BudgetRepo) GetBudgetPlan(
 	ctx context.Context,
-	db DBTX,
+	dbtx DBTX,
 	userId int64,
 	intervalType models.IntervalType,
 ) (models.BudgetPlan, error) {
 	var budgetPlan models.BudgetPlan
 
-	const getBudgetQuery = `SELECT * FROM budget_plans WHERE user_id = $1 AND interval_type = $2;`
-	row := db.QueryRow(ctx, getBudgetQuery, userId, intervalType)
+	const getBudgetSQL = `SELECT * FROM budget_plans WHERE user_id = $1 AND interval_type = $2;`
+	row := dbtx.QueryRow(ctx, getBudgetSQL, userId, intervalType)
 	if err := scanBudgetPlan(row, &budgetPlan); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.BudgetPlan{}, models.ErrNotFound
@@ -38,13 +38,13 @@ func (r *BudgetRepo) GetBudgetPlan(
 // InsertBudgetPlan inserts to the database and returns the new budget plan
 func (r *BudgetRepo) InsertBudgetPlan(
 	ctx context.Context,
-	db DBTX,
+	dbtx DBTX,
 	userId int64,
 	body models.PostBudgetPlanBody,
 ) (models.BudgetPlan, error) {
 	var newBudgetPlan models.BudgetPlan
 
-	const insertBudgetQuery = `
+	const insertBudgetSQL = `
 	INSERT INTO budget_plans (
 		user_id, 
 		interval_type, 
@@ -55,7 +55,7 @@ func (r *BudgetRepo) InsertBudgetPlan(
 	VALUES ($1, $2, $3, $4, $5)
 	RETURNING *;`
 
-	row := db.QueryRow(ctx, insertBudgetQuery,
+	row := dbtx.QueryRow(ctx, insertBudgetSQL,
 		userId,
 		body.IntervalType,
 		body.RecurringIncome,
@@ -75,14 +75,14 @@ func (r *BudgetRepo) InsertBudgetPlan(
 // UpdateBudgetPlan updates and returns the budget plan by interval type
 func (r *BudgetRepo) UpdateBudgetPlan(
 	ctx context.Context,
-	db DBTX,
+	dbtx DBTX,
 	userId int64,
 	intervalType models.IntervalType,
 	body models.PutBudgetPlanBody,
 ) (models.BudgetPlan, error) {
 	var updatedBudgetPlan models.BudgetPlan
 
-	const updateBudgetPlanQuery = `
+	const updateBudgetPlanSQL = `
 	UPDATE budget_plans
 	SET recurring_income = $3, 
 		expense_portion = $4, 
@@ -91,7 +91,7 @@ func (r *BudgetRepo) UpdateBudgetPlan(
 	WHERE user_id = $1 AND interval_type = $2
 	RETURNING *;`
 
-	row := db.QueryRow(ctx, updateBudgetPlanQuery,
+	row := dbtx.QueryRow(ctx, updateBudgetPlanSQL,
 		userId,
 		intervalType,
 		body.RecurringIncome,
@@ -111,18 +111,18 @@ func (r *BudgetRepo) UpdateBudgetPlan(
 // DeleteBudgetPlan deletes and returns the budget plan
 func (r *BudgetRepo) DeleteBudgetPlan(
 	ctx context.Context,
-	db DBTX,
+	dbtx DBTX,
 	userId int64,
 	intervalType models.IntervalType,
 ) (models.BudgetPlan, error) {
 	var deletedBudgetPlan models.BudgetPlan
 
-	const deleteBudgetPlanQuery = `
+	const deleteBudgetPlanSQL = `
 	DELETE FROM budget_plans 
 	WHERE user_id = $1 AND interval_type = $2 
 	RETURNING *;`
 
-	row := db.QueryRow(ctx, deleteBudgetPlanQuery, userId, intervalType)
+	row := dbtx.QueryRow(ctx, deleteBudgetPlanSQL, userId, intervalType)
 	if err := scanBudgetPlan(row, &deletedBudgetPlan); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.BudgetPlan{}, models.ErrNotFound
@@ -133,7 +133,7 @@ func (r *BudgetRepo) DeleteBudgetPlan(
 }
 
 func scanBudgetPlan(budgetPlanRow pgx.Row, budgetPlan *models.BudgetPlan) error {
-	err := budgetPlanRow.Scan(
+	return budgetPlanRow.Scan(
 		&budgetPlan.ID,
 		&budgetPlan.UserID,
 		&budgetPlan.IntervalType,
@@ -143,5 +143,4 @@ func scanBudgetPlan(budgetPlanRow pgx.Row, budgetPlan *models.BudgetPlan) error 
 		&budgetPlan.CreatedAt,
 		&budgetPlan.UpdatedAt,
 	)
-	return err
 }

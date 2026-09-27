@@ -89,14 +89,15 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 
 	if pay {
 		// Create the transaction representing bill payment
-		insertedTransaction, err := s.transactionRepo.InsertTransaction(ctx, tx, models.PostTransactionBody{
+		postTranBody := models.PostTransactionBody{
 			AccountID:       deletedBill.Account.Id,
 			Merchant:        deletedBill.Merchant,
 			TranDescription: fmt.Sprintf("Payment to %s", deletedBill.Description),
 			Category:        deletedBill.Category,
 			Amount:          deletedBill.Amount,
 			CreatedAt:       time.Now(),
-		})
+		}
+		insertedTransaction, err := s.transactionRepo.InsertTransaction(ctx, tx, postTranBody)
 		if err != nil {
 			return err
 		}
@@ -114,14 +115,15 @@ func (s *BillService) DeleteBill(ctx context.Context, id int64, pay bool, recurr
 	}
 	if recurring {
 		// Insert the recurring bill that is due next month
-		recurredBill, err := s.billRepo.InsertBill(ctx, tx, models.BillBody{
+		postBillBody := models.BillBody{
 			AccountID:   deletedBill.Account.Id,
 			Merchant:    deletedBill.Merchant,
 			Description: deletedBill.Description,
 			Category:    deletedBill.Category,
 			Amount:      deletedBill.Amount,
 			DueDate:     deletedBill.DueDate.AddDate(0, 1, 0),
-		})
+		}
+		recurredBill, err := s.billRepo.InsertBill(ctx, tx, postBillBody)
 		if err != nil {
 			return err
 		}

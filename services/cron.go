@@ -4,6 +4,8 @@ import (
 	"betterov2/models"
 	"betterov2/repositories"
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"slices"
 	"time"
@@ -36,28 +38,24 @@ func NewCronService(
 // MoveAccountsDueDate updates next due date for accounts whose due date is past today.
 // If update fails, retrying will be on the accounts that haven't been updated on the previous try.
 // It's because accounts that have will not be queried.
-func (cs *CronService) MoveAccountsDueDate() error {
+func (c *CronService) MoveAccountsDueDate() error {
 	ctx := context.Background()
-	pastDueAccounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, repositories.PastDue)
+	pastDueAccounts, err := c.accRepo.FilterAccounts(ctx, c.db, repositories.PastDue)
 	if err != nil {
 		return err
 	}
 
-	// Iterate the list of accounts in batch of 50.
 	// For each batch, bulk update the due date of the accounts of that batch
-	batchSize := 50
 	index := 1
-	for batch := range slices.Chunk(pastDueAccounts, batchSize) {
-		batchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-
+	for batch := range slices.Chunk(pastDueAccounts, 50) {
 		accountIDs := make([]int64, 0, len(batch))
 		for _, account := range batch {
 			accountIDs = append(accountIDs, account.ID)
 		}
 
 		// Bulk update the list of account IDs
-		numUpdated, err := cs.accRepo.MoveAccountsDueDate(batchCtx, cs.db, accountIDs)
-		// Cancel the batch
+		batchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		numUpdated, err := c.accRepo.MoveAccountsDueDate(batchCtx, c.db, accountIDs)
 		cancel()
 		if err != nil {
 			return err
@@ -74,19 +72,22 @@ func (cs *CronService) MoveAccountsDueDate() error {
 //
 // TODO: Address the limitation that if one account fails, the retry will re-validate
 // the successfully validated accounts.
-func (cs *CronService) ValidateAccounts() error {
+func (c *CronService) ValidateAccounts() error {
 	ctx := context.Background()
-	accounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, repositories.All)
+	accounts, err := c.accRepo.FilterAccounts(ctx, c.db, repositories.All)
 	if err != nil {
 		return err
 	}
 
+	var errs []error
 	for _, account := range accounts {
-		err = cs.validate(ctx, account)
-		if err != nil {
-			log.Printf("Account %d failed validating\n", account.ID)
-			return err
+		if err = c.validate(ctx, account); err != nil {
+			errs = append(errs, fmt.Errorf("account %d: %w", account.ID, err))
+			log.Printf("Account %d failed validating: %v\n", account.ID, err)
 		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 
 	log.Printf("Done validating accounts!\n")
@@ -94,12 +95,11 @@ func (cs *CronService) ValidateAccounts() error {
 }
 
 // Process each individual account for validation
-func (cs *CronService) validate(ctx context.Context, account models.Account) error {
-	// Each validating is only limited to 90 seconds
-	accCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+func (c *CronService) validate(ctx context.Context, account models.Account) error {
+	accCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	tx, err := cs.db.Begin(accCtx)
+	tx, err := c.db.Begin(accCtx)
 	if err != nil {
 		return err
 	}
@@ -107,30 +107,22 @@ func (cs *CronService) validate(ctx context.Context, account models.Account) err
 
 	// Validate the account and flag it if there's discrepancy
 	// Get the latest balance history and sum of all transactions from the time
-	latestHist, err := cs.accHistRepo.GetLatestHistory(accCtx, tx, account.ID)
+	latestHist, err := c.accHistRepo.GetLatestHistory(accCtx, tx, account.ID)
 	if err != nil {
 		return err
 	}
-	sum, err := cs.tranRepo.GetTransactionSum(accCtx, tx, account.ID, latestHist.LoggedTime)
+	sum, err := c.tranRepo.GetTransactionSum(accCtx, tx, account.ID, latestHist.LoggedTime)
 	if err != nil {
 		return err
 	}
 
-	// Latest balance + sum of transactions = the current balance.
-	var discrepancy float64
-	if account.Type == "Debit" {
-		discrepancy = account.Balance - latestHist.Balance - sum
-	} else {
-		discrepancy = account.Balance - latestHist.Balance + sum
-	}
-
+	discrepancy := calculateDiscrepancy(account, latestHist, sum)
 	if discrepancy != 0 {
-		// Flag the account because there is discrepancy here
-		flaggedAcc, err := cs.accRepo.FlagAccount(accCtx, tx, account.ID, discrepancy)
+		flaggedAccount, err := c.accRepo.FlagAccount(accCtx, tx, account.ID, discrepancy)
 		if err != nil {
 			return err
 		}
-		log.Printf("Account %d has been flagged!\n", flaggedAcc.ID)
+		log.Printf("Account %d has been flagged!\n", flaggedAccount.ID)
 	} else {
 		log.Printf("Account %d is OK!\n", account.ID)
 	}
@@ -144,19 +136,22 @@ func (cs *CronService) validate(ctx context.Context, account models.Account) err
 
 // UpdateHistory will create the new history of account whose latest history is past 2 weeks,
 // and delete the history that is older than 6 months ago.
-func (cs *CronService) UpdateHistory() error {
+func (c *CronService) UpdateHistory() error {
 	ctx := context.Background()
-	unflaggedAccounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, repositories.Unflagged)
+	unflaggedAccounts, err := c.accRepo.FilterAccounts(ctx, c.db, repositories.Unflagged)
 	if err != nil {
 		return err
 	}
 
+	var errs []error
 	for _, account := range unflaggedAccounts {
-		err = cs.updateHistory(ctx, account)
-		if err != nil {
-			log.Printf("Error while executing account %d\n", account.ID)
-			return err
+		if err = c.updateHistory(ctx, account, time.Now().UTC()); err != nil {
+			log.Printf("Error while executing account %d: %v\n", account.ID, err)
+			errs = append(errs, fmt.Errorf("account %d: %w", account.ID, err))
 		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 
 	log.Printf("Done creating new history!\n")
@@ -164,26 +159,26 @@ func (cs *CronService) UpdateHistory() error {
 }
 
 // Process each individual account when updating the balance history
-func (cs *CronService) updateHistory(ctx context.Context, account models.Account) error {
-	accCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+func (c *CronService) updateHistory(ctx context.Context, account models.Account, now time.Time) error {
+	accCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	tx, err := cs.db.Begin(accCtx)
+	tx, err := c.db.Begin(accCtx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(accCtx) //nolint:errcheck
 
-	latestHist, err := cs.accHistRepo.GetLatestHistory(accCtx, tx, account.ID)
+	latestHist, err := c.accHistRepo.GetLatestHistory(accCtx, tx, account.ID)
 	if err != nil {
 		return err
 	}
 
 	// Create the account history every month
-	if latestHist.LoggedTime.Before(time.Now().AddDate(0, -1, 0)) {
-		_, err := cs.accHistRepo.InsertHistory(accCtx, tx, models.PostAccHistBody{
+	if shouldCreateHistory(latestHist, now) {
+		_, err := c.accHistRepo.InsertHistory(accCtx, tx, models.PostAccHistBody{
 			AccountId:  account.ID,
-			LoggedTime: time.Now(),
+			LoggedTime: now,
 			Balance:    account.Balance,
 		})
 		if err != nil {
@@ -195,7 +190,7 @@ func (cs *CronService) updateHistory(ctx context.Context, account models.Account
 	}
 
 	// Delete outdated histories of account
-	numDeleted, err := cs.accHistRepo.DeleteOutdatedHistories(accCtx, tx, account.ID)
+	numDeleted, err := c.accHistRepo.DeleteOutdatedHistories(accCtx, tx, account.ID)
 	if err != nil {
 		return err
 	}
@@ -208,19 +203,33 @@ func (cs *CronService) updateHistory(ctx context.Context, account models.Account
 	return nil
 }
 
+func calculateDiscrepancy(
+	account models.Account,
+	latestHist models.AccountHistory,
+	transactionSum float64,
+) float64 {
+	if account.Type == models.Debit {
+		return account.Balance - latestHist.Balance - transactionSum
+	}
+	return account.Balance - latestHist.Balance + transactionSum
+}
+
+func shouldCreateHistory(latestHist models.AccountHistory, now time.Time) bool {
+	return latestHist.LoggedTime.Before(now.AddDate(0, -1, 0))
+}
+
 // Delete all the outdated transactions (transactions that are 6 months old) of
 // all the accounts
-func (cs *CronService) DeleteOutdatedTransactions() error {
+func (c *CronService) DeleteOutdatedTransactions() error {
 	ctx := context.Background()
-	accounts, err := cs.accRepo.ListAllAccounts(ctx, cs.db, repositories.All)
+	accounts, err := c.accRepo.FilterAccounts(ctx, c.db, repositories.All)
 	if err != nil {
 		return err
 	}
 
 	for _, account := range accounts {
-		accCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		numDeleted, err := cs.tranRepo.DeleteOutdatedTransactions(accCtx, cs.db, account.ID)
-		// Cancel the context immediately after this
+		accCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		numDeleted, err := c.tranRepo.DeleteOutdatedTransactions(accCtx, c.db, account.ID)
 		cancel()
 		if err != nil {
 			log.Printf("Error while executing account %d\n", account.ID)
