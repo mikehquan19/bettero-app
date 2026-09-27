@@ -23,8 +23,8 @@ type DBTX interface {
 
 // buildTransactionFilter gets the SQL query to filter transaction from the TransactionFilter.
 // Returns the SQL, the arguments to be passed to pgx
-func buildTransactionFilter(initCond string, value int64, filter models.TransactionFilter) (string, []any) {
-	conditions := []string{initCond}
+func buildTransactionFilter(condition string, value int64, filter models.TransactionFilter) (string, []any) {
+	conditions := []string{condition}
 	args := []any{value}
 	index := 1
 

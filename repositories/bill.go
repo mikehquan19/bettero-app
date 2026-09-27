@@ -15,10 +15,10 @@ func NewBillRepo() *BillRepo {
 }
 
 // ListBills gets the list of bills ordered by its due date
-func (r *BillRepo) ListBills(ctx context.Context, db DBTX, userId int64) ([]models.Bill, error) {
+func (r *BillRepo) ListBills(ctx context.Context, dbtx DBTX, userId int64) ([]models.Bill, error) {
 	var bills []models.Bill
 
-	const listBillQuery = `
+	const listBillSQL = `
 	SELECT
 		b.id, 
 		json_build_object(
@@ -38,7 +38,7 @@ func (r *BillRepo) ListBills(ctx context.Context, db DBTX, userId int64) ([]mode
 	WHERE a.user_id = $1
 	ORDER BY b.due_date ASC;`
 
-	rows, err := db.Query(ctx, listBillQuery, userId)
+	rows, err := dbtx.Query(ctx, listBillSQL, userId)
 	if err != nil {
 		return nil, err
 	}
@@ -52,10 +52,10 @@ func (r *BillRepo) ListBills(ctx context.Context, db DBTX, userId int64) ([]mode
 }
 
 // GetBill returns the list of bills
-func (r *BillRepo) GetBill(ctx context.Context, db DBTX, id int64) (models.Bill, error) {
+func (r *BillRepo) GetBill(ctx context.Context, dbtx DBTX, id int64) (models.Bill, error) {
 	var bill models.Bill
 
-	const getNestedBillQuery = `
+	const getBillSQL = `
 	SELECT
 		b.id,
 		json_build_object(
@@ -74,7 +74,7 @@ func (r *BillRepo) GetBill(ctx context.Context, db DBTX, id int64) (models.Bill,
 	JOIN accounts a ON b.account_id = a.id
 	WHERE b.id = $1;`
 
-	row := db.QueryRow(ctx, getNestedBillQuery, id)
+	row := dbtx.QueryRow(ctx, getBillSQL, id)
 	if err := scanBill(row, &bill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Bill{}, models.ErrNotFound
@@ -86,10 +86,10 @@ func (r *BillRepo) GetBill(ctx context.Context, db DBTX, id int64) (models.Bill,
 }
 
 // InsertBill inserts a bill and returns the bill of the account
-func (r *BillRepo) InsertBill(ctx context.Context, db DBTX, body models.BillBody) (models.Bill, error) {
+func (r *BillRepo) InsertBill(ctx context.Context, dbtx DBTX, body models.BillBody) (models.Bill, error) {
 	var newBill models.Bill
 
-	const insertBillQuery = `
+	const insertBillSQL = `
 	WITH new_bill AS (
 		INSERT INTO bills (
 			account_id, 
@@ -119,7 +119,7 @@ func (r *BillRepo) InsertBill(ctx context.Context, db DBTX, body models.BillBody
 	FROM new_bill b
 	JOIN accounts a ON b.account_id = a.id;`
 
-	row := db.QueryRow(ctx, insertBillQuery,
+	row := dbtx.QueryRow(ctx, insertBillSQL,
 		body.AccountID,
 		body.Merchant,
 		body.Description,
@@ -140,13 +140,13 @@ func (r *BillRepo) InsertBill(ctx context.Context, db DBTX, body models.BillBody
 // UpdateBill updates and returns the bill
 func (r *BillRepo) UpdateBill(
 	ctx context.Context,
-	db DBTX,
+	dbtx DBTX,
 	id int64,
 	body models.BillBody,
 ) (models.Bill, error) {
 	var updatedBill models.Bill
 
-	const updateBillQuery = `
+	const updateBillSQL = `
 	WITH updated_bill AS (
 		UPDATE bills
 		SET account_id = $2, 
@@ -175,7 +175,7 @@ func (r *BillRepo) UpdateBill(
 	FROM updated_bill b
 	JOIN accounts a ON b.account_id = a.id;`
 
-	row := db.QueryRow(ctx, updateBillQuery,
+	row := dbtx.QueryRow(ctx, updateBillSQL,
 		id,
 		body.AccountID,
 		body.Merchant,
@@ -195,10 +195,10 @@ func (r *BillRepo) UpdateBill(
 }
 
 // DeleteBill deletes and returns the bill by ID
-func (r *BillRepo) DeleteBill(ctx context.Context, db DBTX, id int64) (models.Bill, error) {
+func (r *BillRepo) DeleteBill(ctx context.Context, dbtx DBTX, id int64) (models.Bill, error) {
 	var deletedBill models.Bill
 
-	const deleteBillQuery = `
+	const deleteBillSQL = `
 	WITH deleted_bill AS (
 		DELETE FROM bills WHERE id = $1 RETURNING *
 	)
@@ -219,7 +219,7 @@ func (r *BillRepo) DeleteBill(ctx context.Context, db DBTX, id int64) (models.Bi
 	FROM deleted_bill b
 	JOIN accounts a ON b.account_id = a.id;`
 
-	row := db.QueryRow(ctx, deleteBillQuery, id)
+	row := dbtx.QueryRow(ctx, deleteBillSQL, id)
 	if err := scanBill(row, &deletedBill); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Bill{}, models.ErrNotFound
@@ -232,7 +232,7 @@ func (r *BillRepo) DeleteBill(ctx context.Context, db DBTX, id int64) (models.Bi
 
 // scanBill parses the returned row into bill
 func scanBill(billRow pgx.Row, bill *models.Bill) error {
-	err := billRow.Scan(
+	return billRow.Scan(
 		&bill.ID,
 		&bill.Account,
 		&bill.Merchant,
@@ -241,5 +241,4 @@ func scanBill(billRow pgx.Row, bill *models.Bill) error {
 		&bill.Amount,
 		&bill.DueDate,
 	)
-	return err
 }

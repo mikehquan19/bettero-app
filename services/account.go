@@ -99,11 +99,12 @@ func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body m
 
 	// Insert the account balance history at the time of creation
 	// Guaranteed that only after account is created can we take actions on transactions.
-	insertedHistory, err := s.accountHistoryRepo.InsertHistory(ctx, tx, models.PostAccHistBody{
+	postHistBody := models.PostAccHistBody{
 		AccountId:  newAccount.ID,
 		LoggedTime: newAccount.CreatedAt,
 		Balance:    newAccount.Balance,
-	})
+	}
+	insertedHistory, err := s.accountHistoryRepo.InsertHistory(ctx, tx, postHistBody)
 	if err != nil {
 		return models.Account{}, err
 	}
@@ -176,14 +177,16 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 				category = models.Income
 			}
 		}
-		transaction, err := s.transactionRepo.InsertTransaction(ctx, tx, models.PostTransactionBody{
+
+		postTranBody := models.PostTransactionBody{
 			AccountID:       id,
 			Merchant:        updatedAccount.Institution,
 			TranDescription: description,
 			Category:        category,
 			Amount:          math.Abs(change),
 			CreatedAt:       time.Now(),
-		})
+		}
+		transaction, err := s.transactionRepo.InsertTransaction(ctx, tx, postTranBody)
 		if err != nil {
 			return models.Account{}, err
 		}

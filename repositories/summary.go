@@ -18,13 +18,13 @@ func NewSummaryRepo() *SummaryRepo {
 // GetBasicAnalysis returns the basic aggregation of the user's account between 2 dates
 func (s *SummaryRepo) GetBasicAnalysis(
 	ctx context.Context,
-	db DBTX,
+	dbtx DBTX,
 	userId int64,
 	start, end time.Time,
 ) (models.BasicAnalysis, error) {
 	var analysis models.BasicAnalysis
 
-	getBasicAnalysisQuery := `
+	getBasicAnalysisSQL := `
 	WITH total_balance AS (
 		SELECT COALESCE(SUM(a.balance), 0) AS total_balance 
 		FROM accounts a 
@@ -63,7 +63,7 @@ func (s *SummaryRepo) GetBasicAnalysis(
 		total_amount_due a, 
 		total_income i, 
 		total_expense e;`
-	row := db.QueryRow(ctx, getBasicAnalysisQuery, userId, start, end)
+	row := dbtx.QueryRow(ctx, getBasicAnalysisSQL, userId, start, end)
 	if err := scanAnalysis(row, &analysis); err != nil {
 		return models.BasicAnalysis{}, err
 	}
@@ -74,7 +74,7 @@ func (s *SummaryRepo) GetBasicAnalysis(
 // GetDateToAmount returns the map from date to total expense of the user or account
 func (s *SummaryRepo) GetDateToAmount(
 	ctx context.Context,
-	db DBTX,
+	dbtx DBTX,
 	objType models.ObjectType,
 	objId int64,
 	start, end time.Time,
@@ -97,7 +97,7 @@ func (s *SummaryRepo) GetDateToAmount(
 		filter = "t.account_id = $1"
 	}
 
-	getDateToAmounttQuery := fmt.Sprintf(`
+	getDateToAmounttSQL := fmt.Sprintf(`
 	SELECT
 		t.created_at::date AS date, 
 		SUM(t.amount) AS amount
@@ -108,7 +108,7 @@ func (s *SummaryRepo) GetDateToAmount(
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY date;`, table, filter)
 
-	rows, err := db.Query(ctx, getDateToAmounttQuery, objId, start, end)
+	rows, err := dbtx.Query(ctx, getDateToAmounttSQL, objId, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (s *SummaryRepo) GetDateToAmount(
 // getCategoryToAmount returns the map from category to total expense of the obj
 func (s *SummaryRepo) GetCategoryToAmount(
 	ctx context.Context,
-	db DBTX,
+	dbtx DBTX,
 	objType models.ObjectType,
 	objId int64,
 	start, end time.Time,
@@ -149,7 +149,7 @@ func (s *SummaryRepo) GetCategoryToAmount(
 		filter = "t.account_id = $1"
 	}
 
-	getCategoryToAmountQuery := fmt.Sprintf(`
+	getCategoryToAmountSQL := fmt.Sprintf(`
 	SELECT
 		t.category, 
 		SUM(t.amount) AS amount
@@ -160,7 +160,7 @@ func (s *SummaryRepo) GetCategoryToAmount(
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY t.category;`, table, filter)
 
-	rows, err := db.Query(ctx, getCategoryToAmountQuery, objId, start, end)
+	rows, err := dbtx.Query(ctx, getCategoryToAmountSQL, objId, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -176,11 +176,10 @@ func (s *SummaryRepo) GetCategoryToAmount(
 }
 
 func scanAnalysis(analysisRow pgx.Row, analysis *models.BasicAnalysis) error {
-	err := analysisRow.Scan(
+	return analysisRow.Scan(
 		&analysis.TotalBalance,
 		&analysis.TotalAmountDue,
 		&analysis.TotalIncome,
 		&analysis.TotalExpense,
 	)
-	return err
 }
