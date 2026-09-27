@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -33,7 +34,7 @@ func NewTransactionService(
 // FilterTransactions returns list of transactions of category between 2 dates
 func (s *TransactionService) FilterTransactions(
 	ctx context.Context,
-	userId int64,
+	userId uuid.UUID,
 	filter models.TransactionFilter,
 	offset int,
 ) (int, []models.Transaction, error) {
@@ -45,7 +46,7 @@ func (s *TransactionService) FilterTransactions(
 }
 
 // ListSuggestions returns the list of transaction description
-func (s *TransactionService) ListSuggestions(ctx context.Context, userId int64, q string) ([]models.Suggestion, error) {
+func (s *TransactionService) ListSuggestions(ctx context.Context, userId uuid.UUID, q string) ([]models.Suggestion, error) {
 	suggestions, err := s.transactionRepo.ListSuggestions(ctx, s.db, userId, q)
 	if err != nil {
 		return nil, err
@@ -80,18 +81,18 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 	}
 
 	// Update the account balance data
-	netChange := newTransaction.Amount
+	netChange := newTransaction.AmountCents
 	if newTransaction.Category == models.Income {
-		netChange = -newTransaction.Amount
+		netChange = -newTransaction.AmountCents
 	}
 
-	accountId := newTransaction.Account.Id
+	accountId := newTransaction.Account.ID
 
 	balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, netChange)
 	if err != nil {
 		return models.Transaction{}, err
 	}
-	log.Printf("Balance changes to: %f\n", balance)
+	log.Printf("Balance changes to: %d cents\n", balance)
 
 	if err = tx.Commit(ctx); err != nil {
 		return models.Transaction{}, err
@@ -108,7 +109,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 //
 //   - previous effect: amount if the transaction with previous info was deleted
 //   - current effect: amount if the transaction with updatedTransaction info was inserted
-func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, body models.PutTransactionBody) (models.Transaction, error) {
+func (s *TransactionService) UpdateTransaction(ctx context.Context, id uuid.UUID, body models.PutTransactionBody) (models.Transaction, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return models.Transaction{}, err
@@ -132,24 +133,24 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 	}
 
 	// Compute the amount to update the account balance (if balance change)
-	if previousData.Amount != updatedTransaction.Amount {
-		prevChange := previousData.Amount
+	if previousData.AmountCents != updatedTransaction.AmountCents {
+		prevChange := previousData.AmountCents
 		if previousData.Category == models.Income {
-			prevChange = -previousData.Amount
+			prevChange = -previousData.AmountCents
 		}
 
-		currChange := updatedTransaction.Amount
+		currChange := updatedTransaction.AmountCents
 		if updatedTransaction.Category == models.Income {
-			currChange = -updatedTransaction.Amount
+			currChange = -updatedTransaction.AmountCents
 		}
 
-		accountId := updatedTransaction.Account.Id
+		accountId := updatedTransaction.Account.ID
 
 		balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, currChange-prevChange)
 		if err != nil {
 			return models.Transaction{}, err
 		}
-		log.Printf("Balance changes to: %f\n", balance)
+		log.Printf("Balance changes to: %d cents\n", balance)
 	}
 
 	if err = tx.Commit(ctx); err != nil {
@@ -168,7 +169,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id int64, bo
 // For an expense transaction,
 //   - Debit card's balance will increase
 //   - Credit card's balance will decrease
-func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) error {
+func (s *TransactionService) DeleteTransaction(ctx context.Context, id uuid.UUID) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
@@ -185,18 +186,18 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id int64) er
 	}
 
 	// Reverse the effect of creating the transaction
-	netChange := -deletedTransaction.Amount
+	netChange := -deletedTransaction.AmountCents
 	if deletedTransaction.Category == models.Income {
-		netChange = deletedTransaction.Amount
+		netChange = deletedTransaction.AmountCents
 	}
 
-	accountId := deletedTransaction.Account.Id
+	accountId := deletedTransaction.Account.ID
 
 	balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, netChange)
 	if err != nil {
 		return err
 	}
-	log.Printf("Balance changes to: %f\n", balance)
+	log.Printf("Balance changes to: %d cents\n", balance)
 
 	if err = tx.Commit(ctx); err != nil {
 		return err

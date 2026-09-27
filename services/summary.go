@@ -5,6 +5,7 @@ import (
 	"betterov2/repositories"
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -25,10 +26,10 @@ func NewSummaryService(db *pgxpool.Pool, summaryRepo *repositories.SummaryRepo) 
 // GetBasicAnalysis returns the basic aggregation of the user's account between 2 dates
 func (s *SummaryService) GetBasicAnalysis(
 	ctx context.Context,
-	userId int64,
+	userId uuid.UUID,
 	dates models.SummaryDates,
 ) (models.BasicAnalysis, error) {
-	analysis, err := s.summaryRepo.GetBasicAnalysis(ctx, s.db, userId, dates.CurrStart, dates.CurrStart)
+	analysis, err := s.summaryRepo.GetBasicAnalysis(ctx, s.db, userId, dates.CurrStart, dates.CurrEnd)
 	if err != nil {
 		return models.BasicAnalysis{}, err
 	}
@@ -40,9 +41,9 @@ func (s *SummaryService) GetBasicAnalysis(
 func (s *SummaryService) GetDailyMap(
 	ctx context.Context,
 	objType models.ObjectType,
-	objId int64,
+	objId uuid.UUID,
 	dates models.SummaryDates,
-) (map[string]float64, error) {
+) (map[string]models.Money, error) {
 	dailyMap, err := s.summaryRepo.GetDateToAmount(ctx, s.db, objType, objId, dates.CurrStart, dates.CurrEnd)
 	if err != nil {
 		return nil, err
@@ -57,7 +58,7 @@ func (s *SummaryService) GetDailyMap(
 func (s *SummaryService) GetCompositionMap(
 	ctx context.Context,
 	objType models.ObjectType,
-	objId int64,
+	objId uuid.UUID,
 	dates models.SummaryDates,
 ) (map[models.TransactionCategory]float64, error) {
 	var compositionMap = make(map[models.TransactionCategory]float64)
@@ -69,12 +70,12 @@ func (s *SummaryService) GetCompositionMap(
 
 	var totalExpense = 0.0
 	for _, amount := range categoryToAmount {
-		totalExpense += amount
+		totalExpense += float64(amount)
 	}
 
 	for category, amount := range categoryToAmount {
 		if totalExpense != 0.0 {
-			percent := round(amount * 100 / totalExpense)
+			percent := round(float64(amount) * 100 / totalExpense)
 			compositionMap[category] = round(percent)
 		} else {
 			compositionMap[category] = 0.0
@@ -90,7 +91,7 @@ func (s *SummaryService) GetCompositionMap(
 func (s *SummaryService) GetChangeMap(
 	ctx context.Context,
 	objType models.ObjectType,
-	objId int64,
+	objId uuid.UUID,
 	dates models.SummaryDates,
 ) (map[models.TransactionCategory]*float64, error) {
 	var changeMap = make(map[models.TransactionCategory]*float64)
@@ -107,7 +108,8 @@ func (s *SummaryService) GetChangeMap(
 
 	for category, amount := range previous {
 		if amount != 0 {
-			percent := round((current[category] - amount) * 100 / amount)
+			delta := current[category] - amount
+			percent := round(float64(delta*100) / float64(amount))
 			changeMap[category] = &percent
 		} else {
 			changeMap[category] = nil

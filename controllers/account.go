@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
-var UserID int64 = 1
+var UserID = uuid.MustParse("2b8ba95c-4f2f-422e-b9bb-ac0521eb6330")
 
 type AccountController struct {
 	accService     *services.AccountService
@@ -37,6 +37,7 @@ func (a *AccountController) GetAccounts(c *gin.Context) {
 	accounts, err := a.accService.ListAccounts(ctx, UserID)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
+		return
 	}
 
 	respondSuccess(c, http.StatusOK, accounts)
@@ -49,19 +50,19 @@ func (a *AccountController) GetAccount(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 
-	account, err := a.accService.GetAccount(ctx, int64(id))
+	account, err := a.accService.GetAccount(ctx, id)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -86,11 +87,13 @@ func (a *AccountController) PostAccounts(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, models.ErrInvalidAccountBody) {
 			respondError(c, http.StatusBadRequest, err)
-		} else if errors.Is(err, models.ErrForeignKey) {
-			respondError(c, http.StatusNotFound, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		if errors.Is(err, models.ErrForeignKey) {
+			respondError(c, http.StatusNotFound, err)
+			return
+		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -104,7 +107,7 @@ func (a *AccountController) PutAccount(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
@@ -116,15 +119,17 @@ func (a *AccountController) PutAccount(c *gin.Context) {
 		return
 	}
 
-	updatedAccount, err := a.accService.UpdateAccount(ctx, int64(id), body)
+	updatedAccount, err := a.accService.UpdateAccount(ctx, id, body)
 	if err != nil {
 		if errors.Is(err, models.ErrInvalidAccountBody) {
 			respondError(c, http.StatusBadRequest, err)
-		} else if errors.Is(err, models.ErrNotFound) {
-			respondError(c, http.StatusNotFound, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		if errors.Is(err, models.ErrNotFound) {
+			respondError(c, http.StatusNotFound, err)
+			return
+		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -138,18 +143,18 @@ func (a *AccountController) DeleteAccount(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 
-	if err = a.accService.DeleteAccount(ctx, int64(id)); err != nil {
+	if err = a.accService.DeleteAccount(ctx, id); err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -163,7 +168,7 @@ func (a *AccountController) GetAccountTransactions(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
@@ -198,7 +203,7 @@ func (a *AccountController) GetAccountTransactions(c *gin.Context) {
 		CreatedAtTo:     dates[1],
 	}
 
-	total, transactions, err := a.accService.ListAccountTransactions(ctx, int64(id), filter, int64(offset))
+	total, transactions, err := a.accService.ListAccountTransactions(ctx, id, filter, int64(offset))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -219,13 +224,13 @@ func (a *AccountController) GetAccountHistories(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 
-	histories, err := a.accService.ListAccountHistories(ctx, int64(id))
+	histories, err := a.accService.ListAccountHistories(ctx, id)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -241,7 +246,7 @@ func (a *AccountController) GetAccountSummary(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
@@ -253,19 +258,19 @@ func (a *AccountController) GetAccountSummary(c *gin.Context) {
 		return
 	}
 
-	daily, err := a.summaryService.GetDailyMap(ctx, models.AccountObj, int64(id), dates)
+	daily, err := a.summaryService.GetDailyMap(ctx, models.AccountObj, id, dates)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	composition, err := a.summaryService.GetCompositionMap(ctx, models.AccountObj, int64(id), dates)
+	composition, err := a.summaryService.GetCompositionMap(ctx, models.AccountObj, id, dates)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	change, err := a.summaryService.GetChangeMap(ctx, models.AccountObj, int64(id), dates)
+	change, err := a.summaryService.GetChangeMap(ctx, models.AccountObj, id, dates)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return

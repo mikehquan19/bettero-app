@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -48,7 +49,7 @@ func (c *CronService) MoveAccountsDueDate() error {
 	// For each batch, bulk update the due date of the accounts of that batch
 	index := 1
 	for batch := range slices.Chunk(pastDueAccounts, 50) {
-		accountIDs := make([]int64, 0, len(batch))
+		accountIDs := make([]uuid.UUID, 0, len(batch))
 		for _, account := range batch {
 			accountIDs = append(accountIDs, account.ID)
 		}
@@ -82,8 +83,8 @@ func (c *CronService) ValidateAccounts() error {
 	var errs []error
 	for _, account := range accounts {
 		if err = c.validate(ctx, account); err != nil {
-			errs = append(errs, fmt.Errorf("account %d: %w", account.ID, err))
-			log.Printf("Account %d failed validating: %v\n", account.ID, err)
+			errs = append(errs, fmt.Errorf("account %s: %w", account.ID, err))
+			log.Printf("Account %s failed validating: %v\n", account.ID, err)
 		}
 	}
 	if len(errs) > 0 {
@@ -122,9 +123,9 @@ func (c *CronService) validate(ctx context.Context, account models.Account) erro
 		if err != nil {
 			return err
 		}
-		log.Printf("Account %d has been flagged!\n", flaggedAccount.ID)
+		log.Printf("Account %s has been flagged!\n", flaggedAccount.ID)
 	} else {
-		log.Printf("Account %d is OK!\n", account.ID)
+		log.Printf("Account %s is OK!\n", account.ID)
 	}
 
 	if err = tx.Commit(accCtx); err != nil {
@@ -146,8 +147,8 @@ func (c *CronService) UpdateHistory() error {
 	var errs []error
 	for _, account := range unflaggedAccounts {
 		if err = c.updateHistory(ctx, account, time.Now().UTC()); err != nil {
-			log.Printf("Error while executing account %d: %v\n", account.ID, err)
-			errs = append(errs, fmt.Errorf("account %d: %w", account.ID, err))
+			log.Printf("Error while executing account %s: %v\n", account.ID, err)
+			errs = append(errs, fmt.Errorf("account %s: %w", account.ID, err))
 		}
 	}
 	if len(errs) > 0 {
@@ -177,16 +178,16 @@ func (c *CronService) updateHistory(ctx context.Context, account models.Account,
 	// Create the account history every month
 	if shouldCreateHistory(latestHist, now) {
 		_, err := c.accHistRepo.InsertHistory(accCtx, tx, models.PostAccHistBody{
-			AccountId:  account.ID,
-			LoggedTime: now,
-			Balance:    account.Balance,
+			AccountID:    account.ID,
+			LoggedTime:   now,
+			BalanceCents: account.BalanceCents,
 		})
 		if err != nil {
 			return err
 		}
-		log.Printf("New history created for account %d", account.ID)
+		log.Printf("New history created for account %s", account.ID)
 	} else {
-		log.Printf("No history created for account %d", account.ID)
+		log.Printf("No history created for account %s", account.ID)
 	}
 
 	// Delete outdated histories of account
@@ -194,7 +195,7 @@ func (c *CronService) updateHistory(ctx context.Context, account models.Account,
 	if err != nil {
 		return err
 	}
-	log.Printf("Deleted %d histories of account %d", numDeleted, account.ID)
+	log.Printf("Deleted %d histories of account %s", numDeleted, account.ID)
 
 	if err = tx.Commit(accCtx); err != nil {
 		return err
@@ -206,12 +207,12 @@ func (c *CronService) updateHistory(ctx context.Context, account models.Account,
 func calculateDiscrepancy(
 	account models.Account,
 	latestHist models.AccountHistory,
-	transactionSum float64,
-) float64 {
+	transactionSum models.Money,
+) models.Money {
 	if account.Type == models.Debit {
-		return account.Balance - latestHist.Balance - transactionSum
+		return account.BalanceCents - latestHist.BalanceCents - transactionSum
 	}
-	return account.Balance - latestHist.Balance + transactionSum
+	return account.BalanceCents - latestHist.BalanceCents + transactionSum
 }
 
 func shouldCreateHistory(latestHist models.AccountHistory, now time.Time) bool {
@@ -232,10 +233,10 @@ func (c *CronService) DeleteOutdatedTransactions() error {
 		numDeleted, err := c.tranRepo.DeleteOutdatedTransactions(accCtx, c.db, account.ID)
 		cancel()
 		if err != nil {
-			log.Printf("Error while executing account %d\n", account.ID)
+			log.Printf("Error while executing account %s\n", account.ID)
 			return err
 		}
-		log.Printf("Deleted %d outdated transactions of account %d", numDeleted, account.ID)
+		log.Printf("Deleted %d outdated transactions of account %s", numDeleted, account.ID)
 	}
 
 	log.Printf("Done deleting transactions!")

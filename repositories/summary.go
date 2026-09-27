@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -19,38 +20,38 @@ func NewSummaryRepo() *SummaryRepo {
 func (s *SummaryRepo) GetBasicAnalysis(
 	ctx context.Context,
 	dbtx DBTX,
-	userId int64,
+	userId uuid.UUID,
 	start, end time.Time,
 ) (models.BasicAnalysis, error) {
 	var analysis models.BasicAnalysis
 
 	getBasicAnalysisSQL := `
 	WITH total_balance AS (
-		SELECT COALESCE(SUM(a.balance), 0) AS total_balance 
+		SELECT COALESCE(SUM(a.balance_cents), 0) AS total_balance
 		FROM accounts a 
 		WHERE a.user_id = $1 and a.type = 'Debit'
 	),
 	total_amount_due AS (
-		SELECT COALESCE(SUM(a.balance), 0) AS total_amount_due 
+		SELECT COALESCE(SUM(a.balance_cents), 0) AS total_amount_due
 		FROM accounts a 
 		WHERE a.user_id = $1 and a.type = 'Credit'
 	),
 	total_income AS (
-		SELECT COALESCE(SUM(t.amount), 0) AS total_income 
+		SELECT COALESCE(SUM(t.amount_cents), 0) AS total_income
 		FROM transactions t
 		JOIN accounts a ON t.account_id = a.id
 		WHERE
 			a.user_id = $1 AND
-			t.category = 'Income' AND 
+			t.category = 'income' AND
 			t.created_at >= $2 AND t.created_at < $3
 	),
 	total_expense AS (
-		SELECT COALESCE(SUM(t.amount), 0) AS total_expense
+		SELECT COALESCE(SUM(t.amount_cents), 0) AS total_expense
 		FROM transactions t
 		JOIN accounts a ON t.account_id = a.id
 		WHERE
 			a.user_id = $1 AND
-			t.category <> 'Income' AND 
+			t.category <> 'income' AND
 			t.created_at >= $2 AND t.created_at < $3
 	)
 	SELECT 
@@ -76,13 +77,13 @@ func (s *SummaryRepo) GetDateToAmount(
 	ctx context.Context,
 	dbtx DBTX,
 	objType models.ObjectType,
-	objId int64,
+	objId uuid.UUID,
 	start, end time.Time,
-) (map[string]float64, error) {
-	var dateToAmount = make(map[string]float64)
+) (map[string]models.Money, error) {
+	var dateToAmount = make(map[string]models.Money)
 
 	for date := start; !date.After(end); date = date.AddDate(0, 0, 1) {
-		dateToAmount[date.Format("2006-01-02")] = 0.0
+		dateToAmount[date.Format("2006-01-02")] = 0
 	}
 
 	var table, filter string
@@ -100,11 +101,11 @@ func (s *SummaryRepo) GetDateToAmount(
 	getDateToAmounttSQL := fmt.Sprintf(`
 	SELECT
 		t.created_at::date AS date, 
-		SUM(t.amount) AS amount
+		SUM(t.amount_cents) AS amount
 	FROM %s
 	WHERE
 		%s AND
-		t.category <> 'Income' AND 
+		t.category <> 'income' AND
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY date;`, table, filter)
 
@@ -114,7 +115,7 @@ func (s *SummaryRepo) GetDateToAmount(
 	}
 
 	var date time.Time
-	var amount float64
+	var amount models.Money
 	_, err = pgx.ForEachRow(rows, []any{&date, &amount}, func() error {
 		dateToAmount[date.Format("2006-01-02")] = amount
 		return nil
@@ -128,14 +129,14 @@ func (s *SummaryRepo) GetCategoryToAmount(
 	ctx context.Context,
 	dbtx DBTX,
 	objType models.ObjectType,
-	objId int64,
+	objId uuid.UUID,
 	start, end time.Time,
-) (map[models.TransactionCategory]float64, error) {
-	var categoryToAmount = make(map[models.TransactionCategory]float64)
+) (map[models.TransactionCategory]models.Money, error) {
+	var categoryToAmount = make(map[models.TransactionCategory]models.Money)
 
 	// There are 10 categories
 	for _, category := range models.TransactionCategories {
-		categoryToAmount[category] = 0.0
+		categoryToAmount[category] = 0
 	}
 
 	var table, filter string
@@ -152,11 +153,11 @@ func (s *SummaryRepo) GetCategoryToAmount(
 	getCategoryToAmountSQL := fmt.Sprintf(`
 	SELECT
 		t.category, 
-		SUM(t.amount) AS amount
+		SUM(t.amount_cents) AS amount
 	FROM %s
 	WHERE
 		%s AND
-		t.category <> 'Income' AND 
+		t.category <> 'income' AND
 		t.created_at >= $2 AND t.created_at < $3
 	GROUP BY t.category;`, table, filter)
 
@@ -166,7 +167,7 @@ func (s *SummaryRepo) GetCategoryToAmount(
 	}
 
 	var category models.TransactionCategory
-	var amount float64
+	var amount models.Money
 	_, err = pgx.ForEachRow(rows, []any{&category, &amount}, func() error {
 		categoryToAmount[category] = amount
 		return nil
@@ -177,9 +178,9 @@ func (s *SummaryRepo) GetCategoryToAmount(
 
 func scanAnalysis(analysisRow pgx.Row, analysis *models.BasicAnalysis) error {
 	return analysisRow.Scan(
-		&analysis.TotalBalance,
-		&analysis.TotalAmountDue,
-		&analysis.TotalIncome,
-		&analysis.TotalExpense,
+		&analysis.TotalBalanceCents,
+		&analysis.TotalAmountDueCents,
+		&analysis.TotalIncomeCents,
+		&analysis.TotalExpenseCents,
 	)
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type BillController struct {
@@ -56,9 +57,9 @@ func (t *BillController) PostBill(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, models.ErrForeignKey) {
 			respondError(c, http.StatusNotFound, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -72,7 +73,7 @@ func (t *BillController) PutBill(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
@@ -84,13 +85,13 @@ func (t *BillController) PutBill(c *gin.Context) {
 		return
 	}
 
-	updatedBill, err := t.billService.UpdateBill(ctx, int64(id), body)
+	updatedBill, err := t.billService.UpdateBill(ctx, id, body)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -104,7 +105,7 @@ func (t *BillController) DeleteBill(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
@@ -113,9 +114,10 @@ func (t *BillController) DeleteBill(c *gin.Context) {
 	var pay, recurring bool
 	// Specify if the user pays the bill or just deletes
 	if c.Query("pay") != "" {
-		recurring, err = strconv.ParseBool(c.Query("pay"))
+		pay, err = strconv.ParseBool(c.Query("pay"))
 		if err != nil {
 			respondError(c, http.StatusBadRequest, err)
+			return
 		}
 	}
 	// Specify if the user want the bill to recur
@@ -123,15 +125,16 @@ func (t *BillController) DeleteBill(c *gin.Context) {
 		recurring, err = strconv.ParseBool(c.Query("recurring"))
 		if err != nil {
 			respondError(c, http.StatusBadRequest, err)
+			return
 		}
 	}
 
-	if err := t.billService.DeleteBill(ctx, int64(id), pay, recurring); err != nil {
+	if err := t.billService.DeleteBill(ctx, id, pay, recurring); err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 

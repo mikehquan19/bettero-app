@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -15,7 +16,7 @@ func NewAccountHistoryRepo() *AccountHistoryRepo {
 }
 
 // ListHistories returns list of balance history of the account over time
-func (r *AccountHistoryRepo) ListHistories(ctx context.Context, dbtx DBTX, accountId int64) ([]models.AccountHistory, error) {
+func (r *AccountHistoryRepo) ListHistories(ctx context.Context, dbtx DBTX, accountId uuid.UUID) ([]models.AccountHistory, error) {
 	var histories []models.AccountHistory
 
 	const listHistorySQL = `
@@ -36,7 +37,7 @@ func (r *AccountHistoryRepo) ListHistories(ctx context.Context, dbtx DBTX, accou
 }
 
 // GetLatest gets the most recent account history, used for validating primarily
-func (r *AccountHistoryRepo) GetLatestHistory(ctx context.Context, dbtx DBTX, accountId int64) (models.AccountHistory, error) {
+func (r *AccountHistoryRepo) GetLatestHistory(ctx context.Context, dbtx DBTX, accountId uuid.UUID) (models.AccountHistory, error) {
 	var latestHistory models.AccountHistory
 
 	const getLatestHistorySQL = `
@@ -65,15 +66,15 @@ func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, dbtx DBTX, body 
 	INSERT INTO account_histories (
 		account_id,
 		logged_time,
-		balance
+		balance_cents
 	)
 	VALUES ($1, $2, $3)
 	RETURNING *;`
 
 	row := dbtx.QueryRow(ctx, insertHistorySQL,
-		body.AccountId,
+		body.AccountID,
 		body.LoggedTime,
-		body.Balance,
+		body.BalanceCents,
 	)
 	if err := scanAccHistory(row, &newAccountHistory); err != nil {
 		if isForeignKeyViolation(err) {
@@ -87,7 +88,7 @@ func (r *AccountHistoryRepo) InsertHistory(ctx context.Context, dbtx DBTX, body 
 
 // DeleteOutdatedHistories deletes the outdated balance history of account.
 // Returns the number of successfully deleted history.
-func (r *AccountHistoryRepo) DeleteOutdatedHistories(ctx context.Context, dbtx DBTX, accountId int64) (int, error) {
+func (r *AccountHistoryRepo) DeleteOutdatedHistories(ctx context.Context, dbtx DBTX, accountId uuid.UUID) (int, error) {
 	const deleteHistSQL = `
 	DELETE FROM account_histories 
 	WHERE
@@ -99,7 +100,7 @@ func (r *AccountHistoryRepo) DeleteOutdatedHistories(ctx context.Context, dbtx D
 	if err != nil {
 		return -1, err
 	}
-	deleted, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	deleted, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 	if err != nil {
 		return -1, err
 	}
@@ -111,8 +112,8 @@ func (r *AccountHistoryRepo) DeleteOutdatedHistories(ctx context.Context, dbtx D
 func scanAccHistory(accHistRow pgx.Row, accHist *models.AccountHistory) error {
 	return accHistRow.Scan(
 		&accHist.ID,
-		&accHist.AccountId,
+		&accHist.AccountID,
 		&accHist.LoggedTime,
-		&accHist.Balance,
+		&accHist.BalanceCents,
 	)
 }

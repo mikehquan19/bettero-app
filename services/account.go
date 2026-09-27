@@ -6,9 +6,9 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -36,7 +36,7 @@ func NewAccountService(
 }
 
 // ListAccounts returns the list of accounts of the user
-func (s *AccountService) ListAccounts(ctx context.Context, userId int64) ([]models.Account, error) {
+func (s *AccountService) ListAccounts(ctx context.Context, userId uuid.UUID) ([]models.Account, error) {
 	accounts, err := s.accountRepo.ListAccounts(ctx, s.db, userId)
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func (s *AccountService) ListAccounts(ctx context.Context, userId int64) ([]mode
 
 // GetAccount returns details of account.
 // If the account doesn't exist, it returns a custom not found error.
-func (s *AccountService) GetAccount(ctx context.Context, id int64) (models.Account, error) {
+func (s *AccountService) GetAccount(ctx context.Context, id uuid.UUID) (models.Account, error) {
 	account, err := s.accountRepo.GetAccount(ctx, s.db, id)
 	if err != nil {
 		return models.Account{}, err
@@ -58,7 +58,7 @@ func (s *AccountService) GetAccount(ctx context.Context, id int64) (models.Accou
 // ListAccountTransactions returns the list of transactions of account
 func (s *AccountService) ListAccountTransactions(
 	ctx context.Context,
-	id int64,
+	id uuid.UUID,
 	filter models.TransactionFilter,
 	offset int64,
 ) (int, []models.Transaction, error) {
@@ -70,7 +70,7 @@ func (s *AccountService) ListAccountTransactions(
 }
 
 // ListHistories returns the list of balance histories of the account
-func (s *AccountService) ListAccountHistories(ctx context.Context, id int64) ([]models.AccountHistory, error) {
+func (s *AccountService) ListAccountHistories(ctx context.Context, id uuid.UUID) ([]models.AccountHistory, error) {
 	histories, err := s.accountHistoryRepo.ListHistories(ctx, s.db, id)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (s *AccountService) ListAccountHistories(ctx context.Context, id int64) ([]
 
 // CreateAccount inserts new account.
 // If the account references a non-existent user, it returns a custom not found error.
-func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body models.PostAccountBody) (models.Account, error) {
+func (s *AccountService) CreateAccount(ctx context.Context, userId uuid.UUID, body models.PostAccountBody) (models.Account, error) {
 	if err := validateAccount(body.Type, body.AccountBody); err != nil {
 		return models.Account{}, err
 	}
@@ -100,18 +100,18 @@ func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body m
 	// Insert the account balance history at the time of creation
 	// Guaranteed that only after account is created can we take actions on transactions.
 	postHistBody := models.PostAccHistBody{
-		AccountId:  newAccount.ID,
-		LoggedTime: newAccount.CreatedAt,
-		Balance:    newAccount.Balance,
+		AccountID:    newAccount.ID,
+		LoggedTime:   newAccount.CreatedAt,
+		BalanceCents: newAccount.BalanceCents,
 	}
 	insertedHistory, err := s.accountHistoryRepo.InsertHistory(ctx, tx, postHistBody)
 	if err != nil {
 		return models.Account{}, err
 	}
 
-	log.Printf("History for account %d, balance %f on %s\n",
-		insertedHistory.AccountId,
-		insertedHistory.Balance,
+	log.Printf("History for account %s, balance %d cents on %s\n",
+		insertedHistory.AccountID,
+		insertedHistory.BalanceCents,
 		insertedHistory.LoggedTime,
 	)
 
@@ -135,7 +135,7 @@ func (s *AccountService) CreateAccount(ctx context.Context, userId int64, body m
 //
 // NOTE: The feature is to keep ledging consistency, but user won't likely update an account's balance.
 // Most of the time, they will create a descriptive transaction though.
-func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body models.PutAccountBody) (models.Account, error) {
+func (s *AccountService) UpdateAccount(ctx context.Context, id uuid.UUID, body models.PutAccountBody) (models.Account, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return models.Account{}, err
@@ -158,19 +158,24 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 	}
 
 	// Create the transaction reflecting the balance change (reconcile transaction)
-	change := updatedAccount.Balance - previousData.Balance
+	change := updatedAccount.BalanceCents - previousData.BalanceCents
 	if change != 0 {
 		var description string
 		var category models.TransactionCategory
+		amountCents := change
+		if amountCents < 0 {
+			amountCents = -amountCents
+		}
+		displayedAmount := float64(amountCents) / 100
 		if change > 0 {
-			description = fmt.Sprintf("Balance reconciled (+%.2f)", math.Abs(change))
+			description = fmt.Sprintf("Balance reconciled (+%.2f)", displayedAmount)
 
 			category = models.Income
 			if updatedAccount.Type == models.Credit {
 				category = models.Others
 			}
 		} else {
-			description = fmt.Sprintf("Balance reconciled (-%.2f)", math.Abs(change))
+			description = fmt.Sprintf("Balance reconciled (-%.2f)", displayedAmount)
 
 			category = models.Others
 			if updatedAccount.Type == models.Credit {
@@ -179,18 +184,18 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 		}
 
 		postTranBody := models.PostTransactionBody{
-			AccountID:       id,
-			Merchant:        updatedAccount.Institution,
-			TranDescription: description,
-			Category:        category,
-			Amount:          math.Abs(change),
-			CreatedAt:       time.Now(),
+			AccountID:   id,
+			Merchant:    updatedAccount.Institution,
+			Description: description,
+			Category:    category,
+			AmountCents: amountCents,
+			CreatedAt:   time.Now(),
 		}
 		transaction, err := s.transactionRepo.InsertTransaction(ctx, tx, postTranBody)
 		if err != nil {
 			return models.Account{}, err
 		}
-		log.Printf("Transaction %s has been inserted\n", transaction.TranDescription)
+		log.Printf("Transaction %s has been inserted\n", transaction.Description)
 	}
 
 	if err = tx.Commit(ctx); err != nil {
@@ -206,11 +211,11 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id int64, body model
 //
 //   - Credit account must have credit limit and next due
 func validateAccount(aType models.AccountType, body models.AccountBody) error {
-	if aType == models.Debit && (body.NextDue != nil || body.CreditLimit != nil) {
+	if aType == models.Debit && (body.NextDue != nil || body.CreditLimitCents != nil) {
 		return models.ErrDebitCardWithCreditInfo
 	}
 
-	if aType == models.Credit && (body.NextDue == nil || body.CreditLimit == nil) {
+	if aType == models.Credit && (body.NextDue == nil || body.CreditLimitCents == nil) {
 		return models.ErrCreditCardWithoutCreditInfo
 	}
 
@@ -218,7 +223,7 @@ func validateAccount(aType models.AccountType, body models.AccountBody) error {
 }
 
 // DeleteAccount deletes the account, its transactions and account history
-func (s *AccountService) DeleteAccount(ctx context.Context, id int64) error {
+func (s *AccountService) DeleteAccount(ctx context.Context, id uuid.UUID) error {
 	_, err := s.accountRepo.DeleteAccount(ctx, s.db, id)
 	if err != nil {
 		return err

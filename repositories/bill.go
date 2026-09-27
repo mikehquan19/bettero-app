@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -15,26 +16,26 @@ func NewBillRepo() *BillRepo {
 }
 
 // ListBills gets the list of bills ordered by its due date
-func (r *BillRepo) ListBills(ctx context.Context, dbtx DBTX, userId int64) ([]models.Bill, error) {
+func (r *BillRepo) ListBills(ctx context.Context, dbtx DBTX, userId uuid.UUID) ([]models.Bill, error) {
 	var bills []models.Bill
 
 	const listBillSQL = `
 	SELECT
 		b.id, 
-		json_build_object(
+		CASE WHEN a.id IS NULL THEN NULL ELSE json_build_object(
 			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
+			'account_number', a.account_number,
+			'name', a.name,
 			'institution', a.institution,
 			'type', a.type
-		) AS account,
+		) END AS account,
 		b.merchant, 
 		b.description, 
 		b.category, 
-		b.amount, 
+		b.amount_cents,
 		b.due_date
 	FROM bills b 
-	JOIN accounts a ON b.account_id = a.id
+	LEFT JOIN accounts a ON b.account_id = a.id
 	WHERE a.user_id = $1
 	ORDER BY b.due_date ASC;`
 
@@ -52,26 +53,26 @@ func (r *BillRepo) ListBills(ctx context.Context, dbtx DBTX, userId int64) ([]mo
 }
 
 // GetBill returns the list of bills
-func (r *BillRepo) GetBill(ctx context.Context, dbtx DBTX, id int64) (models.Bill, error) {
+func (r *BillRepo) GetBill(ctx context.Context, dbtx DBTX, id uuid.UUID) (models.Bill, error) {
 	var bill models.Bill
 
 	const getBillSQL = `
 	SELECT
 		b.id,
-		json_build_object(
+		CASE WHEN a.id IS NULL THEN NULL ELSE json_build_object(
 			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
+			'account_number', a.account_number,
+			'name', a.name,
 			'institution', a.institution,
 			'type', a.type
-		) AS account,
+		) END AS account,
 		b.merchant, 
 		b.description, 
 		b.category, 
-		b.amount, 
+		b.amount_cents,
 		b.due_date
 	FROM bills b
-	JOIN accounts a ON b.account_id = a.id
+	LEFT JOIN accounts a ON b.account_id = a.id
 	WHERE b.id = $1;`
 
 	row := dbtx.QueryRow(ctx, getBillSQL, id)
@@ -96,7 +97,7 @@ func (r *BillRepo) InsertBill(ctx context.Context, dbtx DBTX, body models.BillBo
 			merchant, 
 			description, 
 			category, 
-			amount, 
+			amount_cents,
 			due_date
 		)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -104,27 +105,27 @@ func (r *BillRepo) InsertBill(ctx context.Context, dbtx DBTX, body models.BillBo
 	)
 	SELECT
 		b.id,
-		json_build_object(
+		CASE WHEN a.id IS NULL THEN NULL ELSE json_build_object(
 			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
+			'account_number', a.account_number,
+			'name', a.name,
 			'institution', a.institution,
 			'type', a.type
-		) AS account,
+		) END AS account,
 		b.merchant, 
 		b.description, 
 		b.category, 
-		b.amount, 
+		b.amount_cents,
 		b.due_date
 	FROM new_bill b
-	JOIN accounts a ON b.account_id = a.id;`
+	LEFT JOIN accounts a ON b.account_id = a.id;`
 
 	row := dbtx.QueryRow(ctx, insertBillSQL,
 		body.AccountID,
 		body.Merchant,
 		body.Description,
 		body.Category,
-		body.Amount,
+		body.AmountCents,
 		body.DueDate,
 	)
 	if err := scanBill(row, &newBill); err != nil {
@@ -141,7 +142,7 @@ func (r *BillRepo) InsertBill(ctx context.Context, dbtx DBTX, body models.BillBo
 func (r *BillRepo) UpdateBill(
 	ctx context.Context,
 	dbtx DBTX,
-	id int64,
+	id uuid.UUID,
 	body models.BillBody,
 ) (models.Bill, error) {
 	var updatedBill models.Bill
@@ -153,27 +154,27 @@ func (r *BillRepo) UpdateBill(
 			merchant = $3, 
 			description = $4, 
 			category = $5, 
-			amount = $6, 
+			amount_cents = $6,
 			due_date = $7
 		WHERE id = $1
 		RETURNING *
 	)
 	SELECT
 		b.id,
-		json_build_object(
+		CASE WHEN a.id IS NULL THEN NULL ELSE json_build_object(
 			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
+			'account_number', a.account_number,
+			'name', a.name,
 			'institution', a.institution,
 			'type', a.type
-		) AS account,
+		) END AS account,
 		b.merchant, 
 		b.description, 
 		b.category,
-		b.amount, 
+		b.amount_cents,
 		b.due_date
 	FROM updated_bill b
-	JOIN accounts a ON b.account_id = a.id;`
+	LEFT JOIN accounts a ON b.account_id = a.id;`
 
 	row := dbtx.QueryRow(ctx, updateBillSQL,
 		id,
@@ -181,7 +182,7 @@ func (r *BillRepo) UpdateBill(
 		body.Merchant,
 		body.Description,
 		body.Category,
-		body.Amount,
+		body.AmountCents,
 		body.DueDate,
 	)
 	if err := scanBill(row, &updatedBill); err != nil {
@@ -195,7 +196,7 @@ func (r *BillRepo) UpdateBill(
 }
 
 // DeleteBill deletes and returns the bill by ID
-func (r *BillRepo) DeleteBill(ctx context.Context, dbtx DBTX, id int64) (models.Bill, error) {
+func (r *BillRepo) DeleteBill(ctx context.Context, dbtx DBTX, id uuid.UUID) (models.Bill, error) {
 	var deletedBill models.Bill
 
 	const deleteBillSQL = `
@@ -204,20 +205,20 @@ func (r *BillRepo) DeleteBill(ctx context.Context, dbtx DBTX, id int64) (models.
 	)
 	SELECT
 		b.id,
-		json_build_object(
+		CASE WHEN a.id IS NULL THEN NULL ELSE json_build_object(
 			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
+			'account_number', a.account_number,
+			'name', a.name,
 			'institution', a.institution,
 			'type', a.type
-		) AS account,
+		) END AS account,
 		b.merchant, 
 		b.description, 
 		b.category, 
-		b.amount, 
+		b.amount_cents,
 		b.due_date
 	FROM deleted_bill b
-	JOIN accounts a ON b.account_id = a.id;`
+	LEFT JOIN accounts a ON b.account_id = a.id;`
 
 	row := dbtx.QueryRow(ctx, deleteBillSQL, id)
 	if err := scanBill(row, &deletedBill); err != nil {
@@ -238,7 +239,7 @@ func scanBill(billRow pgx.Row, bill *models.Bill) error {
 		&bill.Merchant,
 		&bill.Description,
 		&bill.Category,
-		&bill.Amount,
+		&bill.AmountCents,
 		&bill.DueDate,
 	)
 }

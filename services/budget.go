@@ -6,9 +6,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"slices"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -29,17 +31,17 @@ func NewBudgetService(db *pgxpool.Pool, budgetRepo *repositories.BudgetRepo, sum
 }
 
 // GetBudgetPlan returns the analysis of user's spending behavior and budget plan
-func (s *BudgetService) GetBudgetAnalysis(ctx context.Context, userId int64, intervalType models.IntervalType) (models.BudgetResponse, error) {
+func (s *BudgetService) GetBudgetAnalysis(ctx context.Context, userId uuid.UUID, intervalType models.IntervalType) (models.BudgetResponse, error) {
 	budgetPlan, err := s.budgetRepo.GetBudgetPlan(ctx, s.db, userId, intervalType)
 	if err != nil {
 		return models.BudgetResponse{}, err
 	}
 
 	budgetResponse := models.BudgetResponse{
-		ID:              budgetPlan.ID,
-		IntervalType:    budgetPlan.IntervalType,
-		RecurringIncome: budgetPlan.RecurringIncome,
-		ExpensePortion:  budgetPlan.ExpensePortion,
+		ID:                   budgetPlan.ID,
+		IntervalType:         budgetPlan.IntervalType,
+		RecurringIncomeCents: budgetPlan.RecurringIncomeCents,
+		ExpensePortion:       budgetPlan.ExpensePortion,
 		BudgetComposition: models.BudgetComposition{
 			Goal: budgetPlan.CategoryPortion,
 			Real: make(map[models.TransactionCategory]float64),
@@ -62,14 +64,14 @@ func (s *BudgetService) GetBudgetAnalysis(ctx context.Context, userId int64, int
 
 	// Compute the real composition of the budget.
 	// TODO: Logic is the same as summary composition percentage, so write the reusable code
-	var totalExpense = 0.0
+	var totalExpense float64
 	for _, amount := range categoryToAmount {
-		totalExpense += amount
+		totalExpense += float64(amount)
 	}
 
 	for category, amount := range categoryToAmount {
 		if totalExpense != 0.0 {
-			percent := round(amount * 100 / totalExpense)
+			percent := round(float64(amount) * 100 / totalExpense)
 			budgetResponse.BudgetComposition.Real[category] = round(percent)
 		} else {
 			budgetResponse.BudgetComposition.Real[category] = 0.0
@@ -78,16 +80,16 @@ func (s *BudgetService) GetBudgetAnalysis(ctx context.Context, userId int64, int
 
 	// Compute the budget progress
 	for category, amount := range categoryToAmount {
-		budget := budgetPlan.RecurringIncome * budgetPlan.ExpensePortion * budgetPlan.CategoryPortion[category] / 10000
+		budget := models.Money(math.Round(float64(budgetPlan.RecurringIncomeCents) * budgetPlan.ExpensePortion * budgetPlan.CategoryPortion[category] / 10000))
 		percentage := 0.0
 		if budget != 0 {
-			percentage = round(amount * 100 / budget)
+			percentage = round(float64(amount) * 100 / float64(budget))
 		}
 
 		budgetResponse.Progress[category] = &models.CategoryProgress{
-			Current:    amount,
-			Budget:     budget,
-			Percentage: percentage,
+			CurrentCents: amount,
+			BudgetCents:  budget,
+			Percentage:   percentage,
 		}
 	}
 
@@ -136,7 +138,7 @@ func endOfISOWeek(t time.Time) time.Time {
 }
 
 // CreateBudgetPlan creates and returns the new budget plan
-func (s *BudgetService) CreateBudgetPlan(ctx context.Context, userId int64, body models.PostBudgetPlanBody) (models.BudgetPlan, error) {
+func (s *BudgetService) CreateBudgetPlan(ctx context.Context, userId uuid.UUID, body models.PostBudgetPlanBody) (models.BudgetPlan, error) {
 	err := validatePortion(body.GenericBudgetPlanBody)
 	if err != nil {
 		return models.BudgetPlan{}, err
@@ -153,7 +155,7 @@ func (s *BudgetService) CreateBudgetPlan(ctx context.Context, userId int64, body
 // UpdateBudgetPlan updates and returns the budget plan by interval type
 func (s *BudgetService) UpdateBudgetPlan(
 	ctx context.Context,
-	userId int64,
+	userId uuid.UUID,
 	intervalType models.IntervalType,
 	body models.PutBudgetPlanBody,
 ) (models.BudgetPlan, error) {
@@ -204,7 +206,7 @@ func validatePortion(body models.GenericBudgetPlanBody) error {
 }
 
 // DeleteBudgetPlan deletes and returns the budget plan by interval type
-func (s *BudgetService) DeleteBudgetPlan(ctx context.Context, userId int64, intervalType models.IntervalType) (models.BudgetPlan, error) {
+func (s *BudgetService) DeleteBudgetPlan(ctx context.Context, userId uuid.UUID, intervalType models.IntervalType) (models.BudgetPlan, error) {
 	deletedBudgetPlan, err := s.budgetRepo.DeleteBudgetPlan(ctx, s.db, userId, intervalType)
 	if err != nil {
 		return models.BudgetPlan{}, err

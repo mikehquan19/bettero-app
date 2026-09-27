@@ -30,9 +30,9 @@ func (b *BudgetController) GetBudgetPlan(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -54,11 +54,13 @@ func (b *BudgetController) PostBudgetPlan(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, models.ErrInvalidBudgetBody) {
 			respondError(c, http.StatusBadRequest, err)
-		} else if errors.Is(err, models.ErrForeignKey) {
-			respondError(c, http.StatusNotFound, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		if errors.Is(err, models.ErrForeignKey) {
+			respondError(c, http.StatusNotFound, err)
+			return
+		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -82,11 +84,13 @@ func (b *BudgetController) PutBudgetPlan(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, models.ErrInvalidBudgetBody) {
 			respondError(c, http.StatusBadRequest, err)
-		} else if errors.Is(err, models.ErrNotFound) {
-			respondError(c, http.StatusNotFound, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		if errors.Is(err, models.ErrNotFound) {
+			respondError(c, http.StatusNotFound, err)
+			return
+		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -104,9 +108,9 @@ func (b *BudgetController) DeleteBudgetPlan(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 

@@ -8,10 +8,10 @@ import (
 	"fmt"
 
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type TransactionController struct {
@@ -114,11 +114,13 @@ func (t *TransactionController) PostTransaction(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, models.ErrForeignKey) {
 			respondError(c, http.StatusNotFound, err)
-		} else if errors.Is(err, models.ErrTransactionTooOld) {
-			respondError(c, http.StatusBadRequest, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		if errors.Is(err, models.ErrTransactionTooOld) {
+			respondError(c, http.StatusBadRequest, err)
+			return
+		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -132,7 +134,7 @@ func (t *TransactionController) PutTransaction(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
@@ -144,15 +146,17 @@ func (t *TransactionController) PutTransaction(c *gin.Context) {
 		return
 	}
 
-	updatedTran, err := t.tranService.UpdateTransaction(ctx, int64(id), body)
+	updatedTran, err := t.tranService.UpdateTransaction(ctx, id, body)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
-		} else if errors.Is(err, models.ErrTransactionTooOld) {
-			respondError(c, http.StatusBadRequest, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		if errors.Is(err, models.ErrTransactionTooOld) {
+			respondError(c, http.StatusBadRequest, err)
+			return
+		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -166,20 +170,22 @@ func (t *TransactionController) DeleteTransaction(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 
-	if err := t.tranService.DeleteTransaction(ctx, int64(id)); err != nil {
+	if err := t.tranService.DeleteTransaction(ctx, id); err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
-		} else if errors.Is(err, models.ErrTransactionTooOld) {
-			respondError(c, http.StatusBadRequest, err)
-		} else {
-			respondError(c, http.StatusInternalServerError, err)
+			return
 		}
+		if errors.Is(err, models.ErrTransactionTooOld) {
+			respondError(c, http.StatusBadRequest, err)
+			return
+		}
+		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 

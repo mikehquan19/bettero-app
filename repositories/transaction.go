@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -21,7 +22,7 @@ func NewTransactionRepo() *TransactionRepo {
 func (r *TransactionRepo) FilterTransactions(
 	ctx context.Context,
 	db *pgxpool.Pool,
-	userId int64,
+	userId uuid.UUID,
 	filter models.TransactionFilter,
 	offset int,
 ) (int, []models.Transaction, error) {
@@ -55,15 +56,15 @@ func (r *TransactionRepo) FilterTransactions(
 		t.id, 
 		json_build_object(
 			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
+			'account_number', a.account_number,
+			'name', a.name,
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
 		t.merchant, 
-		t.tran_description, 
+		t.description,
 		t.category, 
-		t.amount, 
+		t.amount_cents,
 		t.created_at, 
 		t.updated_at
 	FROM transactions t
@@ -90,7 +91,7 @@ func (r *TransactionRepo) FilterTransactions(
 }
 
 // Get the transaction with nested account data of a given id
-func (r *TransactionRepo) GetTransaction(ctx context.Context, dbtx DBTX, id int64) (models.Transaction, error) {
+func (r *TransactionRepo) GetTransaction(ctx context.Context, dbtx DBTX, id uuid.UUID) (models.Transaction, error) {
 	var transaction models.Transaction
 
 	const getTransactionSQL = `
@@ -98,15 +99,15 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, dbtx DBTX, id int6
 		t.id,
 		json_build_object(
 			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
+			'account_number', a.account_number,
+			'name', a.name,
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
 		t.merchant, 
-		t.tran_description, 
+		t.description,
 		t.category, 
-		t.amount, 
+		t.amount_cents,
 		t.created_at, 
 		t.updated_at
 	FROM transactions t
@@ -128,7 +129,7 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, dbtx DBTX, id int6
 func (r *TransactionRepo) ListSuggestions(
 	ctx context.Context,
 	dbtx DBTX,
-	userId int64,
+	userId uuid.UUID,
 	keyword string,
 ) ([]models.Suggestion, error) {
 	var suggestions []models.Suggestion
@@ -152,11 +153,11 @@ func (r *TransactionRepo) ListSuggestions(
 	FROM (
 		SELECT DISTINCT
 			'description' AS type,
-			t.tran_description AS name,
-			similarity(t.tran_description, $2) AS score
+			t.description AS name,
+			similarity(t.description, $2) AS score
 		FROM transactions t
 		JOIN accounts a ON t.account_id = a.id
-		WHERE t.tran_description % $2 AND a.user_id = $1
+		WHERE t.description % $2 AND a.user_id = $1
 
 		UNION ALL
 
@@ -198,9 +199,9 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, dbtx DBTX, body
 		INSERT INTO transactions (
 			account_id,
 			merchant,
-			tran_description,
+			description,
 			category,
-			amount,
+			amount_cents,
 			created_at
 		)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -210,15 +211,15 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, dbtx DBTX, body
 		t.id,
 		json_build_object(
 			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
+			'account_number', a.account_number,
+			'name', a.name,
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
 		t.merchant, 
-		t.tran_description, 
+		t.description,
 		t.category, 
-		t.amount,
+		t.amount_cents,
 		t.created_at, 
 		t.updated_at
 	FROM new_transaction t
@@ -227,9 +228,9 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, dbtx DBTX, body
 	row := dbtx.QueryRow(ctx, insertTransactionSQL,
 		body.AccountID,
 		body.Merchant,
-		body.TranDescription,
+		body.Description,
 		body.Category,
-		body.Amount,
+		body.AmountCents,
 		body.CreatedAt,
 	)
 	if err := scanTransaction(row, &newTransaction); err != nil {
@@ -244,7 +245,7 @@ func (r *TransactionRepo) InsertTransaction(ctx context.Context, dbtx DBTX, body
 
 // UpdateTransaction updates and returns the transaction. Doesn't allow for updating account ID
 func (r *TransactionRepo) UpdateTransaction(
-	ctx context.Context, dbtx DBTX, id int64, body models.PutTransactionBody,
+	ctx context.Context, dbtx DBTX, id uuid.UUID, body models.PutTransactionBody,
 ) (models.Transaction, error) {
 	var updatedTransaction models.Transaction
 
@@ -253,9 +254,9 @@ func (r *TransactionRepo) UpdateTransaction(
 	WITH updated_transaction AS (
 		UPDATE transactions
 		SET merchant = $2, 
-			tran_description = $3, 
+			description = $3,
 			category = $4, 
-			amount = $5, 
+			amount_cents = $5,
 			created_at = $6,
 			updated_at = NOW()
 		WHERE id = $1
@@ -265,15 +266,15 @@ func (r *TransactionRepo) UpdateTransaction(
 		t.id,
 		json_build_object(
 			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
+			'account_number', a.account_number,
+			'name', a.name,
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
 		t.merchant, 
-		t.tran_description, 
+		t.description,
 		t.category, 
-		t.amount,
+		t.amount_cents,
 		t.created_at, 
 		t.updated_at
 	FROM updated_transaction t
@@ -282,9 +283,9 @@ func (r *TransactionRepo) UpdateTransaction(
 	row := dbtx.QueryRow(ctx, updateTransactionSQL,
 		id,
 		body.Merchant,
-		body.TranDescription,
+		body.Description,
 		body.Category,
-		body.Amount,
+		body.AmountCents,
 		body.CreatedAt,
 	)
 	if err := scanTransaction(row, &updatedTransaction); err != nil {
@@ -298,7 +299,7 @@ func (r *TransactionRepo) UpdateTransaction(
 }
 
 // DeleteTransaction deletes and returns the transaction
-func (r *TransactionRepo) DeleteTransaction(ctx context.Context, dbtx DBTX, id int64) (models.Transaction, error) {
+func (r *TransactionRepo) DeleteTransaction(ctx context.Context, dbtx DBTX, id uuid.UUID) (models.Transaction, error) {
 	var deletedTransaction models.Transaction
 
 	const deleteTransactionSQL = `
@@ -309,15 +310,15 @@ func (r *TransactionRepo) DeleteTransaction(ctx context.Context, dbtx DBTX, id i
 		t.id,
 		json_build_object(
 			'id', a.id,
-			'acc_number', a.acc_number,
-			'acc_name', a.acc_name,
+			'account_number', a.account_number,
+			'name', a.name,
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
 		t.merchant, 
-		t.tran_description, 
+		t.description,
 		t.category, 
-		t.amount,
+		t.amount_cents,
 		t.created_at, 
 		t.updated_at
 	FROM deleted_transaction t
@@ -338,15 +339,15 @@ func (r *TransactionRepo) DeleteTransaction(ctx context.Context, dbtx DBTX, id i
 func (r *TransactionRepo) GetTransactionSum(
 	ctx context.Context,
 	dbtx DBTX,
-	accountId int64,
+	accountId uuid.UUID,
 	startDate time.Time,
-) (float64, error) {
-	var transactionSum float64
+) (models.Money, error) {
+	var transactionSum models.Money
 
 	const totalSumSQL = `
 	SELECT
-		COALESCE(SUM(t.amount * CASE 
-			WHEN t.category = 'Income' THEN -1 
+		COALESCE(SUM(t.amount_cents * CASE
+			WHEN t.category = 'income' THEN -1
 			ELSE 1 
 		END), 0)
 	FROM transactions t
@@ -354,7 +355,7 @@ func (r *TransactionRepo) GetTransactionSum(
 
 	row := dbtx.QueryRow(ctx, totalSumSQL, accountId, startDate)
 	if err := row.Scan(&transactionSum); err != nil {
-		return -1, err
+		return 0, err
 	}
 
 	return transactionSum, nil
@@ -362,7 +363,7 @@ func (r *TransactionRepo) GetTransactionSum(
 
 // DeleteOutdatedTransactions deleles the list of outdated transactions (older than 6 months ago)
 // and returns the number of successfully deleted ones.
-func (r *TransactionRepo) DeleteOutdatedTransactions(ctx context.Context, dbtx DBTX, accountId int64) (int, error) {
+func (r *TransactionRepo) DeleteOutdatedTransactions(ctx context.Context, dbtx DBTX, accountId uuid.UUID) (int, error) {
 	const deleteOutdatedTranSQL = `
 	DELETE FROM transactions
 	WHERE 
@@ -375,7 +376,7 @@ func (r *TransactionRepo) DeleteOutdatedTransactions(ctx context.Context, dbtx D
 		return -1, err
 	}
 
-	deleted, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	deleted, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 	if err != nil {
 		return -1, err
 	}
@@ -389,9 +390,9 @@ func scanTransaction(tranRow pgx.Row, transaction *models.Transaction) error {
 		&transaction.ID,
 		&transaction.Account,
 		&transaction.Merchant,
-		&transaction.TranDescription,
+		&transaction.Description,
 		&transaction.Category,
-		&transaction.Amount,
+		&transaction.AmountCents,
 		&transaction.CreatedAt,
 		&transaction.UpdatedAt,
 	)

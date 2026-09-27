@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -18,7 +19,7 @@ func NewBudgetRepo() *BudgetRepo {
 func (r *BudgetRepo) GetBudgetPlan(
 	ctx context.Context,
 	dbtx DBTX,
-	userId int64,
+	userId uuid.UUID,
 	intervalType models.IntervalType,
 ) (models.BudgetPlan, error) {
 	var budgetPlan models.BudgetPlan
@@ -39,7 +40,7 @@ func (r *BudgetRepo) GetBudgetPlan(
 func (r *BudgetRepo) InsertBudgetPlan(
 	ctx context.Context,
 	dbtx DBTX,
-	userId int64,
+	userId uuid.UUID,
 	body models.PostBudgetPlanBody,
 ) (models.BudgetPlan, error) {
 	var newBudgetPlan models.BudgetPlan
@@ -48,7 +49,7 @@ func (r *BudgetRepo) InsertBudgetPlan(
 	INSERT INTO budget_plans (
 		user_id, 
 		interval_type, 
-		recurring_income, 
+		recurring_income_cents,
 		expense_portion, 
 		category_portion
 	) 
@@ -58,7 +59,7 @@ func (r *BudgetRepo) InsertBudgetPlan(
 	row := dbtx.QueryRow(ctx, insertBudgetSQL,
 		userId,
 		body.IntervalType,
-		body.RecurringIncome,
+		body.RecurringIncomeCents,
 		body.ExpensePortion,
 		body.CategoryPortion,
 	)
@@ -76,7 +77,7 @@ func (r *BudgetRepo) InsertBudgetPlan(
 func (r *BudgetRepo) UpdateBudgetPlan(
 	ctx context.Context,
 	dbtx DBTX,
-	userId int64,
+	userId uuid.UUID,
 	intervalType models.IntervalType,
 	body models.PutBudgetPlanBody,
 ) (models.BudgetPlan, error) {
@@ -84,7 +85,7 @@ func (r *BudgetRepo) UpdateBudgetPlan(
 
 	const updateBudgetPlanSQL = `
 	UPDATE budget_plans
-	SET recurring_income = $3, 
+	SET recurring_income_cents = $3,
 		expense_portion = $4, 
 		category_portion = $5,
 		updated_at = NOW()
@@ -94,7 +95,7 @@ func (r *BudgetRepo) UpdateBudgetPlan(
 	row := dbtx.QueryRow(ctx, updateBudgetPlanSQL,
 		userId,
 		intervalType,
-		body.RecurringIncome,
+		body.RecurringIncomeCents,
 		body.ExpensePortion,
 		body.CategoryPortion,
 	)
@@ -112,7 +113,7 @@ func (r *BudgetRepo) UpdateBudgetPlan(
 func (r *BudgetRepo) DeleteBudgetPlan(
 	ctx context.Context,
 	dbtx DBTX,
-	userId int64,
+	userId uuid.UUID,
 	intervalType models.IntervalType,
 ) (models.BudgetPlan, error) {
 	var deletedBudgetPlan models.BudgetPlan
@@ -137,7 +138,7 @@ func scanBudgetPlan(budgetPlanRow pgx.Row, budgetPlan *models.BudgetPlan) error 
 		&budgetPlan.ID,
 		&budgetPlan.UserID,
 		&budgetPlan.IntervalType,
-		&budgetPlan.RecurringIncome,
+		&budgetPlan.RecurringIncomeCents,
 		&budgetPlan.ExpensePortion,
 		&budgetPlan.CategoryPortion,
 		&budgetPlan.CreatedAt,

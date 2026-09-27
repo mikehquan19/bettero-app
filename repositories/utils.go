@@ -23,7 +23,7 @@ type DBTX interface {
 
 // buildTransactionFilter gets the SQL query to filter transaction from the TransactionFilter.
 // Returns the SQL, the arguments to be passed to pgx
-func buildTransactionFilter(condition string, value int64, filter models.TransactionFilter) (string, []any) {
+func buildTransactionFilter(condition string, value any, filter models.TransactionFilter) (string, []any) {
 	conditions := []string{condition}
 	args := []any{value}
 	index := 1
@@ -42,7 +42,7 @@ func buildTransactionFilter(condition string, value int64, filter models.Transac
 
 	if filter.TranDescription != "" {
 		index++
-		conditions = append(conditions, fmt.Sprintf("t.tran_description = $%d", index))
+		conditions = append(conditions, fmt.Sprintf("t.description = $%d", index))
 		args = append(args, filter.TranDescription)
 	}
 
