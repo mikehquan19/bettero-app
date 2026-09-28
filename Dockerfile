@@ -15,6 +15,7 @@ COPY ./controllers ./controllers
 COPY ./models ./models
 COPY ./routes ./routes
 COPY ./services ./services
+COPY ./repositories ./repositories
 COPY ./setup ./setup
 COPY server.go ./
 

@@ -133,7 +133,8 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id uuid.UUID
 	}
 
 	// Compute the amount to update the account balance (if balance change)
-	if previousData.AmountCents != updatedTransaction.AmountCents {
+	if previousData.AmountCents != updatedTransaction.AmountCents ||
+		previousData.Category != updatedTransaction.Category {
 		prevChange := previousData.AmountCents
 		if previousData.Category == models.Income {
 			prevChange = -previousData.AmountCents

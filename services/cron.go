@@ -65,7 +65,7 @@ func (c *CronService) MoveAccountsDueDate() error {
 		index++
 	}
 
-	log.Printf("Update done!\n")
+	log.Println("Update done!")
 	return nil
 }
 
@@ -91,7 +91,7 @@ func (c *CronService) ValidateAccounts() error {
 		return errors.Join(errs...)
 	}
 
-	log.Printf("Done validating accounts!\n")
+	log.Println("Done validating accounts!")
 	return nil
 }
 
@@ -210,9 +210,9 @@ func calculateDiscrepancy(
 	transactionSum models.Money,
 ) models.Money {
 	if account.Type == models.Debit {
-		return account.BalanceCents - latestHist.BalanceCents - transactionSum
+		return account.BalanceCents - latestHist.BalanceCents + transactionSum
 	}
-	return account.BalanceCents - latestHist.BalanceCents + transactionSum
+	return account.BalanceCents - latestHist.BalanceCents - transactionSum
 }
 
 func shouldCreateHistory(latestHist models.AccountHistory, now time.Time) bool {

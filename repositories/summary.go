@@ -120,6 +120,9 @@ func (s *SummaryRepo) GetDateToAmount(
 		dateToAmount[date.Format("2006-01-02")] = amount
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return dateToAmount, nil
 }
@@ -172,6 +175,9 @@ func (s *SummaryRepo) GetCategoryToAmount(
 		categoryToAmount[category] = amount
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return categoryToAmount, nil
 }
