@@ -25,31 +25,37 @@ func (s *SummaryController) GetSummary(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+
 	dates, err := getSummaryDates(c)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 
-	basic, err := s.summaryService.GetBasicAnalysis(ctx, UserID, dates)
+	basic, err := s.summaryService.GetBasicAnalysis(ctx, userID, dates)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	daily, err := s.summaryService.GetDailyMap(ctx, models.UserObj, UserID, dates)
+	daily, err := s.summaryService.GetDailyMap(ctx, models.UserObj, userID, dates)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	composition, err := s.summaryService.GetCompositionMap(ctx, models.UserObj, UserID, dates)
+	composition, err := s.summaryService.GetCompositionMap(ctx, models.UserObj, userID, dates)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	change, err := s.summaryService.GetChangeMap(ctx, models.UserObj, UserID, dates)
+	change, err := s.summaryService.GetChangeMap(ctx, models.UserObj, userID, dates)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -71,15 +77,15 @@ func getSummaryDates(c *gin.Context) (models.SummaryDates, error) {
 	var err error
 
 	for _, field := range []struct {
-		dest *time.Time
-		name string
+		field *time.Time
+		name  string
 	}{
-		{dest: &dates.CurrStart, name: "curr_start"},
-		{dest: &dates.CurrEnd, name: "curr_end"},
-		{dest: &dates.PrevStart, name: "prev_start"},
-		{dest: &dates.PrevEnd, name: "prev_end"},
+		{field: &dates.CurrStart, name: "curr_start"},
+		{field: &dates.CurrEnd, name: "curr_end"},
+		{field: &dates.PrevStart, name: "prev_start"},
+		{field: &dates.PrevEnd, name: "prev_end"},
 	} {
-		*field.dest, err = time.Parse("2006-01-02", c.Query(field.name))
+		*field.field, err = time.Parse("2006-01-02", c.Query(field.name))
 		if err != nil {
 			return models.SummaryDates{}, err
 		}

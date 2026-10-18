@@ -31,7 +31,13 @@ func (t *BillController) GetBills(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	bills, err := t.billService.ListBills(ctx, UserID)
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+
+	bills, err := t.billService.ListBills(ctx, userID)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -47,13 +53,18 @@ func (t *BillController) PostBill(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
 	var body models.BillBody
 	if err := c.ShouldBindJSON(&body); err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 
-	newBill, err := t.billService.CreateBill(ctx, body)
+	newBill, err := t.billService.CreateBill(ctx, userID, body)
 	if err != nil {
 		if errors.Is(err, models.ErrForeignKey) {
 			respondError(c, http.StatusNotFound, err)
@@ -73,6 +84,11 @@ func (t *BillController) PutBill(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
@@ -85,7 +101,7 @@ func (t *BillController) PutBill(c *gin.Context) {
 		return
 	}
 
-	updatedBill, err := t.billService.UpdateBill(ctx, id, body)
+	updatedBill, err := t.billService.UpdateBill(ctx, userID, id, body)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
@@ -105,6 +121,11 @@ func (t *BillController) DeleteBill(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
@@ -129,9 +150,13 @@ func (t *BillController) DeleteBill(c *gin.Context) {
 		}
 	}
 
-	if err := t.billService.DeleteBill(ctx, id, pay, recurring); err != nil {
+	if err := t.billService.DeleteBill(ctx, userID, id, pay, recurring); err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
+			return
+		}
+		if errors.Is(err, models.ErrForeignKey) {
+			respondError(c, http.StatusBadRequest, err)
 			return
 		}
 		respondError(c, http.StatusInternalServerError, err)

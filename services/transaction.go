@@ -63,7 +63,7 @@ func (s *TransactionService) ListSuggestions(ctx context.Context, userId uuid.UU
 // For an expense transaction, by transaction amount:
 //   - Debit card's balance will decrease
 //   - Credit card's balance will increase
-func (s *TransactionService) CreateTransaction(ctx context.Context, body models.PostTransactionBody) (models.Transaction, error) {
+func (s *TransactionService) CreateTransaction(ctx context.Context, userId uuid.UUID, body models.PostTransactionBody) (models.Transaction, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return models.Transaction{}, err
@@ -75,7 +75,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 	}
 
 	// Insert the new transaction data
-	newTransaction, err := s.transactionRepo.InsertTransaction(ctx, tx, body)
+	newTransaction, err := s.transactionRepo.InsertTransaction(ctx, tx, userId, body)
 	if err != nil {
 		return models.Transaction{}, err
 	}
@@ -109,7 +109,7 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, body models.
 //
 //   - previous effect: amount if the transaction with previous info was deleted
 //   - current effect: amount if the transaction with updatedTransaction info was inserted
-func (s *TransactionService) UpdateTransaction(ctx context.Context, id uuid.UUID, body models.PutTransactionBody) (models.Transaction, error) {
+func (s *TransactionService) UpdateTransaction(ctx context.Context, userId, id uuid.UUID, body models.PutTransactionBody) (models.Transaction, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return models.Transaction{}, err
@@ -117,7 +117,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id uuid.UUID
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Get previous account before updating
-	previousData, err := s.transactionRepo.GetTransaction(ctx, tx, id)
+	previousData, err := s.transactionRepo.GetTransaction(ctx, tx, userId, id)
 	if err != nil {
 		return models.Transaction{}, err
 	}
@@ -127,7 +127,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id uuid.UUID
 	}
 
 	// Update the transaction
-	updatedTransaction, err := s.transactionRepo.UpdateTransaction(ctx, tx, id, body)
+	updatedTransaction, err := s.transactionRepo.UpdateTransaction(ctx, tx, userId, id, body)
 	if err != nil {
 		return models.Transaction{}, err
 	}
@@ -170,14 +170,14 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, id uuid.UUID
 // For an expense transaction,
 //   - Debit card's balance will increase
 //   - Credit card's balance will decrease
-func (s *TransactionService) DeleteTransaction(ctx context.Context, id uuid.UUID) error {
+func (s *TransactionService) DeleteTransaction(ctx context.Context, userId, id uuid.UUID) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	deletedTransaction, err := s.transactionRepo.DeleteTransaction(ctx, tx, id)
+	deletedTransaction, err := s.transactionRepo.DeleteTransaction(ctx, tx, userId, id)
 	if err != nil {
 		return err
 	}
@@ -207,8 +207,7 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, id uuid.UUID
 	return nil
 }
 
-// validateTransactionTime validates the transaction.
-// Transaction older than 2 weeks ago can't be created
+// validateTransactionTime validates the transaction. Transaction older than 2 weeks ago can't be created
 func validateTransactionTime(createdAt time.Time) error {
 	if createdAt.Before(time.Now().AddDate(0, 0, -13)) {
 		return models.ErrTransactionTooOld

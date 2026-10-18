@@ -19,6 +19,7 @@ func main() {
 	var db = setup.ConnectDB()
 
 	// Initialize repositories
+	authRepo := repositories.NewAuthRepo()
 	accountRepo := repositories.NewAccountRepo()
 	accountHistoryRepo := repositories.NewAccountHistoryRepo()
 	transactionRepo := repositories.NewTransactionRepo()
@@ -27,12 +28,14 @@ func main() {
 	budgetRepo := repositories.NewBudgetRepo()
 
 	// Dependency injection
+	authService := services.NewAuthService(db, authRepo)
 	accountService := services.NewAccountService(db, accountRepo, accountHistoryRepo, transactionRepo)
 	transactionService := services.NewTransactionService(db, transactionRepo, accountRepo)
 	billService := services.NewBillService(db, billRepo, accountRepo, transactionRepo)
 	summaryService := services.NewSummaryService(db, summaryRepo)
 	budgetService := services.NewBudgetService(db, budgetRepo, summaryRepo)
 
+	authController := controllers.NewAuthController(authService)
 	accountController := controllers.NewAccountController(accountService, summaryService)
 	transactionController := controllers.NewTransactionController(transactionService)
 	billController := controllers.NewBillController(billService)
@@ -43,7 +46,6 @@ func main() {
 	router := gin.Default()
 
 	// Logger
-	router.Use(gin.Logger())
 	log.SetPrefix("[APP] ")
 	log.SetOutput(gin.DefaultWriter)
 
@@ -59,6 +61,9 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	// Session-based authentication
+	router.Use(controllers.AuthMiddleware(authService))
+
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -66,6 +71,7 @@ func main() {
 		})
 	})
 
+	routes.RegisterAuthRoutes(router, authController)
 	routes.RegisterAccountRoutes(router, accountController)
 	routes.RegisterTransactionRoutes(router, transactionController)
 	routes.RegisterSummaryRoutes(router, summaryController)

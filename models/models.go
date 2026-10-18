@@ -24,6 +24,19 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
+type RegisterUserBody struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+}
+
+type LoginBody struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 type AccountType string
 
 const (

@@ -45,8 +45,8 @@ func (s *BillService) ListBills(ctx context.Context, userId uuid.UUID) ([]models
 }
 
 // CreateBill inserts the bill into the database and returns the nested bill
-func (s *BillService) CreateBill(ctx context.Context, body models.BillBody) (models.Bill, error) {
-	newBill, err := s.billRepo.InsertBill(ctx, s.db, body)
+func (s *BillService) CreateBill(ctx context.Context, userId uuid.UUID, body models.BillBody) (models.Bill, error) {
+	newBill, err := s.billRepo.InsertBill(ctx, s.db, userId, body)
 	if err != nil {
 		return models.Bill{}, err
 	}
@@ -57,10 +57,10 @@ func (s *BillService) CreateBill(ctx context.Context, body models.BillBody) (mod
 // UpdateBill modifies the bill info.
 // Change of account's Id means that a different account will be responsible for
 // paying the bill when it's due.
-func (s *BillService) UpdateBill(ctx context.Context, id uuid.UUID, body models.BillBody) (models.Bill, error) {
+func (s *BillService) UpdateBill(ctx context.Context, userId, id uuid.UUID, body models.BillBody) (models.Bill, error) {
 	var updatedBill models.Bill
 
-	updatedBill, err := s.billRepo.UpdateBill(ctx, s.db, id, body)
+	updatedBill, err := s.billRepo.UpdateBill(ctx, s.db, userId, id, body)
 	if err != nil {
 		return models.Bill{}, err
 	}
@@ -75,7 +75,7 @@ func (s *BillService) UpdateBill(ctx context.Context, id uuid.UUID, body models.
 //
 // The created transaction has the same account's Id, category, and amount as the bill.
 // The paying account's balance also updates to reflect the transaction.
-func (s *BillService) DeleteBill(ctx context.Context, id uuid.UUID, pay bool, recurring bool) error {
+func (s *BillService) DeleteBill(ctx context.Context, userId, id uuid.UUID, pay bool, recurring bool) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (s *BillService) DeleteBill(ctx context.Context, id uuid.UUID, pay bool, re
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Delete the bill, get the non-nested deleted bill
-	deletedBill, err := s.billRepo.DeleteBill(ctx, tx, id)
+	deletedBill, err := s.billRepo.DeleteBill(ctx, tx, userId, id)
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (s *BillService) DeleteBill(ctx context.Context, id uuid.UUID, pay bool, re
 			AmountCents: deletedBill.AmountCents,
 			CreatedAt:   time.Now(),
 		}
-		insertedTransaction, err := s.transactionRepo.InsertTransaction(ctx, tx, postTranBody)
+		insertedTransaction, err := s.transactionRepo.InsertTransaction(ctx, tx, userId, postTranBody)
 		if err != nil {
 			return err
 		}
@@ -125,7 +125,7 @@ func (s *BillService) DeleteBill(ctx context.Context, id uuid.UUID, pay bool, re
 			AmountCents: deletedBill.AmountCents,
 			DueDate:     deletedBill.DueDate.AddDate(0, 1, 0),
 		}
-		recurredBill, err := s.billRepo.InsertBill(ctx, tx, postBillBody)
+		recurredBill, err := s.billRepo.InsertBill(ctx, tx, userId, postBillBody)
 		if err != nil {
 			return err
 		}

@@ -155,7 +155,7 @@ func (c *CronService) UpdateHistory() error {
 		return errors.Join(errs...)
 	}
 
-	log.Printf("Done creating new history!\n")
+	log.Println("Done creating new history!")
 	return nil
 }
 
@@ -185,9 +185,9 @@ func (c *CronService) updateHistory(ctx context.Context, account models.Account,
 		if err != nil {
 			return err
 		}
-		log.Printf("New history created for account %s", account.ID)
+		log.Printf("New history created for account %s\n", account.ID)
 	} else {
-		log.Printf("No history created for account %s", account.ID)
+		log.Printf("No history created for account %s\n", account.ID)
 	}
 
 	// Delete outdated histories of account
@@ -195,7 +195,7 @@ func (c *CronService) updateHistory(ctx context.Context, account models.Account,
 	if err != nil {
 		return err
 	}
-	log.Printf("Deleted %d histories of account %s", numDeleted, account.ID)
+	log.Printf("Deleted %d histories of account %s\n", numDeleted, account.ID)
 
 	if err = tx.Commit(accCtx); err != nil {
 		return err
@@ -236,9 +236,9 @@ func (c *CronService) DeleteOutdatedTransactions() error {
 			log.Printf("Error while executing account %s\n", account.ID)
 			return err
 		}
-		log.Printf("Deleted %d outdated transactions of account %s", numDeleted, account.ID)
+		log.Printf("Deleted %d outdated transactions of account %s\n", numDeleted, account.ID)
 	}
 
-	log.Printf("Done deleting transactions!")
+	log.Println("Done deleting transactions!")
 	return nil
 }

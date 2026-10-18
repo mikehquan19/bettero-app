@@ -13,8 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-var UserID = uuid.MustParse("2b8ba95c-4f2f-422e-b9bb-ac0521eb6330")
-
 type AccountController struct {
 	accService     *services.AccountService
 	summaryService *services.SummaryService
@@ -34,7 +32,13 @@ func (a *AccountController) GetAccounts(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	accounts, err := a.accService.ListAccounts(ctx, UserID)
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+
+	accounts, err := a.accService.ListAccounts(ctx, userID)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -50,13 +54,18 @@ func (a *AccountController) GetAccount(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 
-	account, err := a.accService.GetAccount(ctx, id)
+	account, err := a.accService.GetAccount(ctx, userID, id)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
@@ -69,98 +78,6 @@ func (a *AccountController) GetAccount(c *gin.Context) {
 	respondSuccess(c, http.StatusOK, account)
 }
 
-// POST: /accounts
-//
-// Create new account of the user
-func (a *AccountController) PostAccounts(c *gin.Context) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	defer cancel()
-
-	var body models.PostAccountBody
-
-	if err := c.ShouldBindJSON(&body); err != nil {
-		respondError(c, http.StatusBadRequest, err)
-		return
-	}
-
-	newAccount, err := a.accService.CreateAccount(ctx, UserID, body)
-	if err != nil {
-		if errors.Is(err, models.ErrInvalidAccountBody) {
-			respondError(c, http.StatusBadRequest, err)
-			return
-		}
-		if errors.Is(err, models.ErrForeignKey) {
-			respondError(c, http.StatusNotFound, err)
-			return
-		}
-		respondError(c, http.StatusInternalServerError, err)
-		return
-	}
-
-	respondSuccess(c, http.StatusCreated, newAccount)
-}
-
-// PUT: /accounts/:id
-//
-// Update the information of the account (including the amount).
-func (a *AccountController) PutAccount(c *gin.Context) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	defer cancel()
-
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		respondError(c, http.StatusBadRequest, err)
-		return
-	}
-
-	var body models.PutAccountBody
-	if err := c.ShouldBindJSON(&body); err != nil {
-		respondError(c, http.StatusBadRequest, err)
-		return
-	}
-
-	updatedAccount, err := a.accService.UpdateAccount(ctx, id, body)
-	if err != nil {
-		if errors.Is(err, models.ErrInvalidAccountBody) {
-			respondError(c, http.StatusBadRequest, err)
-			return
-		}
-		if errors.Is(err, models.ErrNotFound) {
-			respondError(c, http.StatusNotFound, err)
-			return
-		}
-		respondError(c, http.StatusInternalServerError, err)
-		return
-	}
-
-	respondSuccess(c, http.StatusAccepted, updatedAccount)
-}
-
-// DELETE: /account/:id
-//
-// Delete the account with a given ID
-func (a *AccountController) DeleteAccount(c *gin.Context) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	defer cancel()
-
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		respondError(c, http.StatusBadRequest, err)
-		return
-	}
-
-	if err = a.accService.DeleteAccount(ctx, id); err != nil {
-		if errors.Is(err, models.ErrNotFound) {
-			respondError(c, http.StatusNotFound, err)
-			return
-		}
-		respondError(c, http.StatusInternalServerError, err)
-		return
-	}
-
-	respondSuccess(c, http.StatusAccepted, "Account deleted!")
-}
-
 // GET: /accounts/:id/transactions
 //
 // Return the paginated list of transactions of an account
@@ -168,6 +85,11 @@ func (a *AccountController) GetAccountTransactions(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
@@ -185,26 +107,31 @@ func (a *AccountController) GetAccountTransactions(c *gin.Context) {
 		return
 	}
 	// Either both dates are defined or nil
-	var dates [2]*time.Time
-	for i, end := range [2]string{"start", "end"} {
+	dates := map[string]*time.Time{"start": nil, "end": nil}
+	for end := range dates {
 		if c.Query(end) != "" {
 			date, err := time.Parse("2006-01-02", c.Query(end))
 			if err != nil {
 				respondError(c, http.StatusBadRequest, err)
 				return
 			}
-			dates[i] = &date
+			dates[end] = &date
 		}
 	}
+
 	filter := models.TransactionFilter{
 		Category:        models.TransactionCategory(c.Query("category")),
 		TranDescription: c.Query("description"),
-		CreatedAtFrom:   dates[0],
-		CreatedAtTo:     dates[1],
+		CreatedAtFrom:   dates["start"],
+		CreatedAtTo:     dates["end"],
 	}
 
-	total, transactions, err := a.accService.ListAccountTransactions(ctx, id, filter, int64(offset))
+	total, transactions, err := a.accService.ListAccountTransactions(ctx, userID, id, filter, int64(offset))
 	if err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			respondError(c, http.StatusNotFound, err)
+			return
+		}
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
@@ -224,14 +151,23 @@ func (a *AccountController) GetAccountHistories(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 
-	histories, err := a.accService.ListAccountHistories(ctx, id)
+	histories, err := a.accService.ListAccountHistories(ctx, userID, id)
 	if err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			respondError(c, http.StatusNotFound, err)
+			return
+		}
 		respondError(c, http.StatusInternalServerError, err)
 		return
 	}
@@ -239,13 +175,18 @@ func (a *AccountController) GetAccountHistories(c *gin.Context) {
 	respondSuccess(c, http.StatusOK, histories)
 }
 
-// GET: /accounts/:id
+// GET: /accounts/:id/summary
 //
 // Get the spending summary of the account
 func (a *AccountController) GetAccountSummary(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
@@ -255,6 +196,16 @@ func (a *AccountController) GetAccountSummary(c *gin.Context) {
 	dates, err := getSummaryDates(c)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
+		return
+	}
+
+	// Check if the account belongs to the user
+	if _, err = a.accService.GetAccount(ctx, userID, id); err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			respondError(c, http.StatusNotFound, err)
+		} else {
+			respondError(c, http.StatusInternalServerError, err)
+		}
 		return
 	}
 
@@ -283,4 +234,111 @@ func (a *AccountController) GetAccountSummary(c *gin.Context) {
 	}
 
 	respondSuccess(c, http.StatusOK, summary)
+}
+
+// POST: /accounts
+//
+// Create new account of the user
+func (a *AccountController) PostAccounts(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+
+	var body models.PostAccountBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		respondError(c, http.StatusBadRequest, err)
+		return
+	}
+
+	newAccount, err := a.accService.CreateAccount(ctx, userID, body)
+	if err != nil {
+		if errors.Is(err, models.ErrInvalidAccountBody) {
+			respondError(c, http.StatusBadRequest, err)
+			return
+		}
+		if errors.Is(err, models.ErrForeignKey) {
+			respondError(c, http.StatusNotFound, err)
+			return
+		}
+		respondError(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondSuccess(c, http.StatusCreated, newAccount)
+}
+
+// PUT: /accounts/:id
+//
+// Update the information of the account (including the amount).
+func (a *AccountController) PutAccount(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err)
+		return
+	}
+
+	var body models.PutAccountBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		respondError(c, http.StatusBadRequest, err)
+		return
+	}
+
+	updatedAccount, err := a.accService.UpdateAccount(ctx, userID, id, body)
+	if err != nil {
+		if errors.Is(err, models.ErrInvalidAccountBody) {
+			respondError(c, http.StatusBadRequest, err)
+			return
+		}
+		if errors.Is(err, models.ErrNotFound) {
+			respondError(c, http.StatusNotFound, err)
+			return
+		}
+		respondError(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondSuccess(c, http.StatusAccepted, updatedAccount)
+}
+
+// DELETE: /account/:id
+//
+// Delete the account with a given ID
+func (a *AccountController) DeleteAccount(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err)
+		return
+	}
+
+	if err = a.accService.DeleteAccount(ctx, userID, id); err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			respondError(c, http.StatusNotFound, err)
+			return
+		}
+		respondError(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondSuccess(c, http.StatusAccepted, "Account deleted!")
 }

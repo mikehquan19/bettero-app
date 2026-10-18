@@ -16,15 +16,17 @@ func NewAccountHistoryRepo() *AccountHistoryRepo {
 }
 
 // ListHistories returns list of balance history of the account over time
-func (r *AccountHistoryRepo) ListHistories(ctx context.Context, dbtx DBTX, accountId uuid.UUID) ([]models.AccountHistory, error) {
+func (r *AccountHistoryRepo) ListHistories(ctx context.Context, dbtx DBTX, userId, accountId uuid.UUID) ([]models.AccountHistory, error) {
 	var histories []models.AccountHistory
 
 	const listHistorySQL = `
-	SELECT * FROM account_histories
-	WHERE account_id = $1 
-	ORDER BY logged_time ASC;`
+	SELECT h.*
+	FROM account_histories h
+	JOIN accounts a ON a.id = h.account_id
+	WHERE a.user_id = $1 AND h.account_id = $2
+	ORDER BY h.logged_time ASC;`
 
-	rows, err := dbtx.Query(ctx, listHistorySQL, accountId)
+	rows, err := dbtx.Query(ctx, listHistorySQL, userId, accountId)
 	if err != nil {
 		return nil, err
 	}

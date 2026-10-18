@@ -6,10 +6,14 @@ import (
 )
 
 var (
-	ErrNotFound          = errors.New("resource not found")
-	ErrForeignKey        = errors.New("references a non-existent resource")
-	ErrTransactionTooOld = errors.New("transaction too old to be taken actions on")
+	ErrNotFound           = errors.New("resource not found")
+	ErrForeignKey         = errors.New("references a non-existent resource")
+	ErrInvalidCredentials = errors.New("invalid username or password")
+	ErrUserExists         = errors.New("username or email already exists")
+	ErrInvalidUserBody    = errors.New("invalid user body")
 )
+
+var ErrTransactionTooOld = errors.New("transaction too old to be taken actions on")
 
 var (
 	ErrInvalidAccountBody          = errors.New("invalid account body")

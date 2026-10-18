@@ -31,12 +31,18 @@ func (t *TransactionController) SearchTransactions(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+
 	if c.Query("q") == "" {
 		respondError(c, http.StatusBadRequest, fmt.Errorf("q must be specified"))
 		return
 	}
 
-	suggestions, err := t.tranService.ListSuggestions(ctx, UserID, c.Query("q"))
+	suggestions, err := t.tranService.ListSuggestions(ctx, userID, c.Query("q"))
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -51,6 +57,12 @@ func (t *TransactionController) GetTransactions(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+
 	offset, err := getOffset(c)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
@@ -63,27 +75,28 @@ func (t *TransactionController) GetTransactions(c *gin.Context) {
 		return
 	}
 	// Either both dates are defined or nil
-	var dates [2]*time.Time
-	for i, end := range [2]string{"start", "end"} {
+	dates := map[string]*time.Time{"start": nil, "end": nil}
+	for end := range dates {
 		if c.Query(end) != "" {
 			date, err := time.Parse("2006-01-02", c.Query(end))
 			if err != nil {
 				respondError(c, http.StatusBadRequest, err)
 				return
 			}
-			dates[i] = &date
+			dates[end] = &date
 		}
 	}
+
 	filter := models.TransactionFilter{
 		Category:        models.TransactionCategory(c.Query("category")),
 		TranDescription: c.Query("description"),
 		Merchant:        c.Query("merchant"),
-		CreatedAtFrom:   dates[0],
-		CreatedAtTo:     dates[1],
+		CreatedAtFrom:   dates["start"],
+		CreatedAtTo:     dates["end"],
 	}
 
 	// Filter transactions based on category, and dates
-	total, transactions, err := t.tranService.FilterTransactions(ctx, UserID, filter, offset)
+	total, transactions, err := t.tranService.FilterTransactions(ctx, userID, filter, offset)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, err)
 		return
@@ -104,13 +117,19 @@ func (t *TransactionController) PostTransaction(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+
 	var body models.PostTransactionBody
 	if err := c.ShouldBindJSON(&body); err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 
-	newTransaction, err := t.tranService.CreateTransaction(ctx, body)
+	newTransaction, err := t.tranService.CreateTransaction(ctx, userID, body)
 	if err != nil {
 		if errors.Is(err, models.ErrForeignKey) {
 			respondError(c, http.StatusNotFound, err)
@@ -134,6 +153,11 @@ func (t *TransactionController) PutTransaction(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
@@ -146,7 +170,7 @@ func (t *TransactionController) PutTransaction(c *gin.Context) {
 		return
 	}
 
-	updatedTran, err := t.tranService.UpdateTransaction(ctx, id, body)
+	updatedTran, err := t.tranService.UpdateTransaction(ctx, userID, id, body)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
@@ -170,13 +194,18 @@ func (t *TransactionController) DeleteTransaction(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 
-	if err := t.tranService.DeleteTransaction(ctx, id); err != nil {
+	if err := t.tranService.DeleteTransaction(ctx, userID, id); err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
 			return

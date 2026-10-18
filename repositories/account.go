@@ -70,10 +70,10 @@ func (r *AccountRepo) FilterAccounts(ctx context.Context, dbtx DBTX, status Stat
 }
 
 // GetAccount gets the account with given ID
-func (r *AccountRepo) GetAccount(ctx context.Context, dbtx DBTX, id uuid.UUID) (models.Account, error) {
+func (r *AccountRepo) GetAccount(ctx context.Context, dbtx DBTX, userId, id uuid.UUID) (models.Account, error) {
 	var account models.Account
 
-	row := dbtx.QueryRow(ctx, "SELECT * FROM accounts WHERE id = $1;", id)
+	row := dbtx.QueryRow(ctx, "SELECT * FROM accounts WHERE user_id = $1 AND id = $2;", userId, id)
 	if err := scanAccount(row, &account); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Account{}, models.ErrNotFound
@@ -88,7 +88,7 @@ func (r *AccountRepo) GetAccount(ctx context.Context, dbtx DBTX, id uuid.UUID) (
 func (r *AccountRepo) ListAccountTransactions(
 	ctx context.Context,
 	db *pgxpool.Pool,
-	id uuid.UUID,
+	userId, id uuid.UUID,
 	filter models.TransactionFilter,
 	offset int64,
 ) (int, []models.Transaction, error) {
@@ -101,10 +101,13 @@ func (r *AccountRepo) ListAccountTransactions(
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	condition, args := buildTransactionFilter("t.account_id = $1", id, filter)
+	condition, args := buildTransactionFilter("a.user_id = $1", userId, filter)
+	accountArg := len(args) + 1
+	condition += fmt.Sprintf(" AND t.account_id = $%d", accountArg)
+	args = append(args, id)
 
 	// Fetch the total number of transactions
-	countTransactionSQL := fmt.Sprintf(`SELECT COUNT(*) FROM transactions t WHERE %s;`, condition)
+	countTransactionSQL := fmt.Sprintf(`SELECT COUNT(*) FROM transactions t JOIN accounts a ON t.account_id = a.id WHERE %s;`, condition)
 	row := tx.QueryRow(ctx, countTransactionSQL, args...)
 	if err := row.Scan(&transactionCount); err != nil {
 		return -1, nil, err
@@ -112,8 +115,8 @@ func (r *AccountRepo) ListAccountTransactions(
 
 	// List the page of transactions from this filter
 	listTransactionSQL := fmt.Sprintf(`
-	SELECT 
-		t.id, 
+	SELECT
+		t.id,
 		json_build_object(
 			'id', a.id,
 			'account_number', a.account_number,
@@ -121,16 +124,16 @@ func (r *AccountRepo) ListAccountTransactions(
 			'institution', a.institution,
 			'type', a.type
 		) AS account,
-		t.merchant, 
+		t.merchant,
 		t.description,
-		t.category, 
+		t.category,
 		t.amount_cents,
-		t.created_at, 
+		t.created_at,
 		t.updated_at
 	FROM transactions t
 	JOIN accounts a ON t.account_id = a.id
 	WHERE %s
-	ORDER BY t.created_at DESC 
+	ORDER BY t.created_at DESC
 	LIMIT 20 OFFSET $%d;`, condition, len(args)+1)
 	args = append(args, offset)
 
@@ -161,11 +164,11 @@ func (r *AccountRepo) InsertAccount(
 
 	const insertAccountSQL = `
 	INSERT INTO accounts (
-		user_id, 
+		user_id,
 		account_number,
 		name,
-		institution, 
-		type, 
+		institution,
+		type,
 		balance_cents,
 		credit_limit_cents,
 		next_due
@@ -197,23 +200,24 @@ func (r *AccountRepo) InsertAccount(
 func (r *AccountRepo) UpdateAccount(
 	ctx context.Context,
 	dbtx DBTX,
-	id uuid.UUID,
+	userId, id uuid.UUID,
 	body models.PutAccountBody,
 ) (models.Account, error) {
 	var updatedAccount models.Account
 
 	updateAccountSQL := `
 	UPDATE accounts
-	SET account_number = $2,
-		name = $3,
-		institution = $4, 
-		balance_cents = $5,
-		credit_limit_cents = $6,
-		next_due = $7, 
+	SET account_number = $3,
+		name = $4,
+		institution = $5,
+		balance_cents = $6,
+		credit_limit_cents = $7,
+		next_due = $8,
 		updated_at = NOW()
-	WHERE id = $1 RETURNING *;`
+	WHERE user_id = $1 AND id = $2 RETURNING *;`
 
 	row := dbtx.QueryRow(ctx, updateAccountSQL,
+		userId,
 		id,
 		body.AccountNumber,
 		body.Name,
@@ -294,7 +298,7 @@ func (r *AccountRepo) FlagAccount(
 
 	const flagAccountSQL = `
 	UPDATE accounts
-	SET discrepancy_flagged = TRUE, 
+	SET discrepancy_flagged = TRUE,
 		discrepancy_amount_cents = $2
 	WHERE id = $1
 	RETURNING *;`
@@ -311,13 +315,13 @@ func (r *AccountRepo) FlagAccount(
 }
 
 // Update the account's data and returns the deleted account
-func (r *AccountRepo) DeleteAccount(ctx context.Context, dbtx DBTX, id uuid.UUID) (models.Account, error) {
+func (r *AccountRepo) DeleteAccount(ctx context.Context, dbtx DBTX, userId, id uuid.UUID) (models.Account, error) {
 	var deletedAccount models.Account
 
 	const deleteAccountSQL = `
-	DELETE FROM accounts WHERE id = $1 RETURNING *;
+	DELETE FROM accounts WHERE user_id = $1 AND id = $2 RETURNING *;
 	`
-	row := dbtx.QueryRow(ctx, deleteAccountSQL, id)
+	row := dbtx.QueryRow(ctx, deleteAccountSQL, userId, id)
 	if err := scanAccount(row, &deletedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Account{}, models.ErrNotFound

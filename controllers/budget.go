@@ -24,9 +24,15 @@ func (b *BudgetController) GetBudgetPlan(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+
 	intervalType := models.IntervalType(c.Param("intervalType"))
 
-	budgetResponse, err := b.budgetService.GetBudgetAnalysis(ctx, UserID, intervalType)
+	budgetResponse, err := b.budgetService.GetBudgetAnalysis(ctx, userID, intervalType)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
@@ -44,13 +50,19 @@ func (b *BudgetController) PostBudgetPlan(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+
 	var body models.PostBudgetPlanBody
 	if err := c.ShouldBindJSON(&body); err != nil {
 		respondError(c, http.StatusBadRequest, err)
 		return
 	}
 
-	newBudgetPlan, err := b.budgetService.CreateBudgetPlan(ctx, UserID, body)
+	newBudgetPlan, err := b.budgetService.CreateBudgetPlan(ctx, userID, body)
 	if err != nil {
 		if errors.Is(err, models.ErrInvalidBudgetBody) {
 			respondError(c, http.StatusBadRequest, err)
@@ -72,6 +84,12 @@ func (b *BudgetController) PutBudgetPlan(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+
 	intervalType := models.IntervalType(c.Param("intervalType"))
 
 	var body models.PutBudgetPlanBody
@@ -80,7 +98,7 @@ func (b *BudgetController) PutBudgetPlan(c *gin.Context) {
 		return
 	}
 
-	updatedBudgetPlan, err := b.budgetService.UpdateBudgetPlan(ctx, UserID, intervalType, body)
+	updatedBudgetPlan, err := b.budgetService.UpdateBudgetPlan(ctx, userID, intervalType, body)
 	if err != nil {
 		if errors.Is(err, models.ErrInvalidBudgetBody) {
 			respondError(c, http.StatusBadRequest, err)
@@ -102,9 +120,15 @@ func (b *BudgetController) DeleteBudgetPlan(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		abortAuthentication(c, err)
+		return
+	}
+
 	intervalType := models.IntervalType(c.Param("intervalType"))
 
-	_, err := b.budgetService.DeleteBudgetPlan(ctx, UserID, intervalType)
+	_, err = b.budgetService.DeleteBudgetPlan(ctx, userID, intervalType)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
 			respondError(c, http.StatusNotFound, err)
