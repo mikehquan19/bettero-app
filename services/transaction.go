@@ -8,24 +8,26 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Transaction Service
 type TransactionService struct {
-	db              *pgxpool.Pool
-	transactionRepo *repositories.TransactionRepo
-	accountRepo     *repositories.AccountRepo
+	db              repositories.DBTX
+	unitOfWork      repositories.UnitOfWork
+	transactionRepo TransactionRepository
+	accountRepo     AccountRepository
 }
 
 // Generate a new transaction service
 func NewTransactionService(
-	database *pgxpool.Pool,
-	transactionRepo *repositories.TransactionRepo,
-	accountRepo *repositories.AccountRepo,
+	database repositories.DBTX,
+	unitOfWork repositories.UnitOfWork,
+	transactionRepo TransactionRepository,
+	accountRepo AccountRepository,
 ) *TransactionService {
 	return &TransactionService{
 		db:              database,
+		unitOfWork:      unitOfWork,
 		transactionRepo: transactionRepo,
 		accountRepo:     accountRepo,
 	}
@@ -38,11 +40,24 @@ func (s *TransactionService) FilterTransactions(
 	filter models.TransactionFilter,
 	offset int,
 ) (int, []models.Transaction, error) {
-	count, transactions, err := s.transactionRepo.FilterTransactions(ctx, s.db, userId, filter, offset)
-	if err != nil {
+	var count int
+	var transactions []models.Transaction
+
+	if err := s.unitOfWork.Do(ctx, func(tx repositories.DBTX) error {
+		var uowErr error
+
+		count, uowErr = s.transactionRepo.CountTransactions(ctx, tx, userId, filter)
+		if uowErr != nil {
+			return uowErr
+		}
+
+		transactions, uowErr = s.transactionRepo.FilterTransactions(ctx, tx, userId, filter, offset)
+		return uowErr
+	}); err != nil {
 		return -1, nil, err
 	}
-	return count, transactions, err
+
+	return count, transactions, nil
 }
 
 // ListSuggestions returns the list of transaction description
@@ -64,37 +79,37 @@ func (s *TransactionService) ListSuggestions(ctx context.Context, userId uuid.UU
 //   - Debit card's balance will decrease
 //   - Credit card's balance will increase
 func (s *TransactionService) CreateTransaction(ctx context.Context, userId uuid.UUID, body models.PostTransactionBody) (models.Transaction, error) {
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return models.Transaction{}, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
 	if err := validateTransactionTime(body.CreatedAt); err != nil {
 		return models.Transaction{}, err
 	}
 
-	// Insert the new transaction data
-	newTransaction, err := s.transactionRepo.InsertTransaction(ctx, tx, userId, body)
-	if err != nil {
-		return models.Transaction{}, err
-	}
+	var newTransaction models.Transaction
 
-	// Update the account balance data
-	netChange := newTransaction.AmountCents
-	if newTransaction.Category == models.Income {
-		netChange = -newTransaction.AmountCents
-	}
+	if err := s.unitOfWork.Do(ctx, func(tx repositories.DBTX) error {
+		var uowErr error
 
-	accountId := newTransaction.Account.ID
+		// Insert the new transaction data
+		newTransaction, uowErr = s.transactionRepo.InsertTransaction(ctx, tx, userId, body)
+		if uowErr != nil {
+			return uowErr
+		}
 
-	balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, netChange)
-	if err != nil {
-		return models.Transaction{}, err
-	}
-	log.Printf("Balance changes to: %d cents\n", balance)
+		// Update the account balance data
+		netChange := newTransaction.AmountCents
+		if newTransaction.Category == models.Income {
+			netChange = -newTransaction.AmountCents
+		}
 
-	if err = tx.Commit(ctx); err != nil {
+		accountId := newTransaction.Account.ID
+
+		balance, uowErr := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, netChange)
+		if uowErr != nil {
+			return uowErr
+		}
+		log.Printf("Balance changes to: %d cents\n", balance)
+
+		return nil
+	}); err != nil {
 		return models.Transaction{}, err
 	}
 
@@ -110,51 +125,50 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, userId uuid.
 //   - previous effect: amount if the transaction with previous info was deleted
 //   - current effect: amount if the transaction with updatedTransaction info was inserted
 func (s *TransactionService) UpdateTransaction(ctx context.Context, userId, id uuid.UUID, body models.PutTransactionBody) (models.Transaction, error) {
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return models.Transaction{}, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	var updatedTransaction models.Transaction
 
-	// Get previous account before updating
-	previousData, err := s.transactionRepo.GetTransaction(ctx, tx, userId, id)
-	if err != nil {
-		return models.Transaction{}, err
-	}
+	if err := s.unitOfWork.Do(ctx, func(tx repositories.DBTX) error {
+		var uowErr error
 
-	if err := validateTransactionTime(previousData.CreatedAt); err != nil {
-		return models.Transaction{}, err
-	}
-
-	// Update the transaction
-	updatedTransaction, err := s.transactionRepo.UpdateTransaction(ctx, tx, userId, id, body)
-	if err != nil {
-		return models.Transaction{}, err
-	}
-
-	// Compute the amount to update the account balance (if balance change)
-	if previousData.AmountCents != updatedTransaction.AmountCents ||
-		previousData.Category != updatedTransaction.Category {
-		prevChange := previousData.AmountCents
-		if previousData.Category == models.Income {
-			prevChange = -previousData.AmountCents
+		// Get previous account before updating
+		previousData, uowErr := s.transactionRepo.GetTransaction(ctx, tx, userId, id)
+		if uowErr != nil {
+			return uowErr
 		}
 
-		currChange := updatedTransaction.AmountCents
-		if updatedTransaction.Category == models.Income {
-			currChange = -updatedTransaction.AmountCents
+		if uowErr = validateTransactionTime(previousData.CreatedAt); uowErr != nil {
+			return uowErr
 		}
 
-		accountId := updatedTransaction.Account.ID
-
-		balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, currChange-prevChange)
-		if err != nil {
-			return models.Transaction{}, err
+		// Update the transaction
+		updatedTransaction, uowErr = s.transactionRepo.UpdateTransaction(ctx, tx, userId, id, body)
+		if uowErr != nil {
+			return uowErr
 		}
-		log.Printf("Balance changes to: %d cents\n", balance)
-	}
 
-	if err = tx.Commit(ctx); err != nil {
+		// Compute the amount to update the account balance (if balance change)
+		if previousData.AmountCents != updatedTransaction.AmountCents || previousData.Category != updatedTransaction.Category {
+			prevChange := previousData.AmountCents
+			if previousData.Category == models.Income {
+				prevChange = -previousData.AmountCents
+			}
+
+			currChange := updatedTransaction.AmountCents
+			if updatedTransaction.Category == models.Income {
+				currChange = -updatedTransaction.AmountCents
+			}
+
+			accountId := updatedTransaction.Account.ID
+
+			balance, uowErr := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, currChange-prevChange)
+			if uowErr != nil {
+				return uowErr
+			}
+			log.Printf("Balance changes to: %d cents\n", balance)
+		}
+
+		return nil
+	}); err != nil {
 		return models.Transaction{}, err
 	}
 
@@ -171,43 +185,44 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, userId, id u
 //   - Debit card's balance will increase
 //   - Credit card's balance will decrease
 func (s *TransactionService) DeleteTransaction(ctx context.Context, userId, id uuid.UUID) error {
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	var deletedTransaction models.Transaction
 
-	deletedTransaction, err := s.transactionRepo.DeleteTransaction(ctx, tx, userId, id)
-	if err != nil {
-		return err
-	}
+	if err := s.unitOfWork.Do(ctx, func(tx repositories.DBTX) error {
+		var uowErr error
 
-	if err := validateTransactionTime(deletedTransaction.CreatedAt); err != nil {
-		return err
-	}
+		deletedTransaction, uowErr = s.transactionRepo.DeleteTransaction(ctx, tx, userId, id)
+		if uowErr != nil {
+			return uowErr
+		}
 
-	// Reverse the effect of creating the transaction
-	netChange := -deletedTransaction.AmountCents
-	if deletedTransaction.Category == models.Income {
-		netChange = deletedTransaction.AmountCents
-	}
+		if uowErr = validateTransactionTime(deletedTransaction.CreatedAt); uowErr != nil {
+			return uowErr
+		}
 
-	accountId := deletedTransaction.Account.ID
+		// Reverse the effect of creating the transaction
+		netChange := -deletedTransaction.AmountCents
+		if deletedTransaction.Category == models.Income {
+			netChange = deletedTransaction.AmountCents
+		}
 
-	balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, netChange)
-	if err != nil {
-		return err
-	}
-	log.Printf("Balance changes to: %d cents\n", balance)
+		accountId := deletedTransaction.Account.ID
 
-	if err = tx.Commit(ctx); err != nil {
+		balance, uowErr := s.accountRepo.UpdateAccountBalance(ctx, tx, accountId, netChange)
+		if uowErr != nil {
+			return uowErr
+		}
+		log.Printf("Balance changes to: %d cents\n", balance)
+
+		return nil
+	}); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// validateTransactionTime validates the transaction. Transaction older than 2 weeks ago can't be created
+// validateTransactionTime validates the transaction.
+// Transaction older than 2 weeks ago can't be created
 func validateTransactionTime(createdAt time.Time) error {
 	if createdAt.Before(time.Now().AddDate(0, 0, -13)) {
 		return models.ErrTransactionTooOld

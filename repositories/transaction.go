@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type TransactionRepo struct{}
@@ -18,36 +17,39 @@ func NewTransactionRepo() *TransactionRepo {
 	return &TransactionRepo{}
 }
 
-// FilterTransactions returns the list of paginated transactions of the user
-func (r *TransactionRepo) FilterTransactions(
+// CountTransactions returns the number of a user's transactions that match the filter.
+func (r *TransactionRepo) CountTransactions(
 	ctx context.Context,
-	db *pgxpool.Pool,
+	dbtx DBTX,
 	userId uuid.UUID,
 	filter models.TransactionFilter,
-	offset int,
-) (int, []models.Transaction, error) {
+) (int, error) {
 	var transactionCount int
-	var transactions []models.Transaction
-
-	tx, err := db.Begin(ctx)
-	if err != nil {
-		return -1, nil, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
 
 	condition, args := buildTransactionFilter("a.user_id = $1", userId, filter)
 
-	// Fetch the total number of transactions
 	countTransactionSQL := fmt.Sprintf(`
 	SELECT COUNT(*)
-	FROM transactions t
-	JOIN accounts a ON t.account_id = a.id
+	FROM transactions t JOIN accounts a ON t.account_id = a.id
 	WHERE %s;`, condition)
 
-	row := tx.QueryRow(ctx, countTransactionSQL, args...)
+	row := dbtx.QueryRow(ctx, countTransactionSQL, args...)
 	if err := row.Scan(&transactionCount); err != nil {
-		return -1, nil, err
+		return -1, err
 	}
+
+	return transactionCount, nil
+}
+
+// FilterTransactions returns the list of paginated transactions of the user
+func (r *TransactionRepo) FilterTransactions(
+	ctx context.Context,
+	dbtx DBTX,
+	userId uuid.UUID,
+	filter models.TransactionFilter,
+	offset int,
+) ([]models.Transaction, error) {
+	condition, args := buildTransactionFilter("a.user_id = $1", userId, filter)
 
 	// List the page of transactions from this filter
 	// TODO: Don't use OFFSET, change to a more scalable approach
@@ -74,20 +76,12 @@ func (r *TransactionRepo) FilterTransactions(
 	LIMIT 20 OFFSET $%d;`, condition, len(args)+1)
 	args = append(args, offset)
 
-	rows, err := tx.Query(ctx, listTransactionSQL, args...)
+	rows, err := dbtx.Query(ctx, listTransactionSQL, args...)
 	if err != nil {
-		return -1, nil, err
-	}
-	transactions, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Transaction])
-	if err != nil {
-		return -1, nil, err
+		return nil, err
 	}
 
-	if err = tx.Commit(ctx); err != nil {
-		return -1, nil, err
-	}
-
-	return transactionCount, transactions, err
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Transaction])
 }
 
 // Get the transaction with nested account data of a given id
@@ -132,25 +126,16 @@ func (r *TransactionRepo) ListSuggestions(
 	userId uuid.UUID,
 	keyword string,
 ) ([]models.Suggestion, error) {
-	var suggestions []models.Suggestion
 
-	tx, err := dbtx.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	// Set the threshold per query since this is session-scoped
-	// NOTE: Keep low enough so it can be diverse, but also high enough
-	// so it doesn't return completely unrelated result
-	_, err = tx.Exec(ctx, "SET pg_trgm.similarity_threshold = 0.2;")
-	if err != nil {
-		return nil, err
-	}
-
-	autocompleteSQL := `
+	// NOTE: Keep similarity score low enough so it can be diverse,
+	// but also high enough so it doesn't return completely unrelated result
+	const autocompleteSQL = `
+	WITH settings AS MATERIALIZED (
+		SELECT set_config('pg_trgm.similarity_threshold', '0.2', true)
+	)
 	SELECT type, name
-	FROM (
+	FROM settings
+	CROSS JOIN LATERAL (
 		SELECT DISTINCT
 			'description' AS type,
 			t.description AS name,
@@ -168,24 +153,16 @@ func (r *TransactionRepo) ListSuggestions(
 		FROM transactions t
 		JOIN accounts a ON t.account_id = a.id
 		WHERE t.merchant % $2 AND a.user_id = $1
-	)
+	) AS suggestions
 	ORDER BY score DESC
 	LIMIT 10;`
 
-	rows, err := tx.Query(ctx, autocompleteSQL, userId, keyword)
-	if err != nil {
-		return nil, err
-	}
-	suggestions, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Suggestion])
+	rows, err := dbtx.Query(ctx, autocompleteSQL, userId, keyword)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-
-	return suggestions, nil
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Suggestion])
 }
 
 // InsertTransaction inserts the transaction, and returns the inserted transaction

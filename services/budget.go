@@ -11,18 +11,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Account Service
 type BudgetService struct {
-	db          *pgxpool.Pool
-	budgetRepo  *repositories.BudgetRepo
-	summaryRepo *repositories.SummaryRepo
+	db          repositories.DBTX
+	budgetRepo  BudgetRepository
+	summaryRepo SummaryRepository
 }
 
 // Generate a new account service
-func NewBudgetService(db *pgxpool.Pool, budgetRepo *repositories.BudgetRepo, summaryRepo *repositories.SummaryRepo) *BudgetService {
+func NewBudgetService(db repositories.DBTX, budgetRepo BudgetRepository, summaryRepo SummaryRepository) *BudgetService {
 	return &BudgetService{
 		db:          db,
 		budgetRepo:  budgetRepo,

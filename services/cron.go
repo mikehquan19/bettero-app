@@ -11,25 +11,27 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type CronService struct {
-	db          *pgxpool.Pool
-	accRepo     repositories.AccountRepo
-	accHistRepo repositories.AccountHistoryRepo
-	tranRepo    repositories.TransactionRepo
+	db          repositories.DBTX
+	unitOfWork  repositories.UnitOfWork
+	accRepo     CronAccountRepository
+	accHistRepo CronAccountHistoryRepository
+	tranRepo    CronTransactionRepository
 }
 
 // Initialize the new cron service
 func NewCronService(
-	db *pgxpool.Pool,
-	accRepo repositories.AccountRepo,
-	accHistRepo repositories.AccountHistoryRepo,
-	tranRepo repositories.TransactionRepo,
+	db repositories.DBTX,
+	unitOfWork repositories.UnitOfWork,
+	accRepo CronAccountRepository,
+	accHistRepo CronAccountHistoryRepository,
+	tranRepo CronTransactionRepository,
 ) *CronService {
 	return &CronService{
 		db:          db,
+		unitOfWork:  unitOfWork,
 		accRepo:     accRepo,
 		accHistRepo: accHistRepo,
 		tranRepo:    tranRepo,
@@ -100,39 +102,31 @@ func (c *CronService) validate(ctx context.Context, account models.Account) erro
 	accCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	tx, err := c.db.Begin(accCtx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(accCtx) //nolint:errcheck
-
-	// Validate the account and flag it if there's discrepancy
-	// Get the latest balance history and sum of all transactions from the time
-	latestHist, err := c.accHistRepo.GetLatestHistory(accCtx, tx, account.ID)
-	if err != nil {
-		return err
-	}
-	sum, err := c.tranRepo.GetTransactionSum(accCtx, tx, account.ID, latestHist.LoggedTime)
-	if err != nil {
-		return err
-	}
-
-	discrepancy := calculateDiscrepancy(account, latestHist, sum)
-	if discrepancy != 0 {
-		flaggedAccount, err := c.accRepo.FlagAccount(accCtx, tx, account.ID, discrepancy)
-		if err != nil {
-			return err
+	return c.unitOfWork.Do(accCtx, func(tx repositories.DBTX) error {
+		// Validate the account and flag it if there's discrepancy.
+		// Get the latest balance history and sum of all transactions from that time.
+		latestHist, uowErr := c.accHistRepo.GetLatestHistory(accCtx, tx, account.ID)
+		if uowErr != nil {
+			return uowErr
 		}
-		log.Printf("Account %s has been flagged!\n", flaggedAccount.ID)
-	} else {
-		log.Printf("Account %s is OK!\n", account.ID)
-	}
+		sum, uowErr := c.tranRepo.GetTransactionSum(accCtx, tx, account.ID, latestHist.LoggedTime)
+		if uowErr != nil {
+			return uowErr
+		}
 
-	if err = tx.Commit(accCtx); err != nil {
-		return err
-	}
+		discrepancy := calculateDiscrepancy(account, latestHist, sum)
+		if discrepancy != 0 {
+			flaggedAccount, uowErr := c.accRepo.FlagAccount(accCtx, tx, account.ID, discrepancy)
+			if uowErr != nil {
+				return uowErr
+			}
+			log.Printf("Account %s has been flagged!\n", flaggedAccount.ID)
+		} else {
+			log.Printf("Account %s is OK!\n", account.ID)
+		}
 
-	return nil
+		return nil
+	})
 }
 
 // UpdateHistory will create the new history of account whose latest history is past 2 weeks,
@@ -164,44 +158,36 @@ func (c *CronService) updateHistory(ctx context.Context, account models.Account,
 	accCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	tx, err := c.db.Begin(accCtx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(accCtx) //nolint:errcheck
-
-	latestHist, err := c.accHistRepo.GetLatestHistory(accCtx, tx, account.ID)
-	if err != nil {
-		return err
-	}
-
-	// Create the account history every month
-	if shouldCreateHistory(latestHist, now) {
-		_, err := c.accHistRepo.InsertHistory(accCtx, tx, models.PostAccHistBody{
-			AccountID:    account.ID,
-			LoggedTime:   now,
-			BalanceCents: account.BalanceCents,
-		})
-		if err != nil {
-			return err
+	return c.unitOfWork.Do(accCtx, func(tx repositories.DBTX) error {
+		latestHist, uowErr := c.accHistRepo.GetLatestHistory(accCtx, tx, account.ID)
+		if uowErr != nil {
+			return uowErr
 		}
-		log.Printf("New history created for account %s\n", account.ID)
-	} else {
-		log.Printf("No history created for account %s\n", account.ID)
-	}
 
-	// Delete outdated histories of account
-	numDeleted, err := c.accHistRepo.DeleteOutdatedHistories(accCtx, tx, account.ID)
-	if err != nil {
-		return err
-	}
-	log.Printf("Deleted %d histories of account %s\n", numDeleted, account.ID)
+		// Create the account history every month
+		if shouldCreateHistory(latestHist, now) {
+			_, uowErr = c.accHistRepo.InsertHistory(accCtx, tx, models.PostAccHistBody{
+				AccountID:    account.ID,
+				LoggedTime:   now,
+				BalanceCents: account.BalanceCents,
+			})
+			if uowErr != nil {
+				return uowErr
+			}
+			log.Printf("New history created for account %s\n", account.ID)
+		} else {
+			log.Printf("No history created for account %s\n", account.ID)
+		}
 
-	if err = tx.Commit(accCtx); err != nil {
-		return err
-	}
+		// Delete outdated histories of account
+		numDeleted, uowErr := c.accHistRepo.DeleteOutdatedHistories(accCtx, tx, account.ID)
+		if uowErr != nil {
+			return uowErr
+		}
+		log.Printf("Deleted %d histories of account %s\n", numDeleted, account.ID)
 
-	return nil
+		return nil
+	})
 }
 
 func calculateDiscrepancy(

@@ -9,26 +9,28 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Account Service
 type AccountService struct {
-	db                 *pgxpool.Pool
-	accountRepo        *repositories.AccountRepo
-	accountHistoryRepo *repositories.AccountHistoryRepo
-	transactionRepo    *repositories.TransactionRepo
+	db                 repositories.DBTX
+	unitOfWork         repositories.UnitOfWork
+	accountRepo        AccountRepository
+	accountHistoryRepo AccountHistoryRepository
+	transactionRepo    TransactionRepository
 }
 
 // Generate a new account service
 func NewAccountService(
-	db *pgxpool.Pool,
-	accountRepo *repositories.AccountRepo,
-	accountHistoryRepo *repositories.AccountHistoryRepo,
-	transactionRepo *repositories.TransactionRepo,
+	db repositories.DBTX,
+	unitOfWork repositories.UnitOfWork,
+	accountRepo AccountRepository,
+	accountHistoryRepo AccountHistoryRepository,
+	transactionRepo TransactionRepository,
 ) *AccountService {
 	return &AccountService{
 		db:                 db,
+		unitOfWork:         unitOfWork,
 		accountRepo:        accountRepo,
 		accountHistoryRepo: accountHistoryRepo,
 		transactionRepo:    transactionRepo,
@@ -62,11 +64,24 @@ func (s *AccountService) ListAccountTransactions(
 	filter models.TransactionFilter,
 	offset int64,
 ) (int, []models.Transaction, error) {
-	count, transactions, err := s.accountRepo.ListAccountTransactions(ctx, s.db, userId, id, filter, offset)
-	if err != nil {
+	var count int
+	var transactions []models.Transaction
+
+	// Return the combination of count and list of transactions from the filter
+	if err := s.unitOfWork.Do(ctx, func(tx repositories.DBTX) error {
+		var uowErr error
+
+		count, uowErr = s.accountRepo.CountAccTransactions(ctx, tx, userId, id, filter)
+		if uowErr != nil {
+			return uowErr
+		}
+
+		transactions, uowErr = s.accountRepo.ListAccTransactions(ctx, tx, userId, id, filter, offset)
+		return uowErr
+	}); err != nil {
 		return -1, nil, err
 	}
-	return count, transactions, err
+	return count, transactions, nil
 }
 
 // ListHistories returns the list of balance histories of the account
@@ -85,37 +100,37 @@ func (s *AccountService) CreateAccount(ctx context.Context, userId uuid.UUID, bo
 		return models.Account{}, err
 	}
 
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return models.Account{}, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	var newAccount models.Account
 
-	newAccount, err := s.accountRepo.InsertAccount(ctx, tx, userId, body)
-	if err != nil {
-		// If the account references a non-existent user, it returns a custom not found error.
-		return models.Account{}, err
-	}
+	if err := s.unitOfWork.Do(ctx, func(tx repositories.DBTX) error {
+		var uowErr error
 
-	// Insert the account balance history at the time of creation
-	// Guaranteed that only after account is created can we take actions on transactions.
-	postHistBody := models.PostAccHistBody{
-		AccountID:    newAccount.ID,
-		LoggedTime:   newAccount.CreatedAt,
-		BalanceCents: newAccount.BalanceCents,
-	}
-	insertedHistory, err := s.accountHistoryRepo.InsertHistory(ctx, tx, postHistBody)
-	if err != nil {
-		return models.Account{}, err
-	}
+		newAccount, uowErr = s.accountRepo.InsertAccount(ctx, tx, userId, body)
+		if uowErr != nil {
+			// The account references a non-existent user, return 404
+			return uowErr
+		}
 
-	log.Printf("History for account %s, balance %d cents on %s\n",
-		insertedHistory.AccountID,
-		insertedHistory.BalanceCents,
-		insertedHistory.LoggedTime,
-	)
+		// Insert the account balance history at the time of creation.
+		// Guaranteed that only after account is created can we take actions on transactions.
+		postHistBody := models.PostAccHistBody{
+			AccountID:    newAccount.ID,
+			LoggedTime:   newAccount.CreatedAt,
+			BalanceCents: newAccount.BalanceCents,
+		}
+		insertedHistory, uowErr := s.accountHistoryRepo.InsertHistory(ctx, tx, postHistBody)
+		if uowErr != nil {
+			return uowErr
+		}
 
-	if err = tx.Commit(ctx); err != nil {
+		log.Printf("History for account %s, balance %d cents on %s\n",
+			insertedHistory.AccountID,
+			insertedHistory.BalanceCents,
+			insertedHistory.LoggedTime,
+		)
+
+		return nil
+	}); err != nil {
 		return models.Account{}, err
 	}
 
@@ -136,30 +151,31 @@ func (s *AccountService) CreateAccount(ctx context.Context, userId uuid.UUID, bo
 // NOTE: The feature is to keep ledging consistency, but user won't likely update an account's balance.
 // Most of the time, they will create a descriptive transaction though.
 func (s *AccountService) UpdateAccount(ctx context.Context, userId, id uuid.UUID, body models.PutAccountBody) (models.Account, error) {
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return models.Account{}, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	var updatedAccount models.Account
 
-	// Get the current account data, which be used later
-	previousData, err := s.accountRepo.GetAccount(ctx, tx, userId, id)
-	if err != nil {
-		return models.Account{}, err
-	}
-	if err = validateAccount(previousData.Type, body.AccountBody); err != nil {
-		return models.Account{}, err
-	}
+	if err := s.unitOfWork.Do(ctx, func(tx repositories.DBTX) error {
+		var uowErr error
 
-	// Update the account
-	updatedAccount, err := s.accountRepo.UpdateAccount(ctx, tx, userId, id, body)
-	if err != nil {
-		return models.Account{}, err
-	}
+		// Get the current account data, which be used later
+		previousData, uowErr := s.accountRepo.GetAccount(ctx, tx, userId, id)
+		if uowErr != nil {
+			return uowErr
+		}
+		if uowErr = validateAccount(previousData.Type, body.AccountBody); uowErr != nil {
+			return uowErr
+		}
 
-	// Create the transaction reflecting the balance change (reconcile transaction)
-	change := updatedAccount.BalanceCents - previousData.BalanceCents
-	if change != 0 {
+		// Update the account
+		updatedAccount, uowErr = s.accountRepo.UpdateAccount(ctx, tx, userId, id, body)
+		if uowErr != nil {
+			return uowErr
+		}
+
+		// Create the transaction reflecting the balance change (reconcile transaction)
+		change := updatedAccount.BalanceCents - previousData.BalanceCents
+		if change == 0 {
+			return nil
+		}
 		var description string
 		var category models.TransactionCategory
 
@@ -196,14 +212,14 @@ func (s *AccountService) UpdateAccount(ctx context.Context, userId, id uuid.UUID
 			AmountCents: amountCents,
 			CreatedAt:   time.Now(),
 		}
-		transaction, err := s.transactionRepo.InsertTransaction(ctx, tx, userId, postTranBody)
-		if err != nil {
-			return models.Account{}, err
+		transaction, uowErr := s.transactionRepo.InsertTransaction(ctx, tx, userId, postTranBody)
+		if uowErr != nil {
+			return uowErr
 		}
-		log.Printf("Transaction %s has been inserted\n", transaction.Description)
-	}
+		log.Printf("Transaction %s has been inserted\n", transaction.ID)
 
-	if err = tx.Commit(ctx); err != nil {
+		return nil
+	}); err != nil {
 		return models.Account{}, err
 	}
 
@@ -229,10 +245,11 @@ func validateAccount(aType models.AccountType, body models.AccountBody) error {
 
 // DeleteAccount deletes the account, its transactions and account history
 func (s *AccountService) DeleteAccount(ctx context.Context, userId, id uuid.UUID) error {
-	_, err := s.accountRepo.DeleteAccount(ctx, s.db, userId, id)
+	deletedAccount, err := s.accountRepo.DeleteAccount(ctx, s.db, userId, id)
 	if err != nil {
 		return err
 	}
+	log.Printf("Account %s has been deleted\n", deletedAccount.ID)
 
 	return nil
 }

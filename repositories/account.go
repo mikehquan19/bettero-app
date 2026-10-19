@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type AccountRepo struct{}
@@ -61,12 +60,7 @@ func (r *AccountRepo) FilterAccounts(ctx context.Context, dbtx DBTX, status Stat
 		return nil, err
 	}
 
-	accounts, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Account])
-	if err != nil {
-		return nil, err
-	}
-
-	return accounts, nil
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Account])
 }
 
 // GetAccount gets the account with given ID
@@ -84,34 +78,43 @@ func (r *AccountRepo) GetAccount(ctx context.Context, dbtx DBTX, userId, id uuid
 	return account, nil
 }
 
-// ListAccountTransactions returns the paginated list of transactions of the acount
-func (r *AccountRepo) ListAccountTransactions(
+// CountAccountTransactions returns the number of an account's transactions that match the filter.
+func (r *AccountRepo) CountAccTransactions(
 	ctx context.Context,
-	db *pgxpool.Pool,
+	dbtx DBTX,
+	userId, id uuid.UUID,
+	filter models.TransactionFilter,
+) (int, error) {
+	var transactionCount int
+
+	condition, args := buildTransactionFilter("a.user_id = $1", userId, filter)
+	condition += fmt.Sprintf(" AND t.account_id = $%d", len(args)+1)
+	args = append(args, id)
+
+	countTransactionSQL := fmt.Sprintf(`
+	SELECT COUNT(*)
+	FROM transactions t JOIN accounts a ON t.account_id = a.id
+	WHERE %s;`, condition)
+
+	row := dbtx.QueryRow(ctx, countTransactionSQL, args...)
+	if err := row.Scan(&transactionCount); err != nil {
+		return -1, err
+	}
+
+	return transactionCount, nil
+}
+
+// ListAccountTransactions returns one page of an account's transactions that match the filter.
+func (r *AccountRepo) ListAccTransactions(
+	ctx context.Context,
+	dbtx DBTX,
 	userId, id uuid.UUID,
 	filter models.TransactionFilter,
 	offset int64,
-) (int, []models.Transaction, error) {
-	var transactionCount int
-	var transactions []models.Transaction
-
-	tx, err := db.Begin(ctx)
-	if err != nil {
-		return -1, nil, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
+) ([]models.Transaction, error) {
 	condition, args := buildTransactionFilter("a.user_id = $1", userId, filter)
-	accountArg := len(args) + 1
-	condition += fmt.Sprintf(" AND t.account_id = $%d", accountArg)
+	condition += fmt.Sprintf(" AND t.account_id = $%d", len(args)+1)
 	args = append(args, id)
-
-	// Fetch the total number of transactions
-	countTransactionSQL := fmt.Sprintf(`SELECT COUNT(*) FROM transactions t JOIN accounts a ON t.account_id = a.id WHERE %s;`, condition)
-	row := tx.QueryRow(ctx, countTransactionSQL, args...)
-	if err := row.Scan(&transactionCount); err != nil {
-		return -1, nil, err
-	}
 
 	// List the page of transactions from this filter
 	listTransactionSQL := fmt.Sprintf(`
@@ -130,27 +133,18 @@ func (r *AccountRepo) ListAccountTransactions(
 		t.amount_cents,
 		t.created_at,
 		t.updated_at
-	FROM transactions t
-	JOIN accounts a ON t.account_id = a.id
+	FROM transactions t JOIN accounts a ON t.account_id = a.id
 	WHERE %s
 	ORDER BY t.created_at DESC
 	LIMIT 20 OFFSET $%d;`, condition, len(args)+1)
 	args = append(args, offset)
 
-	rows, err := tx.Query(ctx, listTransactionSQL, args...)
+	rows, err := dbtx.Query(ctx, listTransactionSQL, args...)
 	if err != nil {
-		return -1, nil, err
-	}
-	transactions, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Transaction])
-	if err != nil {
-		return -1, nil, err
+		return nil, err
 	}
 
-	if err = tx.Commit(ctx); err != nil {
-		return -1, nil, err
-	}
-
-	return transactionCount, transactions, err
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Transaction])
 }
 
 // InsertAccount inserts and returns an account of the user

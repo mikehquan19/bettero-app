@@ -9,26 +9,28 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Bill Service
 type BillService struct {
-	db              *pgxpool.Pool
-	billRepo        *repositories.BillRepo
-	accountRepo     *repositories.AccountRepo
-	transactionRepo *repositories.TransactionRepo
+	db              repositories.DBTX
+	unitOfWork      repositories.UnitOfWork
+	billRepo        BillRepository
+	accountRepo     AccountRepository
+	transactionRepo TransactionRepository
 }
 
 // Generate a new bill service
 func NewBillService(
-	database *pgxpool.Pool,
-	billRepo *repositories.BillRepo,
-	accountRepo *repositories.AccountRepo,
-	transactionRepo *repositories.TransactionRepo,
+	database repositories.DBTX,
+	unitOfWork repositories.UnitOfWork,
+	billRepo BillRepository,
+	accountRepo AccountRepository,
+	transactionRepo TransactionRepository,
 ) *BillService {
 	return &BillService{
 		db:              database,
+		unitOfWork:      unitOfWork,
 		billRepo:        billRepo,
 		accountRepo:     accountRepo,
 		transactionRepo: transactionRepo,
@@ -76,65 +78,57 @@ func (s *BillService) UpdateBill(ctx context.Context, userId, id uuid.UUID, body
 // The created transaction has the same account's Id, category, and amount as the bill.
 // The paying account's balance also updates to reflect the transaction.
 func (s *BillService) DeleteBill(ctx context.Context, userId, id uuid.UUID, pay bool, recurring bool) error {
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	// Delete the bill, get the non-nested deleted bill
-	deletedBill, err := s.billRepo.DeleteBill(ctx, tx, userId, id)
-	if err != nil {
-		return err
-	}
-	if (pay || recurring) && deletedBill.Account == nil {
-		return models.ErrForeignKey
-	}
-
-	if pay {
-		// Create the transaction representing bill payment
-		postTranBody := models.PostTransactionBody{
-			AccountID:   deletedBill.Account.ID,
-			Merchant:    deletedBill.Merchant,
-			Description: fmt.Sprintf("Payment to %s", deletedBill.Description),
-			Category:    deletedBill.Category,
-			AmountCents: deletedBill.AmountCents,
-			CreatedAt:   time.Now(),
+	return s.unitOfWork.Do(ctx, func(tx repositories.DBTX) error {
+		// Delete the bill, get the non-nested deleted bill
+		deletedBill, uowErr := s.billRepo.DeleteBill(ctx, tx, userId, id)
+		if uowErr != nil {
+			return uowErr
 		}
-		insertedTransaction, err := s.transactionRepo.InsertTransaction(ctx, tx, userId, postTranBody)
-		if err != nil {
-			return err
+		if (pay || recurring) && deletedBill.Account == nil {
+			return models.ErrForeignKey
 		}
 
-		log.Printf("Transaction %s has been inserted\n", insertedTransaction.Description)
+		if pay {
+			// Create the transaction representing bill payment
+			postTranBody := models.PostTransactionBody{
+				AccountID:   deletedBill.Account.ID,
+				Merchant:    deletedBill.Merchant,
+				Description: fmt.Sprintf("Payment to %s", deletedBill.Description),
+				Category:    deletedBill.Category,
+				AmountCents: deletedBill.AmountCents,
+				CreatedAt:   time.Now(),
+			}
+			insertedTransaction, uowErr := s.transactionRepo.InsertTransaction(ctx, tx, userId, postTranBody)
+			if uowErr != nil {
+				return uowErr
+			}
+			log.Printf("Transaction %s has been inserted\n", insertedTransaction.Description)
 
-		// Bill payment is considered expense, so auto-update the balance
-		balance, err := s.accountRepo.UpdateAccountBalance(ctx, tx, deletedBill.Account.ID, deletedBill.AmountCents)
-		if err != nil {
-			return err
+			// Bill payment is considered expense, so auto-update the balance
+			balance, uowErr := s.accountRepo.UpdateAccountBalance(ctx, tx, deletedBill.Account.ID, deletedBill.AmountCents)
+			if uowErr != nil {
+				return uowErr
+			}
+			log.Printf("Balance changes to: %d cents\n", balance)
 		}
-		log.Printf("Balance changes to: %d cents\n", balance)
-	}
-	if recurring {
-		// Insert the recurring bill that is due next month
-		postBillBody := models.BillBody{
-			AccountID:   deletedBill.Account.ID,
-			Merchant:    deletedBill.Merchant,
-			Description: deletedBill.Description,
-			Category:    deletedBill.Category,
-			AmountCents: deletedBill.AmountCents,
-			DueDate:     deletedBill.DueDate.AddDate(0, 1, 0),
-		}
-		recurredBill, err := s.billRepo.InsertBill(ctx, tx, userId, postBillBody)
-		if err != nil {
-			return err
-		}
-		log.Printf("Bill %s has been recurred\n", recurredBill.Description)
-	}
 
-	if err = tx.Commit(ctx); err != nil {
-		return err
-	}
+		if recurring {
+			// Insert the recurring bill that is due next month
+			postBillBody := models.BillBody{
+				AccountID:   deletedBill.Account.ID,
+				Merchant:    deletedBill.Merchant,
+				Description: deletedBill.Description,
+				Category:    deletedBill.Category,
+				AmountCents: deletedBill.AmountCents,
+				DueDate:     deletedBill.DueDate.AddDate(0, 1, 0),
+			}
+			recurredBill, uowErr := s.billRepo.InsertBill(ctx, tx, userId, postBillBody)
+			if uowErr != nil {
+				return uowErr
+			}
+			log.Printf("Bill %s has been recurred\n", recurredBill.Description)
+		}
 
-	return nil
+		return nil
+	})
 }

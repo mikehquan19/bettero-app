@@ -17,8 +17,6 @@ func NewAccountHistoryRepo() *AccountHistoryRepo {
 
 // ListHistories returns list of balance history of the account over time
 func (r *AccountHistoryRepo) ListHistories(ctx context.Context, dbtx DBTX, userId, accountId uuid.UUID) ([]models.AccountHistory, error) {
-	var histories []models.AccountHistory
-
 	const listHistorySQL = `
 	SELECT h.*
 	FROM account_histories h
@@ -30,12 +28,8 @@ func (r *AccountHistoryRepo) ListHistories(ctx context.Context, dbtx DBTX, userI
 	if err != nil {
 		return nil, err
 	}
-	histories, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.AccountHistory])
-	if err != nil {
-		return nil, err
-	}
 
-	return histories, nil
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.AccountHistory])
 }
 
 // GetLatest gets the most recent account history, used for validating primarily

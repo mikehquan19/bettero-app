@@ -6,17 +6,16 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // SummaryService
 type SummaryService struct {
-	db          *pgxpool.Pool
-	summaryRepo *repositories.SummaryRepo
+	db          repositories.DBTX
+	summaryRepo SummaryRepository
 }
 
 // Generate a new summary service
-func NewSummaryService(db *pgxpool.Pool, summaryRepo *repositories.SummaryRepo) *SummaryService {
+func NewSummaryService(db repositories.DBTX, summaryRepo SummaryRepository) *SummaryService {
 	return &SummaryService{
 		db:          db,
 		summaryRepo: summaryRepo,

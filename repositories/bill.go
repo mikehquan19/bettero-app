@@ -17,8 +17,6 @@ func NewBillRepo() *BillRepo {
 
 // ListBills gets the list of bills ordered by its due date
 func (r *BillRepo) ListBills(ctx context.Context, dbtx DBTX, userId uuid.UUID) ([]models.Bill, error) {
-	var bills []models.Bill
-
 	const listBillSQL = `
 	SELECT
 		b.id,
@@ -44,12 +42,7 @@ func (r *BillRepo) ListBills(ctx context.Context, dbtx DBTX, userId uuid.UUID) (
 		return nil, err
 	}
 
-	bills, err = pgx.CollectRows(rows, pgx.RowToStructByName[models.Bill])
-	if err != nil {
-		return nil, err
-	}
-
-	return bills, nil
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Bill])
 }
 
 // GetBill returns the list of bills

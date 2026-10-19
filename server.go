@@ -19,6 +19,8 @@ func main() {
 	var db = setup.ConnectDB()
 
 	// Initialize repositories
+	uow := repositories.NewDBUnitOfWork(db)
+
 	authRepo := repositories.NewAuthRepo()
 	accountRepo := repositories.NewAccountRepo()
 	accountHistoryRepo := repositories.NewAccountHistoryRepo()
@@ -29,9 +31,9 @@ func main() {
 
 	// Dependency injection
 	authService := services.NewAuthService(db, authRepo)
-	accountService := services.NewAccountService(db, accountRepo, accountHistoryRepo, transactionRepo)
-	transactionService := services.NewTransactionService(db, transactionRepo, accountRepo)
-	billService := services.NewBillService(db, billRepo, accountRepo, transactionRepo)
+	accountService := services.NewAccountService(db, uow, accountRepo, accountHistoryRepo, transactionRepo)
+	transactionService := services.NewTransactionService(db, uow, transactionRepo, accountRepo)
+	billService := services.NewBillService(db, uow, billRepo, accountRepo, transactionRepo)
 	summaryService := services.NewSummaryService(db, summaryRepo)
 	budgetService := services.NewBudgetService(db, budgetRepo, summaryRepo)
 
