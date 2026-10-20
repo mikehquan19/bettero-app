@@ -157,9 +157,13 @@ func (s *AccountService) UpdateAccount(ctx context.Context, userId, id uuid.UUID
 		var uowErr error
 
 		// Get the current account data, which be used later
-		previousData, uowErr := s.accountRepo.GetAccount(ctx, tx, userId, id)
+		previousData, uowErr := s.accountRepo.LockAccount(ctx, tx, id)
 		if uowErr != nil {
 			return uowErr
+		}
+		if previousData.UserID != userId {
+			// The account does not belong to this user
+			return models.ErrNotFound
 		}
 		if uowErr = validateAccount(previousData.Type, body.AccountBody); uowErr != nil {
 			return uowErr

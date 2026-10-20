@@ -39,11 +39,12 @@ func NewCronService(
 }
 
 // MoveAccountsDueDate updates next due date for accounts whose due date is past today.
-// If update fails, retrying will be on the accounts that haven't been updated on the previous try.
-// It's because accounts that have will not be queried.
+// If update fails, retrying will be on the accounts that haven't been updated on the previous try, because accounts that have will not be queried.
+//
+// Frequency: daily
 func (c *CronService) MoveAccountsDueDate() error {
 	ctx := context.Background()
-	pastDueAccounts, err := c.accRepo.FilterAccounts(ctx, c.db, repositories.PastDue)
+	pastDueAccounts, err := c.accRepo.ListAccountsByStatus(ctx, c.db, repositories.PastDue)
 	if err != nil {
 		return err
 	}
@@ -71,102 +72,80 @@ func (c *CronService) MoveAccountsDueDate() error {
 	return nil
 }
 
-// ValidateAccountsAndInsertHistory validates all the account balances.
+// ValidateAccountsAndUpdateHistory validates every account, updates its discrepancy state,
+// and creates a history when the latest one is at least 14 days old.
+//
+// Histories older than six months are deleted after a successful validation.
 //
 // TODO: Address the limitation that if one account fails, the retry will re-validate
 // the successfully validated accounts.
-func (c *CronService) ValidateAccounts() error {
+//
+// Frequency: daily, before DeleteOutdatedTransactions.
+func (c *CronService) ValidateAccountsAndUpdateHistory() error {
 	ctx := context.Background()
-	accounts, err := c.accRepo.FilterAccounts(ctx, c.db, repositories.All)
+	allAccounts, err := c.accRepo.ListAccountsByStatus(ctx, c.db, repositories.All)
 	if err != nil {
 		return err
 	}
 
 	var errs []error
-	for _, account := range accounts {
-		if err = c.validate(ctx, account); err != nil {
+	for _, account := range allAccounts {
+		if err = c.validateAndUpdateHistory(ctx, account.ID); err != nil {
 			errs = append(errs, fmt.Errorf("account %s: %w", account.ID, err))
-			log.Printf("Account %s failed validating: %v\n", account.ID, err)
+			log.Printf("Account %s failed ledger maintenance: %v\n", account.ID, err)
 		}
 	}
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}
 
-	log.Println("Done validating accounts!")
+	log.Println("Done validating accounts and updating histories!")
 	return nil
 }
 
-// Process each individual account for validation
-func (c *CronService) validate(ctx context.Context, account models.Account) error {
+// validateAndUpdateHistory processes one account atomically so the history
+// always represents a balance that passed validation.
+func (c *CronService) validateAndUpdateHistory(ctx context.Context, accountID uuid.UUID) error {
 	accCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	return c.unitOfWork.Do(accCtx, func(tx repositories.DBTX) error {
-		// Validate the account and flag it if there's discrepancy.
-		// Get the latest balance history and sum of all transactions from that time.
+		// Validate the account
+		account, uowErr := c.accRepo.LockAccount(accCtx, tx, accountID)
+		if uowErr != nil {
+			return uowErr
+		}
 		latestHist, uowErr := c.accHistRepo.GetLatestHistory(accCtx, tx, account.ID)
 		if uowErr != nil {
 			return uowErr
 		}
-		sum, uowErr := c.tranRepo.GetTransactionSum(accCtx, tx, account.ID, latestHist.LoggedTime)
+		transactionSum, uowErr := c.tranRepo.GetTransactionSum(
+			accCtx,
+			tx,
+			account.ID,
+			latestHist.LoggedTime,
+		)
 		if uowErr != nil {
 			return uowErr
 		}
 
-		discrepancy := calculateDiscrepancy(account, latestHist, sum)
+		discrepancy := calculateDiscrepancy(account, latestHist, transactionSum)
+		updatedAccount, uowErr := c.accRepo.SetAccountDiscrepancy(accCtx, tx, account.ID, discrepancy)
+		if uowErr != nil {
+			return uowErr
+		}
 		if discrepancy != 0 {
-			flaggedAccount, uowErr := c.accRepo.FlagAccount(accCtx, tx, account.ID, discrepancy)
-			if uowErr != nil {
-				return uowErr
-			}
-			log.Printf("Account %s has been flagged!\n", flaggedAccount.ID)
+			// If the account is in consistent state, skip creating the history checkpoint
+			log.Printf("Account %s flagged with discrepancy %d cents; history skipped\n", updatedAccount.ID, discrepancy)
+			return nil
 		} else {
 			log.Printf("Account %s is OK!\n", account.ID)
 		}
 
-		return nil
-	})
-}
-
-// UpdateHistory will create the new history of account whose latest history is past 2 weeks,
-// and delete the history that is older than 6 months ago.
-func (c *CronService) UpdateHistory() error {
-	ctx := context.Background()
-	unflaggedAccounts, err := c.accRepo.FilterAccounts(ctx, c.db, repositories.Unflagged)
-	if err != nil {
-		return err
-	}
-
-	var errs []error
-	for _, account := range unflaggedAccounts {
-		if err = c.updateHistory(ctx, account, time.Now().UTC()); err != nil {
-			log.Printf("Error while executing account %s: %v\n", account.ID, err)
-			errs = append(errs, fmt.Errorf("account %s: %w", account.ID, err))
-		}
-	}
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-
-	log.Println("Done creating new history!")
-	return nil
-}
-
-// Process each individual account when updating the balance history
-func (c *CronService) updateHistory(ctx context.Context, account models.Account, now time.Time) error {
-	accCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	return c.unitOfWork.Do(accCtx, func(tx repositories.DBTX) error {
-		latestHist, uowErr := c.accHistRepo.GetLatestHistory(accCtx, tx, account.ID)
-		if uowErr != nil {
-			return uowErr
-		}
-
-		// Create the account history every month
+		// Create an account history checkpoint every 14 days.
+		now := time.Now().UTC()
 		if shouldCreateHistory(latestHist, now) {
-			_, uowErr = c.accHistRepo.InsertHistory(accCtx, tx, models.PostAccHistBody{
+			insertedHistory, uowErr := c.accHistRepo.InsertHistory(accCtx, tx, models.PostAccHistBody{
 				AccountID:    account.ID,
 				LoggedTime:   now,
 				BalanceCents: account.BalanceCents,
@@ -174,7 +153,7 @@ func (c *CronService) updateHistory(ctx context.Context, account models.Account,
 			if uowErr != nil {
 				return uowErr
 			}
-			log.Printf("New history created for account %s\n", account.ID)
+			log.Printf("New history %s created for account %s\n", insertedHistory.ID, account.ID)
 		} else {
 			log.Printf("No history created for account %s\n", account.ID)
 		}
@@ -195,21 +174,21 @@ func calculateDiscrepancy(
 	latestHist models.AccountHistory,
 	transactionSum models.Money,
 ) models.Money {
-	if account.Type == models.Debit {
-		return account.BalanceCents - latestHist.BalanceCents + transactionSum
+	if account.Type == models.Credit {
+		return account.BalanceCents - latestHist.BalanceCents - transactionSum
 	}
-	return account.BalanceCents - latestHist.BalanceCents - transactionSum
+	return account.BalanceCents - latestHist.BalanceCents + transactionSum
 }
 
 func shouldCreateHistory(latestHist models.AccountHistory, now time.Time) bool {
-	return latestHist.LoggedTime.Before(now.AddDate(0, -1, 0))
+	return !now.Before(latestHist.LoggedTime.AddDate(0, 0, 14))
 }
 
-// Delete all the outdated transactions (transactions that are 6 months old) of
-// all the accounts
+// Frequency: daily, after ValidateAccountsAndUpdateHistory.
+// DeleteOutdatedTransactions deletes transactions older than six months for all accounts.
 func (c *CronService) DeleteOutdatedTransactions() error {
 	ctx := context.Background()
-	accounts, err := c.accRepo.FilterAccounts(ctx, c.db, repositories.All)
+	accounts, err := c.accRepo.ListAccountsByStatus(ctx, c.db, repositories.All)
 	if err != nil {
 		return err
 	}

@@ -88,6 +88,11 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, userId uuid.
 	if err := s.unitOfWork.Do(ctx, func(tx repositories.DBTX) error {
 		var uowErr error
 
+		// Serialize every balance-changing workflow with history snapshots.
+		if _, uowErr = s.accountRepo.LockAccount(ctx, tx, body.AccountID); uowErr != nil {
+			return uowErr
+		}
+
 		// Insert the new transaction data
 		newTransaction, uowErr = s.transactionRepo.InsertTransaction(ctx, tx, userId, body)
 		if uowErr != nil {
@@ -137,6 +142,9 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, userId, id u
 		}
 
 		if uowErr = validateTransactionTime(previousData.CreatedAt); uowErr != nil {
+			return uowErr
+		}
+		if _, uowErr = s.accountRepo.LockAccount(ctx, tx, previousData.Account.ID); uowErr != nil {
 			return uowErr
 		}
 
@@ -190,12 +198,19 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, userId, id u
 	if err := s.unitOfWork.Do(ctx, func(tx repositories.DBTX) error {
 		var uowErr error
 
-		deletedTransaction, uowErr = s.transactionRepo.DeleteTransaction(ctx, tx, userId, id)
+		previousData, uowErr := s.transactionRepo.GetTransaction(ctx, tx, userId, id)
 		if uowErr != nil {
 			return uowErr
 		}
+		if uowErr = validateTransactionTime(previousData.CreatedAt); uowErr != nil {
+			return uowErr
+		}
+		if _, uowErr = s.accountRepo.LockAccount(ctx, tx, previousData.Account.ID); uowErr != nil {
+			return uowErr
+		}
 
-		if uowErr = validateTransactionTime(deletedTransaction.CreatedAt); uowErr != nil {
+		deletedTransaction, uowErr = s.transactionRepo.DeleteTransaction(ctx, tx, userId, id)
+		if uowErr != nil {
 			return uowErr
 		}
 

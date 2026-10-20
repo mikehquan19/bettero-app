@@ -89,6 +89,10 @@ func (s *BillService) DeleteBill(ctx context.Context, userId, id uuid.UUID, pay 
 		}
 
 		if pay {
+			if _, uowErr = s.accountRepo.LockAccount(ctx, tx, deletedBill.Account.ID); uowErr != nil {
+				return uowErr
+			}
+
 			// Create the transaction representing bill payment
 			postTranBody := models.PostTransactionBody{
 				AccountID:   deletedBill.Account.ID,

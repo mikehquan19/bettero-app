@@ -106,7 +106,8 @@ func (r *TransactionRepo) GetTransaction(ctx context.Context, dbtx DBTX, userId,
 		t.updated_at
 	FROM transactions t
 	JOIN accounts a ON t.account_id = a.id
-	WHERE t.id = $1 AND a.user_id = $2;`
+	WHERE t.id = $1 AND a.user_id = $2
+	FOR UPDATE OF t;`
 
 	row := dbtx.QueryRow(ctx, getTransactionSQL, id, userId)
 	if err := scanTransaction(row, &transaction); err != nil {
@@ -335,7 +336,7 @@ func (r *TransactionRepo) GetTransactionSum(
 			ELSE 1
 		END), 0)
 	FROM transactions t
-	WHERE t.account_id = $1 AND t.created_at >= $2;`
+	WHERE t.account_id = $1 AND t.created_at > $2;`
 
 	row := dbtx.QueryRow(ctx, totalSumSQL, accountId, startDate)
 	if err := row.Scan(&transactionSum); err != nil {
@@ -351,7 +352,7 @@ func (r *TransactionRepo) DeleteOutdatedTransactions(ctx context.Context, dbtx D
 	const deleteOutdatedTranSQL = `
 	DELETE FROM transactions
 	WHERE
-		created_at < CURRENT_DATE - INTERVAL '6 months'
+		created_at < CURRENT_TIMESTAMP - INTERVAL '6 months'
 		AND account_id = $1
 	RETURNING id;`
 

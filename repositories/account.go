@@ -43,8 +43,8 @@ const (
 	All       Status = "All"
 )
 
-// ListAllAccounts returns the list of accounts based on filter status.
-func (r *AccountRepo) FilterAccounts(ctx context.Context, dbtx DBTX, status Status) ([]models.Account, error) {
+// ListAccountsByStatus returns the list of accounts matching the given status.
+func (r *AccountRepo) ListAccountsByStatus(ctx context.Context, dbtx DBTX, status Status) ([]models.Account, error) {
 	var filter string
 	switch status {
 	case PastDue:
@@ -68,6 +68,21 @@ func (r *AccountRepo) GetAccount(ctx context.Context, dbtx DBTX, userId, id uuid
 	var account models.Account
 
 	row := dbtx.QueryRow(ctx, "SELECT * FROM accounts WHERE user_id = $1 AND id = $2;", userId, id)
+	if err := scanAccount(row, &account); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Account{}, models.ErrNotFound
+		}
+		return models.Account{}, err
+	}
+
+	return account, nil
+}
+
+// LockAccount locks and returns an account for a ledger-consistency validation
+func (r *AccountRepo) LockAccount(ctx context.Context, dbtx DBTX, id uuid.UUID) (models.Account, error) {
+	var account models.Account
+
+	row := dbtx.QueryRow(ctx, "SELECT * FROM accounts WHERE id = $1 FOR UPDATE;", id)
 	if err := scanAccount(row, &account); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Account{}, models.ErrNotFound
@@ -281,31 +296,31 @@ func (r *AccountRepo) MoveAccountsDueDate(ctx context.Context, dbtx DBTX, ids []
 	return len(updatedIDs), nil
 }
 
-// FlagAccount will flag the account with the given discrepany amount.
-func (r *AccountRepo) FlagAccount(
+// SetAccountDiscrepancy stores the signed discrepancy and updates the flag.
+func (r *AccountRepo) SetAccountDiscrepancy(
 	ctx context.Context,
 	dbtx DBTX,
 	id uuid.UUID,
 	discrepancyAmount models.Money,
 ) (models.Account, error) {
-	var flaggedAccount models.Account
+	var updatedAccount models.Account
 
-	const flagAccountSQL = `
+	const setDiscrepancySQL = `
 	UPDATE accounts
-	SET discrepancy_flagged = TRUE,
+	SET discrepancy_flagged = ($2 <> 0),
 		discrepancy_amount_cents = $2
 	WHERE id = $1
 	RETURNING *;`
 
-	row := dbtx.QueryRow(ctx, flagAccountSQL, id, discrepancyAmount)
-	if err := scanAccount(row, &flaggedAccount); err != nil {
+	row := dbtx.QueryRow(ctx, setDiscrepancySQL, id, discrepancyAmount)
+	if err := scanAccount(row, &updatedAccount); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Account{}, models.ErrNotFound
 		}
 		return models.Account{}, err
 	}
 
-	return flaggedAccount, nil
+	return updatedAccount, nil
 }
 
 // Update the account's data and returns the deleted account

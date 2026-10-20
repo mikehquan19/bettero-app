@@ -17,10 +17,12 @@ COPY ./routes ./routes
 COPY ./services ./services
 COPY ./repositories ./repositories
 COPY ./setup ./setup
+COPY ./cmd ./cmd
 COPY server.go ./
 
-# Compile the server
+# Compile the API server and the one-shot cron runner
 RUN CGO_ENABLED=0 GOOS=linux go build -o ./bettero-app .
+RUN CGO_ENABLED=0 GOOS=linux go build -o ./bettero-cron ./cmd/cron
 
 # Deploy the application to lean image
 FROM gcr.io/distroless/base-debian11 AS build-release-stage
@@ -28,6 +30,7 @@ FROM gcr.io/distroless/base-debian11 AS build-release-stage
 WORKDIR /
 
 COPY --from=build-stage ./bettero/bettero-app ./bettero-app
+COPY --from=build-stage ./bettero/bettero-cron ./bettero-cron
 
 # API Server
 EXPOSE 8080
