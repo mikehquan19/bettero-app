@@ -191,7 +191,6 @@ func (s *AccountService) UpdateAccount(ctx context.Context, userId, id uuid.UUID
 		if change > 0 {
 			description = fmt.Sprintf("Balance reconciled (+%.2f)", displayedAmount)
 
-			category = models.Income
 			if updatedAccount.Type == models.Credit {
 				category = models.Others
 			} else {
@@ -200,7 +199,6 @@ func (s *AccountService) UpdateAccount(ctx context.Context, userId, id uuid.UUID
 		} else {
 			description = fmt.Sprintf("Balance reconciled (-%.2f)", displayedAmount)
 
-			category = models.Others
 			if updatedAccount.Type == models.Credit {
 				category = models.Income
 			} else {

@@ -109,7 +109,7 @@ func getCurrentPeriod(intervalType models.IntervalType) (time.Time, time.Time, e
 	case models.Week:
 		return startOfISOWeek(now), endOfISOWeek(now), nil
 	default:
-		return time.Time{}, time.Time{}, fmt.Errorf("Invalid interval type")
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid interval type")
 	}
 }
 
